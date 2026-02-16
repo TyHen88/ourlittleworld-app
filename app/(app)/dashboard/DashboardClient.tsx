@@ -352,6 +352,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, heroMessa
                     <button className="text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-romantic-heart transition-colors">See Feed</button>
                 </div>
                 <CoupleFeedPost
+                    id="recent-memory"
                     author="My Forever"
                     content="Coffee morning at our favorite corner! ☕✨"
                     timestamp="2 hours ago"
