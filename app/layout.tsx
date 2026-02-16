@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { LoveThemeProvider } from "@/components/LoveThemeProvider";
+import { Providers } from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,9 +33,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} bg-romantic-warm text-slate-800 antialiased`}>
-        <LoveThemeProvider>
-          {children}
-        </LoveThemeProvider>
+        <Providers>
+          <LoveThemeProvider>
+            {children}
+          </LoveThemeProvider>
+        </Providers>
       </body>
     </html>
   );

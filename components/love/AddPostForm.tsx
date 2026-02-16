@@ -7,6 +7,8 @@ import { Heart, Camera, Smile, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createPost } from "@/lib/actions/post";
 import { createClient } from "@/utils/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCouple } from "@/hooks/use-couple";
 
 interface AddPostFormProps {
     embedded?: boolean;
@@ -21,6 +23,8 @@ type PreviewImage = {
 };
 
 export function AddPostForm({ embedded = false, className, onSuccess }: AddPostFormProps) {
+    const queryClient = useQueryClient();
+    const { couple } = useCouple();
     const [content, setContent] = useState("");
     const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -118,6 +122,20 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
             });
 
             if (!result?.success) throw new Error(result?.error || 'Failed to create post');
+
+            console.log("Post created successfully. Triggering cache refresh...");
+
+            // Fuzzy match all queries starting with 'posts'
+            // Using both to be absolutely sure
+            if (couple?.id) {
+                queryClient.invalidateQueries({ queryKey: ['posts', couple.id] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['posts'], exact: false });
+            await queryClient.refetchQueries({
+                queryKey: ['posts'],
+                type: 'active',
+                exact: false
+            });
 
             setContent("");
             clearPreviews();

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/utils/supabase/client";
 import { calculateDaysTogether } from "@/lib/utils/date-utilities";
+
+const supabase = createClient();
 
 export interface CoupleData {
     id: string;
@@ -11,6 +13,8 @@ export interface CoupleData {
     start_date: string;
     partner_1_nickname: string;
     partner_2_nickname: string;
+    partner_1_id: string;
+    partner_2_id: string;
 }
 
 export interface UserProfile {
@@ -18,63 +22,53 @@ export interface UserProfile {
     full_name: string;
     couple_id: string;
     avatar_url: string;
+    nickname?: string;
 }
 
 export function useCouple() {
-    const [user, setUser] = useState<any>(null);
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [couple, setCouple] = useState<CoupleData | null>(null);
-    const [daysTogether, setDaysTogether] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+    // 1. Fetch Auth User
+    const authQuery = useQuery({
+        queryKey: ["auth-user"],
+        queryFn: async () => {
+            const { data: { user }, error } = await supabase.auth.getUser();
+            if (error) throw error;
+            return user;
+        },
+        staleTime: Infinity, // Auth guest session is stable
+    });
 
-    const loadData = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            const supabase = createClient();
+    // 2. Fetch Profile & Couple
+    const coupleQuery = useQuery({
+        queryKey: ["couple", authQuery.data?.id],
+        queryFn: async () => {
+            if (!authQuery.data?.id) return null;
 
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            if (userError) throw userError;
-            if (!user) {
-                setIsLoading(false);
-                return;
-            }
-
-            setUser(user);
-
-            const { data: profileData, error: profileError } = await supabase
+            const { data, error } = await supabase
                 .from('profiles')
                 .select('*, couples!fk_profiles_couple(*)')
-                .eq('id', user.id)
+                .eq('id', authQuery.data.id)
                 .maybeSingle();
 
-            if (profileError) throw profileError;
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!authQuery.data?.id,
+    });
 
-            if (profileData) {
-                setProfile(profileData);
-                if (profileData.couples) {
-                    setCouple(profileData.couples);
-                    setDaysTogether(calculateDaysTogether(profileData.couples.start_date));
-                }
-            }
-        } catch (err: any) {
-            setError(err);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
+    const profile = coupleQuery.data;
+    const couple = profile?.couples as unknown as CoupleData | undefined;
+    const daysTogether = couple ? calculateDaysTogether(couple.start_date) : 0;
 
     return {
-        user,
+        user: authQuery.data,
         profile,
         couple,
         daysTogether,
-        isLoading,
-        error,
-        refresh: loadData
+        isLoading: authQuery.isLoading || coupleQuery.isLoading,
+        error: authQuery.error || coupleQuery.error,
+        refresh: () => {
+            authQuery.refetch();
+            coupleQuery.refetch();
+        }
     };
 }
