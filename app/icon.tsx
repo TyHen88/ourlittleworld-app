@@ -1,0 +1,56 @@
+import { ImageResponse } from "next/og";
+
+export const runtime = "edge";
+
+export const size = {
+    width: 64,
+    height: 64,
+};
+
+export const contentType = "image/png";
+
+export default function Icon() {
+    const heartPath =
+        "M12 21s-6.716-4.49-9.428-7.2C.66 11.888.427 9.07 2.1 7.4c1.67-1.67 4.377-1.438 6.3.485L12 11.485l3.6-3.6c1.923-1.923 4.63-2.155 6.3-.485 1.673 1.67 1.44 4.488-.472 6.4C18.716 16.51 12 21 12 21z";
+
+    return new ImageResponse(
+        (
+            <div
+                style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "linear-gradient(180deg, #ffffff 0%, #fff1f2 100%)",
+                    borderRadius: 16,
+                }}
+            >
+                <div style={{ position: "relative", width: 44, height: 44, display: "flex" }}>
+                    <svg
+                        width={44}
+                        height={44}
+                        viewBox="0 0 24 24"
+                        fill="#fb7185"
+                        style={{ opacity: 0.28 }}
+                    >
+                        <path d={heartPath} />
+                    </svg>
+                    <svg
+                        width={44}
+                        height={44}
+                        viewBox="0 0 24 24"
+                        fill="#e11d48"
+                        style={{ position: "absolute", inset: 0 }}
+                    >
+                        <path d={heartPath} />
+                    </svg>
+                </div>
+            </div>
+        ),
+        {
+            width: size.width,
+            height: size.height,
+        }
+    );
+}
