@@ -7,9 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, Camera, Edit2, Save, X, LogOut, Copy, Check } from "lucide-react";
-import { signOut } from "@/lib/actions/auth";
+import { getCurrentUser, signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -31,53 +30,19 @@ export default function ProfilePage() {
 
     const loadProfile = async () => {
         setLoading(true);
-        const supabase = createClient();
-
-        // Get current user session
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !user) {
+        const result = await getCurrentUser();
+        if (!result.success || !result.user) {
             router.push("/login");
             return;
         }
 
-        // Get profile with couple info - use maybeSingle() to handle missing profile
-        let { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*, couples!fk_profiles_couple(*)') // Specify the relationship via couple_id
-            .eq('id', user.id)
-            .maybeSingle(); // Returns null if not found instead of error
-
-        // If profile doesn't exist, create it
-        if (!profile && !profileError) {
-            const { data: newProfile, error: createError } = await supabase
-                .from('profiles')
-                .insert({
-                    id: user.id,
-                    email: user.email,
-                    full_name: user.user_metadata?.full_name || '',
-                })
-                .select('*, couples!fk_profiles_couple(*)')
-                .maybeSingle();
-
-            if (createError) {
-                console.error('Profile creation error:', createError);
-            } else {
-                profile = newProfile;
-            }
-        }
-
-        if (profileError) {
-            console.error('Profile error:', profileError);
-        }
-
-        setUser(user);
-        setProfile(profile);
-        setCouple(profile?.couples);
+        setUser(result.user);
+        setProfile(result.profile);
+        setCouple((result.profile as any)?.couple ?? null);
 
         setFormData({
-            full_name: profile?.full_name || "",
-            avatar_url: profile?.avatar_url || "",
+            full_name: (result.profile as any)?.full_name || "",
+            avatar_url: (result.profile as any)?.avatar_url || "",
         });
 
         setLoading(false);
@@ -86,16 +51,12 @@ export default function ProfilePage() {
     const handleSave = async () => {
         if (!user) return;
 
-        const supabase = createClient();
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                full_name: formData.full_name,
-                avatar_url: formData.avatar_url,
-            })
-            .eq('id', user.id);
+        const result = await updateCurrentUserProfile({
+            full_name: formData.full_name,
+            avatar_url: formData.avatar_url,
+        });
 
-        if (!error) {
+        if (result.success) {
             setEditing(false);
             loadProfile();
         }
@@ -122,11 +83,7 @@ export default function ProfilePage() {
         );
     }
 
-    const partnerProfile = couple ?
-        (couple.partner_1_id === user?.id ? couple.partner_2_id : couple.partner_1_id)
-        : null;
-
-    console.log(profile);
+    const otherPartner = couple?.members?.find((m: any) => m.id !== user?.id) ?? null;
     return (
         <div className="min-h-screen bg-gradient-love p-6">
             <div className="max-w-2xl mx-auto space-y-6 pb-24">
@@ -247,13 +204,13 @@ export default function ProfilePage() {
                                     </Avatar>
                                     <Avatar className="w-10 h-10 border-2 border-white">
                                         <AvatarFallback className="bg-romantic-lavender text-slate-600 text-xs">
-                                            {partnerProfile ? "P" : "?"}
+                                            {otherPartner ? "P" : "?"}
                                         </AvatarFallback>
                                     </Avatar>
                                 </div>
                             </div>
 
-                            {couple.partner_2_id ? (
+                            {couple?.members && couple.members.length >= 2 ? (
                                 <div className="p-4 bg-romantic-mint/20 rounded-2xl border border-romantic-mint">
                                     <p className="text-sm font-bold text-emerald-700 text-center">
                                         ✨ Your world is complete! Both partners connected.

@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum Payer {
@@ -82,6 +83,7 @@ model Post {
   author_id   String   @db.Uuid
   content     String   @db.Text
   image_url   String?
+  metadata    Json?
 
   // Timestamps
   created_at  DateTime @default(now()) @db.Timestamptz(6)
@@ -101,6 +103,7 @@ model DailyMood {
   mood_date   DateTime @default(now()) @db.Date
   mood_emoji  String
   note        String?
+  metadata    Json?
 
   // Timestamps
   created_at  DateTime @default(now()) @db.Timestamptz(6)

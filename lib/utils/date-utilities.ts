@@ -20,10 +20,16 @@ export function calculateDaysTogether(startDate: string): number {
 /**
  * Formats a date string into a romantic display format.
  */
-export function formatAnniversaryDate(date: string): string {
+export function calculateDaysTogetherSafe(startDate: string | Date | null | undefined): number {
+    if (!startDate) return 0;
+    return calculateDaysTogether(startDate instanceof Date ? startDate.toISOString() : startDate);
+}
+
+export function formatAnniversaryDate(date: string | Date | null | undefined): string {
     if (!date) return "";
     try {
-        return new Date(date).toLocaleDateString('en-US', {
+        const normalized = date instanceof Date ? date : new Date(date);
+        return normalized.toLocaleDateString('en-US', {
             month: 'long',
             day: 'numeric',
             year: 'numeric'

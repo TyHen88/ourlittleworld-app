@@ -9,8 +9,6 @@ export interface CoupleData {
     couple_name: string;
     couple_photo_url: string;
     start_date: string;
-    partner_1_id: string;
-    partner_2_id: string;
     partner_1_nickname: string;
     partner_2_nickname: string;
 }

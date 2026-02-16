@@ -25,14 +25,12 @@ export type Profile = {
 export type Couple = {
     id: string;
     invite_code: string;
-    partner_1_id: string;
-    partner_2_id: string | null;
     couple_name: string | null;
     start_date: string | null;
     couple_photo_url: string | null;
     partner_1_nickname: string | null;
     partner_2_nickname: string | null;
-    world_theme: string;
+    world_theme: string | null;
     created_at: string;
     updated_at: string;
 };

@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, MessageCircle, Share2, MoreHorizontal } from "lucide-react";
+import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PostProps {
@@ -43,7 +43,11 @@ export function CoupleFeedPost({ author, content, timestamp, reactions, comments
 
             {/* Post Content */}
             <div className="px-4 pb-4">
-                <p className="text-slate-700 leading-relaxed font-medium">{content}</p>
+                <div className="rounded-3xl bg-slate-50/50 border border-romantic-blush/20 px-4 py-3">
+                    <p className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words text-[15px]">
+                        {content}
+                    </p>
+                </div>
             </div>
 
             {/* Sample Image Placeholder */}
@@ -100,5 +104,3 @@ export function CoupleFeedPost({ author, content, timestamp, reactions, comments
         </Card>
     );
 }
-
-import { Image as ImageIcon } from "lucide-react";

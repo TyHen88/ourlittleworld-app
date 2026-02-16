@@ -6,6 +6,7 @@ CREATE TABLE daily_moods (
     date DATE NOT NULL DEFAULT CURRENT_DATE,
     mood_emoji TEXT NOT NULL,
     note TEXT,
+    metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
     -- One mood per user per day

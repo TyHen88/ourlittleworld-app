@@ -37,12 +37,37 @@ export default async function DashboardPage() {
         ? calculateDaysTogether(couple.start_date.toISOString())
         : 0;
 
+    const todayKey = new Date().toISOString().split('T')[0];
+    const today = new Date(todayKey);
+
+    const dailyMoodDelegate: any = (prisma as any).dailyMood;
+
+    const todayMessageRow = couple?.id
+        ? await dailyMoodDelegate.findFirst({
+            where: {
+                couple_id: couple.id,
+                mood_date: today,
+                metadata: { not: null }
+            },
+            select: {
+                metadata: true,
+                created_at: true
+            },
+            orderBy: {
+                created_at: "desc"
+            }
+        })
+        : null;
+
+    const heroMessage = (todayMessageRow?.metadata as any)?.message as string | undefined;
+
     return (
         <DashboardClient
             user={user}
             profile={profile}
             couple={couple}
             daysTogether={daysTogether}
+            heroMessage={heroMessage}
         />
     );
 }

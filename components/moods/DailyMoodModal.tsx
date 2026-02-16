@@ -26,6 +26,7 @@ interface DailyMoodModalProps {
 export function DailyMoodModal({ open, onOpenChange }: DailyMoodModalProps) {
     const [selectedMood, setSelectedMood] = useState<string | null>(null);
     const [note, setNote] = useState("");
+    const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async () => {
@@ -35,14 +36,26 @@ export function DailyMoodModal({ open, onOpenChange }: DailyMoodModalProps) {
         const result = await submitDailyMood({
             moodEmoji: selectedMood,
             note: note.trim() || undefined,
+            metadata: {
+                message: message.trim() || undefined,
+            },
         });
 
         setLoading(false);
 
         if (result.success) {
+            document.dispatchEvent(new CustomEvent('daily-mood-updated', {
+                detail: {
+                    moodEmoji: selectedMood,
+                    note: note.trim() || null,
+                    message: message.trim() || null,
+                }
+            }));
+
             // Close with heart animation
             setSelectedMood(null);
             setNote("");
+            setMessage("");
             onOpenChange(false);
         }
     };
@@ -93,6 +106,22 @@ export function DailyMoodModal({ open, onOpenChange }: DailyMoodModalProps) {
                         />
                         <p className="text-xs text-slate-400 text-right">
                             {note.length}/100
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-slate-600">
+                            Add a love quote (optional)
+                        </label>
+                        <Input
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            placeholder="Love you more than yesterday"
+                            maxLength={80}
+                            className="rounded-2xl border-romantic-blush bg-white/50"
+                        />
+                        <p className="text-xs text-slate-400 text-right">
+                            {message.length}/80
                         </p>
                     </div>
 

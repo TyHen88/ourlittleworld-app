@@ -3,16 +3,19 @@
 
 -- 1. Drop existing INSERT policy (it's blocking us)
 DROP POLICY IF EXISTS "Users can insert their own profile" ON profiles;
+DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON profiles;
 
 -- 2. Create a function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
+  INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
   VALUES (
     NEW.id,
     NEW.email,
-    NEW.raw_user_meta_data->>'full_name'
+    NEW.raw_user_meta_data->>'full_name',
+    NOW(),
+    NOW()
   );
   RETURN NEW;
 END;

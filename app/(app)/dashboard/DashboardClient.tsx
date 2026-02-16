@@ -1,28 +1,103 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { Heart, Stars, MapPin, Sparkles } from "lucide-react";
+import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
+import { updateTodayMoodMessage } from "@/lib/actions/moods";
+import { createClient } from "@/utils/supabase/client";
 
 interface DashboardClientProps {
     user: any;
     profile: any;
     couple: any;
     daysTogether: number;
+    heroMessage?: string;
 }
 
-export function DashboardClient({ user, profile, couple, daysTogether }: DashboardClientProps) {
+export function DashboardClient({ user, profile, couple, daysTogether, heroMessage }: DashboardClientProps) {
     const [moodModalOpen, setMoodModalOpen] = useState(false);
+    const [heroMessageLocal, setHeroMessageLocal] = useState(heroMessage || "");
+    const [editingHeroMessage, setEditingHeroMessage] = useState(false);
+    const [heroMessageDraft, setHeroMessageDraft] = useState("");
+    const [savingHeroMessage, setSavingHeroMessage] = useState(false);
 
     // Derived values for the partner
     const otherPartner = couple?.members?.find((m: any) => m.id !== user?.id);
+
+    const displayedHeroMessage = heroMessageLocal || "Love you more than yesterday";
+
+    useEffect(() => {
+        if (!couple?.id) return;
+
+        const supabase = createClient();
+        const todayKey = new Date().toISOString().split('T')[0];
+        const toDateKey = (value: any) => {
+            if (!value) return null;
+            if (typeof value === 'string') {
+                return value.includes('T') ? value.split('T')[0] : value;
+            }
+            try {
+                return new Date(value).toISOString().split('T')[0];
+            } catch {
+                return null;
+            }
+        };
+
+        const channel = supabase
+            .channel(`daily_moods:dashboard:${couple.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'daily_moods',
+                    filter: `couple_id=eq.${couple.id}`
+                },
+                (payload: any) => {
+                    if (editingHeroMessage) return;
+
+                    const row = payload?.new || payload?.old;
+                    const rowDateKey = toDateKey(row?.mood_date);
+                    if (rowDateKey !== todayKey) return;
+
+                    if (payload?.eventType === 'DELETE') {
+                        setHeroMessageLocal("");
+                        return;
+                    }
+
+                    const message = payload?.new?.metadata?.message ?? row?.metadata?.message;
+                    if (typeof message === 'string') {
+                        setHeroMessageLocal(message);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [couple?.id, editingHeroMessage]);
+
+    useEffect(() => {
+        const handler = (e: any) => {
+            if (editingHeroMessage) return;
+            const nextMessage = e?.detail?.message;
+            if (typeof nextMessage === 'string') {
+                setHeroMessageLocal(nextMessage);
+            }
+        };
+        document.addEventListener('daily-mood-updated', handler as any);
+        return () => {
+            document.removeEventListener('daily-mood-updated', handler as any);
+        };
+    }, [editingHeroMessage]);
 
     return (
         <div className="p-6 space-y-8 max-w-2xl mx-auto">
@@ -186,10 +261,74 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                         <Heart className="text-romantic-heart fill-romantic-heart animate-heart-beat" size={24} />
                     </div>
                     <div className="text-left flex-1">
-                        <h2 className="text-lg font-bold text-slate-800 italic leading-tight">"Love you more than yesterday"</h2>
+                        <div className="relative pr-10">
+                            {!editingHeroMessage ? (
+                                <>
+                                    <h2 className="text-lg font-bold text-slate-800 italic leading-tight">"{displayedHeroMessage}"</h2>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setHeroMessageDraft(displayedHeroMessage);
+                                            setEditingHeroMessage(true);
+                                        }}
+                                        className="absolute right-0 top-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-2 rounded-full bg-white/60 hover:bg-white/90"
+                                        aria-label="Edit message"
+                                    >
+                                        <Pencil size={16} className="text-slate-600" />
+                                    </button>
+                                </>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="bg-white/50 rounded-2xl p-3 border border-romantic-blush/30">
+                                        <textarea
+                                            value={heroMessageDraft}
+                                            onChange={(e) => setHeroMessageDraft(e.target.value)}
+                                            maxLength={120}
+                                            className="w-full bg-transparent border-none outline-none text-slate-700 font-semibold italic resize-none min-h-[56px]"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                            {heroMessageDraft.length}/120
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={savingHeroMessage}
+                                                onClick={async () => {
+                                                    setSavingHeroMessage(true);
+                                                    const result = await updateTodayMoodMessage(heroMessageDraft);
+                                                    setSavingHeroMessage(false);
+                                                    if (result.success) {
+                                                        setHeroMessageLocal(heroMessageDraft.trim());
+                                                        setEditingHeroMessage(false);
+                                                    }
+                                                }}
+                                                className="h-9 px-3 rounded-full bg-white/70 hover:bg-white transition-colors text-slate-700 font-bold text-xs flex items-center gap-1"
+                                            >
+                                                <Check size={16} />
+                                                Save
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={savingHeroMessage}
+                                                onClick={() => {
+                                                    setEditingHeroMessage(false);
+                                                    setHeroMessageDraft(displayedHeroMessage);
+                                                }}
+                                                className="h-9 px-3 rounded-full bg-white/50 hover:bg-white/70 transition-colors text-slate-600 font-bold text-xs flex items-center gap-1"
+                                            >
+                                                <X size={16} />
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">
                             <MapPin size={12} className="text-romantic-heart" />
-                            <span>San Francisco, CA</span>
+                            <span>{couple?.city || "Phnom Penh"}</span>
                         </div>
                     </div>
                 </motion.div>

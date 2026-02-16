@@ -25,6 +25,7 @@ export default function EnhancedOnboardingPage() {
     const router = useRouter();
     const [step, setStep] = useState<number>(1);
     const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
+    const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
     const [userId, setUserId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -228,7 +229,7 @@ export default function EnhancedOnboardingPage() {
 
                         <div className="space-y-4">
                             <Button
-                                onClick={() => { setMode("create"); setStep(2); }}
+                                onClick={() => { setMode("create"); setStep(2); setCreateStep(1); setError(""); }}
                                 className="w-full h-16 text-lg rounded-3xl bg-gradient-button text-white shadow-xl hover:shadow-2xl transition-all border-none group"
                             >
                                 <Plus className="mr-2 group-hover:rotate-90 transition-transform" size={24} />
@@ -268,6 +269,15 @@ export default function EnhancedOnboardingPage() {
                                 <p className="text-slate-500">Make it uniquely yours</p>
                             </div>
 
+                            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-slate-400 px-2">
+                                <span>Step {createStep} of 3</span>
+                                <div className="flex gap-2">
+                                    <div className={`h-2 w-8 rounded-full ${createStep >= 1 ? 'bg-romantic-heart' : 'bg-slate-200'}`} />
+                                    <div className={`h-2 w-8 rounded-full ${createStep >= 2 ? 'bg-romantic-heart' : 'bg-slate-200'}`} />
+                                    <div className={`h-2 w-8 rounded-full ${createStep >= 3 ? 'bg-romantic-heart' : 'bg-slate-200'}`} />
+                                </div>
+                            </div>
+
                             {error && (
                                 <motion.div
                                     initial={{ opacity: 0, y: -10 }}
@@ -279,138 +289,179 @@ export default function EnhancedOnboardingPage() {
                             )}
 
                             <div className="space-y-5">
-                                {/* World Name */}
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
-                                        World Name *
-                                    </Label>
-                                    <div className="relative">
-                                        <Input
-                                            value={worldName}
-                                            onChange={(e) => setWorldName(e.target.value)}
-                                            placeholder="Our Sweet Escape"
-                                            className="h-14 rounded-2xl border-romantic-blush bg-white/50 pr-12 text-lg"
-                                            maxLength={30}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleGenerateName}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-romantic-blush/20 rounded-full transition-colors"
-                                            title="Generate random name"
-                                        >
-                                            <Wand2 className="text-romantic-heart" size={20} />
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {NAME_SUGGESTIONS.slice(0, 4).map((name) => (
-                                            <button
-                                                key={name}
-                                                onClick={() => setWorldName(name)}
-                                                className="px-3 py-1 text-xs bg-romantic-blush/20 hover:bg-romantic-blush/40 text-romantic-heart rounded-full transition-colors"
-                                            >
-                                                {name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Start Date */}
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
-                                        <Calendar size={16} />
-                                        When did it all begin? (Optional)
-                                    </Label>
-                                    <Input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="h-14 rounded-2xl border-romantic-blush bg-white/50"
-                                    />
-                                </div>
-
-                                {/* Photo Upload */}
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
-                                        <Camera size={16} />
-                                        Couple Photo (Optional)
-                                    </Label>
-                                    {photoPreview ? (
-                                        <div className="relative">
-                                            <div className="w-full h-48 rounded-2xl overflow-hidden border-4 border-romantic-blush relative">
-                                                <img
-                                                    src={photoPreview}
-                                                    alt="Preview"
-                                                    className="w-full h-full object-cover"
+                                {createStep === 1 && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
+                                                World Name *
+                                            </Label>
+                                            <div className="relative">
+                                                <Input
+                                                    value={worldName}
+                                                    onChange={(e) => setWorldName(e.target.value)}
+                                                    placeholder="Our Sweet Escape"
+                                                    className="h-14 rounded-2xl border-romantic-blush bg-white/50 pr-12 text-lg"
+                                                    maxLength={30}
                                                 />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-romantic-heart/20 to-transparent" />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleGenerateName}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-romantic-blush/20 rounded-full transition-colors"
+                                                    title="Generate random name"
+                                                >
+                                                    <Wand2 className="text-romantic-heart" size={20} />
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={() => {
-                                                    setPhotoFile(null);
-                                                    setPhotoPreview(null);
-                                                }}
-                                                className="absolute top-2 right-2 p-2 bg-white/90 rounded-full hover:bg-white transition-colors"
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {NAME_SUGGESTIONS.slice(0, 4).map((name) => (
+                                                    <button
+                                                        key={name}
+                                                        onClick={() => setWorldName(name)}
+                                                        className="px-3 py-1 text-xs bg-romantic-blush/20 hover:bg-romantic-blush/40 text-romantic-heart rounded-full transition-colors"
+                                                    >
+                                                        {name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 pt-2">
+                                            <Button
+                                                onClick={() => { setError(""); setCreateStep(2); }}
+                                                disabled={!worldName.trim()}
+                                                className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg group"
                                             >
-                                                <X size={20} className="text-slate-600" />
+                                                <span>Continue</span>
+                                                <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
+                                            </Button>
+                                            <button
+                                                onClick={() => { setStep(1); setMode("choose"); setError(""); }}
+                                                className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                                            >
+                                                Back
                                             </button>
                                         </div>
-                                    ) : (
-                                        <label className="block w-full h-32 border-2 border-dashed border-romantic-blush rounded-2xl hover:border-romantic-heart transition-colors cursor-pointer bg-white/50">
-                                            <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                                                <Upload size={32} className="mb-2" />
-                                                <span className="text-sm">Click to upload</span>
-                                            </div>
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handlePhotoSelect}
-                                                className="hidden"
+                                    </>
+                                )}
+
+                                {createStep === 2 && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
+                                                <Calendar size={16} />
+                                                When did it all begin? (Optional)
+                                            </Label>
+                                            <Input
+                                                type="date"
+                                                value={startDate}
+                                                onChange={(e) => setStartDate(e.target.value)}
+                                                className="h-14 rounded-2xl border-romantic-blush bg-white/50"
                                             />
-                                        </label>
-                                    )}
-                                </div>
+                                        </div>
 
-                                {/* Partner Nickname */}
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
-                                        <Heart size={16} />
-                                        What do you call your love? (Optional)
-                                    </Label>
-                                    <Input
-                                        value={partnerNickname}
-                                        onChange={(e) => setPartnerNickname(e.target.value)}
-                                        placeholder="My Honey, My Love, Babe..."
-                                        className="h-14 rounded-2xl border-romantic-blush bg-white/50"
-                                        maxLength={20}
-                                    />
-                                </div>
-                            </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
+                                                <Camera size={16} />
+                                                Couple Photo (Optional)
+                                            </Label>
+                                            {photoPreview ? (
+                                                <div className="relative">
+                                                    <div className="w-full h-48 rounded-2xl overflow-hidden border-4 border-romantic-blush relative">
+                                                        <img
+                                                            src={photoPreview}
+                                                            alt="Preview"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-romantic-heart/20 to-transparent" />
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setPhotoFile(null);
+                                                            setPhotoPreview(null);
+                                                        }}
+                                                        className="absolute top-2 right-2 p-2 bg-white/90 rounded-full hover:bg-white transition-colors"
+                                                    >
+                                                        <X size={20} className="text-slate-600" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <label className="block w-full h-32 border-2 border-dashed border-romantic-blush rounded-2xl hover:border-romantic-heart transition-colors cursor-pointer bg-white/50">
+                                                    <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                                                        <Upload size={32} className="mb-2" />
+                                                        <span className="text-sm">Click to upload</span>
+                                                    </div>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handlePhotoSelect}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            )}
+                                        </div>
 
-                            <div className="space-y-3 pt-4">
-                                <Button
-                                    onClick={handleCreateWorld}
-                                    disabled={loading || !worldName.trim()}
-                                    className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg group"
-                                >
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin mr-2">⭐</div>
-                                            Creating Your World...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="mr-2" size={20} />
-                                            Create Our World
-                                            <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
-                                        </>
-                                    )}
-                                </Button>
-                                <button
-                                    onClick={() => { setStep(1); setMode("choose"); setError(""); }}
-                                    className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
-                                >
-                                    Go Back
-                                </button>
+                                        <div className="space-y-3 pt-2">
+                                            <Button
+                                                onClick={() => { setError(""); setCreateStep(3); }}
+                                                className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg group"
+                                            >
+                                                <span>Continue</span>
+                                                <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
+                                            </Button>
+                                            <button
+                                                onClick={() => { setError(""); setCreateStep(1); }}
+                                                className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                                            >
+                                                Back
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {createStep === 3 && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
+                                                <Heart size={16} />
+                                                What do you call your love? (Optional)
+                                            </Label>
+                                            <Input
+                                                value={partnerNickname}
+                                                onChange={(e) => setPartnerNickname(e.target.value)}
+                                                placeholder="My Honey, My Love, Babe..."
+                                                className="h-14 rounded-2xl border-romantic-blush bg-white/50"
+                                                maxLength={20}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-3 pt-2">
+                                            <Button
+                                                onClick={handleCreateWorld}
+                                                disabled={loading || !worldName.trim()}
+                                                className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg group"
+                                            >
+                                                {loading ? (
+                                                    <>
+                                                        <div className="animate-spin mr-2">⭐</div>
+                                                        Creating Your World...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Sparkles className="mr-2" size={20} />
+                                                        Create Our World
+                                                        <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
+                                                    </>
+                                                )}
+                                            </Button>
+                                            <button
+                                                onClick={() => { setError(""); setCreateStep(2); }}
+                                                className="w-full text-sm text-slate-400 hover:text-slate-600 transition-colors"
+                                            >
+                                                Back
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </Card>
                     </motion.div>
