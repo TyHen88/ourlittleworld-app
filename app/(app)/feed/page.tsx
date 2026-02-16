@@ -8,6 +8,7 @@ import { Plus, Sparkles, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCouple } from "@/hooks/use-couple";
 import { usePosts } from "@/hooks/use-posts";
+import { FullPageLoader } from "@/components/FullPageLoader";
 
 export default function FeedPage() {
     const [composerOpen, setComposerOpen] = useState(false);
@@ -89,6 +90,10 @@ export default function FeedPage() {
 
     const isLoadingInitial = (coupleLoading || postsLoading) && mappedPosts.length === 0;
 
+    if (isLoadingInitial) {
+        return <FullPageLoader />;
+    }
+
     return (
         <div className="p-6 space-y-8 max-w-2xl mx-auto">
             <header className="flex items-center justify-between">
@@ -102,12 +107,7 @@ export default function FeedPage() {
             </header>
 
             <section className="space-y-8 pt-4 pb-20">
-                {isLoadingInitial ? (
-                    <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                        <div className="w-10 h-10 border-4 border-romantic-blush border-t-romantic-heart rounded-full animate-spin" />
-                        <p className="text-sm text-slate-400 font-medium italic">Finding your memories...</p>
-                    </div>
-                ) : !couple?.id ? (
+                {!couple?.id ? (
                     <div className="text-center py-20 bg-white/50 rounded-4xl border-2 border-dashed border-romantic-blush/30">
                         <p className="text-slate-400 font-medium">No connection found.</p>
                     </div>

@@ -9,6 +9,7 @@ import { createPost } from "@/lib/actions/post";
 import { createClient } from "@/utils/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCouple } from "@/hooks/use-couple";
+import { FullPageLoader } from "@/components/FullPageLoader";
 
 interface AddPostFormProps {
     embedded?: boolean;
@@ -51,6 +52,10 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
             return [];
         });
     };
+
+    if (submitting && !embedded) {
+        return <FullPageLoader />;
+    }
 
     const handleSubmit = async () => {
         if (submitting) return;

@@ -93,3 +93,30 @@
 .bg-gradient-button {
   background: linear-gradient(to right, #FFB6C1, #FF6B6B);
 }
+
+.animate-spin-slow {
+  animation: spin 22s linear infinite;
+}
+
+.animate-heart-pulse {
+  animation: heartPulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-loading-bar {
+  animation: loadingBar 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes heartPulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.22); opacity: 1; }
+}
+
+@keyframes loadingBar {
+  0%   { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(300%); }
+}

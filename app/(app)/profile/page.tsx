@@ -9,6 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, Camera, Edit2, Save, X, LogOut, Copy, Check } from "lucide-react";
 import { getCurrentUser, signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { FullPageLoader } from "@/components/FullPageLoader";
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -18,11 +20,21 @@ export default function ProfilePage() {
     const [profile, setProfile] = useState<any>(null);
     const [couple, setCouple] = useState<any>(null);
     const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
+    const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
     const [formData, setFormData] = useState({
         full_name: "",
         avatar_url: "",
     });
+
+    useEffect(() => {
+        return () => {
+            if (formData.avatar_url?.startsWith("blob:")) {
+                URL.revokeObjectURL(formData.avatar_url);
+            }
+        };
+    }, [formData.avatar_url]);
 
     useEffect(() => {
         loadProfile();
@@ -62,6 +74,43 @@ export default function ProfilePage() {
         }
     };
 
+    const handleAvatarFileSelected = async (file: File) => {
+        if (!user?.id) return;
+
+        setUploadingAvatar(true);
+        try {
+            const ext = file.name.split(".").pop() || "jpg";
+            const fileName = `${user.id}-${Date.now()}.${ext}`;
+            const filePath = `avatars/${fileName}`;
+            const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "couple-assets";
+
+            const supabase = createClient();
+
+            const previewUrl = URL.createObjectURL(file);
+            setFormData((prev) => {
+                if (prev.avatar_url?.startsWith("blob:")) URL.revokeObjectURL(prev.avatar_url);
+                return { ...prev, avatar_url: previewUrl };
+            });
+
+            const { error: uploadError } = await supabase.storage
+                .from(bucket)
+                .upload(filePath, file, { cacheControl: "3600", upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from(bucket)
+                .getPublicUrl(filePath);
+
+            setFormData((prev) => {
+                if (prev.avatar_url?.startsWith("blob:")) URL.revokeObjectURL(prev.avatar_url);
+                return { ...prev, avatar_url: publicUrl };
+            });
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
     const handleSignOut = async () => {
         await signOut();
         router.push("/login");
@@ -76,11 +125,7 @@ export default function ProfilePage() {
     };
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gradient-love">
-                <Heart className="text-romantic-heart animate-heart-beat fill-romantic-heart" size={64} />
-            </div>
-        );
+        return <FullPageLoader />;
     }
 
     const otherPartner = couple?.members?.find((m: any) => m.id !== user?.id) ?? null;
@@ -112,9 +157,27 @@ export default function ProfilePage() {
                                 </AvatarFallback>
                             </Avatar>
                             {editing && (
-                                <button className="absolute bottom-0 right-0 p-3 bg-gradient-button text-white rounded-full shadow-lg hover:scale-110 transition-transform">
+                                <button
+                                    type="button"
+                                    onClick={() => avatarInputRef.current?.click()}
+                                    disabled={uploadingAvatar}
+                                    className="absolute bottom-0 right-0 p-3 bg-gradient-button text-white rounded-full shadow-lg hover:scale-110 transition-transform disabled:opacity-60"
+                                >
                                     <Camera size={20} />
                                 </button>
+                            )}
+                            {editing && (
+                                <input
+                                    ref={avatarInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = "";
+                                        if (file) handleAvatarFileSelected(file);
+                                    }}
+                                />
                             )}
                         </div>
 
@@ -135,19 +198,17 @@ export default function ProfilePage() {
 
                                     <div className="space-y-2">
                                         <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
-                                            Avatar URL
+                                            Avatar
                                         </Label>
-                                        <Input
-                                            value={formData.avatar_url}
-                                            onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
-                                            placeholder="https://example.com/avatar.jpg"
-                                            className="h-14 rounded-2xl border-romantic-blush bg-white/50"
-                                        />
+                                        <div className="text-sm text-slate-500 px-2">
+                                            Tap the camera icon to upload a photo.
+                                        </div>
                                     </div>
 
                                     <div className="flex gap-3 pt-4">
                                         <Button
                                             onClick={handleSave}
+                                            disabled={uploadingAvatar}
                                             className="flex-1 h-12 rounded-2xl bg-gradient-button text-white shadow-lg"
                                         >
                                             <Save size={18} className="mr-2" />

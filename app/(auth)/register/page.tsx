@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Heart, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { signUp } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
+import { FullPageLoader } from "@/components/FullPageLoader";
 
 export default function RegisterPage() {
     const router = useRouter();
@@ -19,6 +20,7 @@ export default function RegisterPage() {
     });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [redirecting, setRedirecting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,15 +37,24 @@ export default function RegisterPage() {
         }
 
         setLoading(true);
-        const result = await signUp(formData.email, formData.password, formData.fullName);
-        setLoading(false);
+        try {
+            const result = await signUp(formData.email, formData.password, formData.fullName);
 
-        if (result.success) {
-            router.push(`/confirm-email?email=${encodeURIComponent(formData.email)}`);
-        } else {
+            if (result.success) {
+                setRedirecting(true);
+                router.push(`/confirm-email?email=${encodeURIComponent(formData.email)}`);
+                return;
+            }
+
             setError(result.error || "Registration failed");
+        } finally {
+            setLoading(false);
         }
     };
+
+    if (redirecting) {
+        return <FullPageLoader />;
+    }
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[100dvh] p-6 bg-gradient-love">

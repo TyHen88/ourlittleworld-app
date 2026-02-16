@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Heart, Mail, Lock, ArrowRight } from "lucide-react";
 import { signIn } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
+import { FullPageLoader } from "@/components/FullPageLoader";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -17,21 +18,31 @@ export default function LoginPage() {
     });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [redirecting, setRedirecting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         setLoading(true);
 
-        const result = await signIn(formData.email, formData.password);
-        setLoading(false);
+        try {
+            const result = await signIn(formData.email, formData.password);
 
-        if (result.success) {
-            router.push((result as any).redirectTo || "/dashboard");
-        } else {
+            if (result.success) {
+                setRedirecting(true);
+                router.push((result as any).redirectTo || "/dashboard");
+                return;
+            }
+
             setError(result.error || "Login failed");
+        } finally {
+            setLoading(false);
         }
     };
+
+    if (redirecting) {
+        return <FullPageLoader />;
+    }
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[100dvh] p-6 bg-gradient-love">
