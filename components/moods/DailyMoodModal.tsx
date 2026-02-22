@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Heart, X } from "lucide-react";
 import { submitDailyMood } from "@/lib/actions/moods";
+import { useQueryClient } from "@tanstack/react-query";
 
 const MOOD_EMOJIS = [
     { emoji: "😊", label: "Happy" },
@@ -24,6 +25,7 @@ interface DailyMoodModalProps {
 }
 
 export function DailyMoodModal({ open, onOpenChange }: DailyMoodModalProps) {
+    const queryClient = useQueryClient();
     const [selectedMood, setSelectedMood] = useState<string | null>(null);
     const [note, setNote] = useState("");
     const [message, setMessage] = useState("");
@@ -33,30 +35,58 @@ export function DailyMoodModal({ open, onOpenChange }: DailyMoodModalProps) {
         if (!selectedMood) return;
 
         setLoading(true);
+
+        // Optimistic update - update UI immediately
+        const todayKey = new Date().toISOString().split('T')[0];
+        const optimisticData = {
+            mood_emoji: selectedMood,
+            note: note.trim() || null,
+            metadata: message.trim() ? { message: message.trim() } : null,
+        };
+
+        // Update mood badge immediately
+        queryClient.setQueryData(['daily-mood'], (old: any) => optimisticData);
+
+        // Dispatch event for immediate UI update
+        document.dispatchEvent(new CustomEvent('daily-mood-updated', {
+            detail: {
+                moodEmoji: selectedMood,
+                note: note.trim() || null,
+                message: message.trim() || null,
+            }
+        }));
+
+        // Close modal immediately for smooth UX
+        const tempMood = selectedMood;
+        const tempNote = note;
+        const tempMessage = message;
+        setSelectedMood(null);
+        setNote("");
+        setMessage("");
+        onOpenChange(false);
+
+        // Save to server in background
         const result = await submitDailyMood({
-            moodEmoji: selectedMood,
-            note: note.trim() || undefined,
+            moodEmoji: tempMood,
+            note: tempNote.trim() || undefined,
             metadata: {
-                message: message.trim() || undefined,
+                message: tempMessage.trim() || undefined,
             },
         });
 
         setLoading(false);
 
         if (result.success) {
-            document.dispatchEvent(new CustomEvent('daily-mood-updated', {
-                detail: {
-                    moodEmoji: selectedMood,
-                    note: note.trim() || null,
-                    message: message.trim() || null,
-                }
-            }));
-
-            // Close with heart animation
-            setSelectedMood(null);
-            setNote("");
-            setMessage("");
-            onOpenChange(false);
+            // Confirm with server data
+            queryClient.invalidateQueries({ queryKey: ['couple'] });
+            queryClient.invalidateQueries({ queryKey: ['daily-mood'] });
+        } else {
+            // Rollback on error - reopen modal
+            setSelectedMood(tempMood);
+            setNote(tempNote);
+            setMessage(tempMessage);
+            onOpenChange(true);
+            queryClient.invalidateQueries({ queryKey: ['daily-mood'] });
         }
     };
 

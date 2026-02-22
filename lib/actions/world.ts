@@ -94,7 +94,6 @@ export async function createWorld(data: CreateWorldData) {
                     return newCouple;
                 });
 
-                revalidatePath('/dashboard');
                 return {
                     success: true,
                     data: couple,
@@ -195,7 +194,6 @@ export async function joinWorld(data: JoinWorldData) {
             });
         });
 
-        revalidatePath('/dashboard');
         return {
             success: true,
             data: couple,

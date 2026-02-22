@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { AddPostForm } from "@/components/love/AddPostForm";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Sparkles, X } from "lucide-react";
+import { MessageCircle, MessageCircleHeart, MessageSquare, Plus, Sparkles, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCouple } from "@/hooks/use-couple";
 import { usePosts } from "@/hooks/use-posts";
@@ -123,6 +123,7 @@ export default function FeedPage() {
                                 key={p.id}
                                 {...p}
                                 currentUserId={user?.id}
+                                coupleId={couple?.id}
                             />
                         ))}
 
@@ -177,13 +178,16 @@ export default function FeedPage() {
             </AnimatePresence>
 
             <motion.button
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5, type: "spring" }}
                 type="button"
                 onClick={() => setComposerOpen(true)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-brand rounded-full shadow-2xl flex items-center justify-center z-40 text-white"
+                className="fixed bottom-24 right-6 w-14 h-14 bg-romantic-heart rounded-full shadow-2xl flex items-center justify-center z-40 text-white border-2 border-white"
             >
-                <Plus size={28} />
+                <MessageCircleHeart size={28} />
             </motion.button>
         </div>
     );

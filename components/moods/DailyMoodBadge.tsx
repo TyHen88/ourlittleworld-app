@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface DailyMoodBadgeProps {
     userId: string;
@@ -10,9 +11,9 @@ interface DailyMoodBadgeProps {
 }
 
 export function DailyMoodBadge({ userId, coupleId, position = "top-right" }: DailyMoodBadgeProps) {
-    const [mood, setMood] = useState<string | null>(null);
-    const [note, setNote] = useState<string | null>(null);
+    const queryClient = useQueryClient();
     const [noteOpen, setNoteOpen] = useState(false);
+    const todayKey = new Date().toISOString().split('T')[0];
 
     const toDateKey = (value: any) => {
         if (!value) return null;
@@ -27,25 +28,28 @@ export function DailyMoodBadge({ userId, coupleId, position = "top-right" }: Dai
         }
     };
 
-    useEffect(() => {
-        const supabase = createClient();
-        const todayKey = new Date().toISOString().split('T')[0];
-
-        // Fetch initial mood
-        const fetchMood = async () => {
+    // Fetch mood with React Query
+    const { data: moodData } = useQuery({
+        queryKey: ['daily-mood', userId, todayKey],
+        queryFn: async () => {
+            const supabase = createClient();
             const { data } = await supabase
                 .from('daily_moods')
                 .select('mood_emoji, note')
                 .eq('user_id', userId)
                 .eq('mood_date', todayKey)
                 .maybeSingle();
+            return data;
+        },
+        staleTime: 30 * 1000,
+    });
 
-            setMood(data?.mood_emoji || null);
-            setNote(data?.note || null);
-            setNoteOpen(false);
-        };
+    const mood = moodData?.mood_emoji || null;
+    const note = moodData?.note || null;
 
-        fetchMood();
+    // Realtime subscription
+    useEffect(() => {
+        const supabase = createClient();
 
         // Subscribe to realtime updates
         const channel = supabase
@@ -65,13 +69,7 @@ export function DailyMoodBadge({ userId, coupleId, position = "top-right" }: Dai
 
                     // Update if it's this user's mood for today
                     if (rowUserId === userId && rowDateKey === todayKey) {
-                        if (payload?.eventType === 'DELETE') {
-                            setMood(null);
-                            setNote(null);
-                        } else {
-                            setMood(payload?.new?.mood_emoji || row?.mood_emoji || null);
-                            setNote(payload?.new?.note || row?.note || null);
-                        }
+                        queryClient.invalidateQueries({ queryKey: ['daily-mood', userId, todayKey] });
                         setNoteOpen(false);
                     }
                 }

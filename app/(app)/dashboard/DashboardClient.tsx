@@ -3,36 +3,73 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
-import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X } from "lucide-react";
+import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X, Wallet, TrendingUp, Calendar, Bell, Upload, Target, ArrowRight, Zap, Clock, Gift } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { updateTodayMoodMessage } from "@/lib/actions/moods";
 import { createClient } from "@/utils/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface DashboardClientProps {
     user: any;
     profile: any;
     couple: any;
     daysTogether: number;
-    heroMessage?: string;
 }
 
-export function DashboardClient({ user, profile, couple, daysTogether, heroMessage }: DashboardClientProps) {
+export function DashboardClient({ user, profile, couple, daysTogether }: DashboardClientProps) {
+    const queryClient = useQueryClient();
     const [moodModalOpen, setMoodModalOpen] = useState(false);
-    const [heroMessageLocal, setHeroMessageLocal] = useState(heroMessage || "");
+    const [heroMessageLocal, setHeroMessageLocal] = useState("");
     const [editingHeroMessage, setEditingHeroMessage] = useState(false);
     const [heroMessageDraft, setHeroMessageDraft] = useState("");
     const [savingHeroMessage, setSavingHeroMessage] = useState(false);
+    const [loadingHeroMessage, setLoadingHeroMessage] = useState(true);
+    const [displayMode, setDisplayMode] = useState<"days" | "months">("days");
 
     // Derived values for the partner
     const otherPartner = couple?.members?.find((m: any) => m.id !== user?.id);
 
+    // Calculate months together
+    const monthsTogether = Math.floor(daysTogether / 30);
+
     const displayedHeroMessage = heroMessageLocal || "Love you more than yesterday";
 
+    // Fetch hero message on mount
+    useEffect(() => {
+        if (!couple?.id) return;
+
+        const fetchHeroMessage = async () => {
+            const supabase = createClient();
+            const todayKey = new Date().toISOString().split('T')[0];
+            const today = new Date(todayKey);
+
+            const { data } = await supabase
+                .from('daily_moods')
+                .select('metadata')
+                .eq('couple_id', couple.id)
+                .eq('mood_date', today.toISOString())
+                .not('metadata', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (data?.metadata) {
+                const message = (data.metadata as any)?.message;
+                if (typeof message === 'string') {
+                    setHeroMessageLocal(message);
+                }
+            }
+            setLoadingHeroMessage(false);
+        };
+
+        fetchHeroMessage();
+    }, [couple?.id]);
+
+    // Realtime subscription for hero message updates
     useEffect(() => {
         if (!couple?.id) return;
 
@@ -155,14 +192,13 @@ export function DashboardClient({ user, profile, couple, daysTogether, heroMessa
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.5 }}
                 >
-                    <Card className="relative overflow-hidden p-8 border-none bg-gradient-to-br from-romantic-blush/40 via-romantic-lavender/40 to-white shadow-xl rounded-4xl">
-                        <div className="relative z-10 text-center space-y-6">
-                            <div className="flex flex-col items-center space-y-4">
-                                <div className="flex items-center justify-center -space-x-4">
+                    <Card className="relative overflow-hidden p-5 border-none bg-gradient-to-br from-romantic-blush/40 via-romantic-lavender/40 to-white shadow-xl rounded-3xl">
+                        <div className="relative z-10 text-center space-y-4">
+                            <div className="flex flex-col items-center space-y-3">
+                                <div className="flex items-center justify-center -space-x-3">
                                     <div className="relative group">
-                                        <div className="absolute -inset-1 bg-gradient-to-r from-romantic-heart to-romantic-blush rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                                        <Avatar className="w-20 h-20 border-4 border-white shadow-xl relative">
-                                            <AvatarFallback className="bg-romantic-blush text-romantic-heart text-xl font-bold overflow-hidden">
+                                        <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
+                                            <AvatarFallback className="bg-romantic-blush text-romantic-heart text-lg font-bold overflow-hidden">
                                                 {profile?.avatar_url ? (
                                                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                                                 ) : (profile?.full_name?.[0] || 'M')}
@@ -176,13 +212,12 @@ export function DashboardClient({ user, profile, couple, daysTogether, heroMessa
                                             />
                                         )}
                                     </div>
-                                    <div className="z-10 bg-white rounded-full p-2 shadow-lg -rotate-12">
-                                        <Heart className="text-romantic-heart fill-romantic-heart w-6 h-6 animate-heart-beat" />
+                                    <div className="z-10 bg-white rounded-full p-1.5 shadow-md -rotate-12">
+                                        <Heart className="text-romantic-heart fill-romantic-heart w-5 h-5 animate-heart-beat" />
                                     </div>
                                     <div className="relative group">
-                                        <div className="absolute -inset-1 bg-gradient-to-r from-romantic-lavender to-romantic-blush rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                                        <Avatar className="w-20 h-20 border-4 border-white shadow-xl relative">
-                                            <AvatarFallback className="bg-romantic-lavender text-slate-600 text-xl font-bold overflow-hidden">
+                                        <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
+                                            <AvatarFallback className="bg-romantic-lavender text-slate-600 text-lg font-bold overflow-hidden">
                                                 {otherPartner?.avatar_url ? (
                                                     <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
                                                 ) : (otherPartner?.full_name?.[0] || 'L')}
@@ -199,52 +234,40 @@ export function DashboardClient({ user, profile, couple, daysTogether, heroMessa
                                 </div>
 
                                 <div className="space-y-1">
-                                    <h3 className="text-xl font-black text-slate-800 tracking-tight">
+                                    <h3 className="text-lg font-bold text-slate-800">
                                         {couple.partner_1_nickname || "Partner 1"} & {couple.partner_2_nickname || "Partner 2"}
                                     </h3>
-                                    <div className="flex items-center justify-center gap-2">
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-white/50 px-3 py-1 rounded-full backdrop-blur-sm">
-                                            {couple.couple_name}
-                                        </span>
-                                    </div>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white/50 px-2.5 py-0.5 rounded-full">
+                                        {couple.couple_name}
+                                    </span>
                                 </div>
                             </div>
 
-                            <div className="inline-block relative">
-                                <motion.div
-                                    animate={{
-                                        scale: [1, 1.05, 1],
-                                        rotate: [0, 2, -2, 0]
-                                    }}
-                                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                                    className="bg-gradient-button text-white px-10 py-5 rounded-[2.5rem] shadow-2xl relative z-10"
+                            <div className="space-y-2 flex flex-col items-center">
+                                <button
+                                    onClick={() => setDisplayMode(displayMode === "days" ? "months" : "days")}
+                                    className="text-lg font-bold text-slate-800 hover:text-romantic-heart transition-colors cursor-pointer"
                                 >
-                                    <div className="text-5xl font-black tracking-tighter">
-                                        D+{daysTogether}
-                                    </div>
-                                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-80 mt-1">
-                                        Days Together
-                                    </div>
-                                </motion.div>
-                                <div className="absolute inset-0 bg-romantic-heart/20 rounded-[2.5rem] blur-2xl animate-pulse" />
-                            </div>
+                                    {displayMode === "days"
+                                        ? `Day ${daysTogether.toLocaleString()} Together`
+                                        : `${monthsTogether} Months Together`
+                                    }
+                                </button>
 
-                            <div className="pt-2">
-                                <div className="inline-flex items-center gap-2 bg-slate-50/80 backdrop-blur-sm px-4 py-2 rounded-full border border-white/50 shadow-sm">
-                                    <Sparkles className="text-romantic-heart w-3 h-3" />
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">
-                                        Anniversary: {formatAnniversaryDate(couple.start_date) || "Special Day"}
+                                <div className="flex items-center justify-center gap-1.5 bg-slate-50/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/50 shadow-sm w-fit mx-auto">
+                                    <Calendar className="text-romantic-heart w-3 h-3" />
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                        {formatAnniversaryDate(couple.start_date) || "Special Day"}
                                     </p>
-                                    <Sparkles className="text-romantic-heart w-3 h-3" />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                            <Heart className="w-32 h-32 text-romantic-heart fill-romantic-heart" />
+                        <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
+                            <Heart className="w-20 h-20 text-romantic-heart fill-romantic-heart" />
                         </div>
-                        <div className="absolute bottom-0 left-0 p-4 opacity-10 pointer-events-none">
-                            <Heart className="w-24 h-24 text-romantic-lavender fill-romantic-lavender" />
+                        <div className="absolute bottom-0 left-0 p-3 opacity-10 pointer-events-none">
+                            <Heart className="w-16 h-16 text-romantic-lavender fill-romantic-lavender" />
                         </div>
                     </Card>
                 </motion.div>
@@ -296,12 +319,24 @@ export function DashboardClient({ user, profile, couple, daysTogether, heroMessa
                                                 type="button"
                                                 disabled={savingHeroMessage}
                                                 onClick={async () => {
+                                                    // Optimistic update - update UI immediately
+                                                    const previousMessage = heroMessageLocal;
+                                                    setHeroMessageLocal(heroMessageDraft.trim());
+                                                    setEditingHeroMessage(false);
+
+                                                    // Save to server in background
                                                     setSavingHeroMessage(true);
                                                     const result = await updateTodayMoodMessage(heroMessageDraft);
                                                     setSavingHeroMessage(false);
+
                                                     if (result.success) {
-                                                        setHeroMessageLocal(heroMessageDraft.trim());
-                                                        setEditingHeroMessage(false);
+                                                        // Confirm with server data
+                                                        queryClient.invalidateQueries({ queryKey: ['couple'] });
+                                                    } else {
+                                                        // Rollback on error
+                                                        setHeroMessageLocal(previousMessage);
+                                                        setEditingHeroMessage(true);
+                                                        setHeroMessageDraft(previousMessage);
                                                     }
                                                 }}
                                                 className="h-9 px-3 rounded-full bg-white/70 hover:bg-white transition-colors text-slate-700 font-bold text-xs flex items-center gap-1"
@@ -337,37 +372,182 @@ export function DashboardClient({ user, profile, couple, daysTogether, heroMessa
                 <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-white/10 rounded-full blur-xl" />
             </Card>
 
+            {/* Quick Actions */}
+            <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="space-y-4"
+            >
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Zap className="text-romantic-heart" size={20} />
+                    Quick Actions
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                    <motion.a
+                        href="/budget"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-100 hover:border-green-200 transition-all group"
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className="p-2 bg-green-100 rounded-xl group-hover:bg-green-200 transition-colors">
+                                <Wallet className="text-green-600" size={20} />
+                            </div>
+                            <ArrowRight className="text-green-300 group-hover:text-green-400 transition-colors" size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Add Transaction</h4>
+                        <p className="text-xs text-slate-500 mt-1">Track your spending</p>
+                    </motion.a>
+
+                    <motion.a
+                        href="/budget"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100 hover:border-blue-200 transition-all group"
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className="p-2 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
+                                <TrendingUp className="text-blue-600" size={20} />
+                            </div>
+                            <ArrowRight className="text-blue-300 group-hover:text-blue-400 transition-colors" size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">View Budget</h4>
+                        <p className="text-xs text-slate-500 mt-1">Check your progress</p>
+                    </motion.a>
+
+                    <motion.button
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setMoodModalOpen(true)}
+                        className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group"
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className="p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors">
+                                <Heart className="text-pink-600" size={20} />
+                            </div>
+                            <ArrowRight className="text-pink-300 group-hover:text-pink-400 transition-colors" size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Daily Mood</h4>
+                        <p className="text-xs text-slate-500 mt-1">How are you feeling?</p>
+                    </motion.button>
+
+                    <motion.a
+                        href="/feed"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-2xl border border-purple-100 hover:border-purple-200 transition-all group"
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className="p-2 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors">
+                                <Sparkles className="text-purple-600" size={20} />
+                            </div>
+                            <ArrowRight className="text-purple-300 group-hover:text-purple-400 transition-colors" size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Share Memory</h4>
+                        <p className="text-xs text-slate-500 mt-1">Post a moment</p>
+                    </motion.a>
+                </div>
+            </motion.section>
+
             {/* Main Widgets */}
             <section className="space-y-6">
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-bold text-slate-800">Finances</h3>
                     <span className="text-xs font-bold text-romantic-heart uppercase tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
                 </div>
-                <BudgetOverview />
+                <BudgetOverview coupleId={couple?.id} />
             </section>
 
-            <section className="space-y-6 pb-6">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-800">Recent Memory</h3>
-                    <button className="text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-romantic-heart transition-colors">See Feed</button>
+            {/* Coming Soon Features */}
+            <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="space-y-4 pb-6"
+            >
+                <div className="flex items-center gap-2">
+                    <Gift className="text-romantic-heart" size={20} />
+                    <h3 className="text-lg font-bold text-slate-800">Coming Soon</h3>
+                    <span className="text-xs font-bold text-amber-600 uppercase tracking-widest px-2 py-0.5 bg-amber-50 rounded-full">New</span>
                 </div>
-                <CoupleFeedPost
-                    id="recent-memory"
-                    author="My Forever"
-                    content="Coffee morning at our favorite corner! ☕✨"
-                    timestamp="2 hours ago"
-                    comments={3}
-                    reactions={12}
-                />
-            </section>
+                <Card className="p-5 border-none bg-gradient-to-br from-slate-50 to-white shadow-sm rounded-3xl">
+                    <div className="space-y-4">
+                        <div className="flex items-start gap-3 group">
+                            <div className="p-2 bg-amber-50 rounded-xl group-hover:bg-amber-100 transition-colors">
+                                <Bell className="text-amber-600" size={18} />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-800 text-sm">Smart Reminders</h4>
+                                <p className="text-xs text-slate-500 mt-1">Budget alerts & daily expense tracking</p>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                    <Clock className="text-slate-400" size={12} />
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 2</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="h-px bg-slate-100" />
+
+                        <div className="flex items-start gap-3 group">
+                            <div className="p-2 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
+                                <Calendar className="text-blue-600" size={18} />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-800 text-sm">Calendar View</h4>
+                                <p className="text-xs text-slate-500 mt-1">Visualize spending by date & week</p>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                    <Clock className="text-slate-400" size={12} />
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 3</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="h-px bg-slate-100" />
+
+                        <div className="flex items-start gap-3 group">
+                            <div className="p-2 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
+                                <Upload className="text-green-600" size={18} />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-800 text-sm">Receipt Upload</h4>
+                                <p className="text-xs text-slate-500 mt-1">CSV import & bulk transactions</p>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                    <Clock className="text-slate-400" size={12} />
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 4</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="h-px bg-slate-100" />
+
+                        <div className="flex items-start gap-3 group">
+                            <div className="p-2 bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors">
+                                <Target className="text-purple-600" size={18} />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-800 text-sm">Savings Goals</h4>
+                                <p className="text-xs text-slate-500 mt-1">Track goals & multi-year planning</p>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                    <Clock className="text-slate-400" size={12} />
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            </motion.section>
 
             {/* Floating Heart Button for Mood Check-in */}
             {couple && (
                 <motion.button
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.5, type: "spring" }}
                     onClick={() => setMoodModalOpen(true)}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-button rounded-full shadow-2xl flex items-center justify-center z-50"
+                    className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-button rounded-full shadow-2xl flex items-center justify-center z-50 border-2 border-white"
                 >
                     <Heart className="text-white fill-white" size={24} />
                 </motion.button>

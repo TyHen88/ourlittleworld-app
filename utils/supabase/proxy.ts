@@ -42,6 +42,7 @@ export async function updateSession(request: NextRequest) {
         !request.nextUrl.pathname.startsWith('/register') &&
         !request.nextUrl.pathname.startsWith('/confirm-email') &&
         !request.nextUrl.pathname.startsWith('/auth') &&
+        !request.nextUrl.pathname.startsWith('/landing') &&
         request.nextUrl.pathname !== '/'
     ) {
         // Redirect to login if not authenticated

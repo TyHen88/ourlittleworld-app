@@ -13,104 +13,132 @@ enum Payer {
   SHARED
 }
 
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
 model Profile {
-  id         String      @id @db.Uuid
-  email      String      @unique
+  id         String  @id @db.Uuid
+  email      String  @unique
   full_name  String?
   avatar_url String?
-  couple_id  String?     @db.Uuid
+  couple_id  String? @db.Uuid
 
   // Timestamps
-  created_at DateTime    @default(now()) @db.Timestamptz(6)
-  updated_at DateTime    @updatedAt @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
 
   // Relations
-  couple     Couple?     @relation("MemberOf", fields: [couple_id], references: [id], onDelete: SetNull)
+  couple       Couple?       @relation("MemberOf", fields: [couple_id], references: [id], onDelete: SetNull)
   transactions Transaction[]
-  posts      Post[]
-  dailyMoods DailyMood[]
+  posts        Post[]
+  dailyMoods   DailyMood[]
 
   @@map("profiles")
 }
 
 model Couple {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invite_code     String        @unique
-  couple_name     String?
-  start_date      DateTime?     @db.Date
-  couple_photo_url String?
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invite_code        String    @unique
+  couple_name        String?
+  start_date         DateTime? @db.Date
+  couple_photo_url   String?
   partner_1_nickname String?
   partner_2_nickname String?
-  world_theme     String?       @default("blush")
+  world_theme        String?   @default("blush")
 
   // Timestamps
-  created_at      DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime      @updatedAt @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
 
   // Relations
-  members         Profile[]     @relation("MemberOf")
-  transactions    Transaction[]
-  posts           Post[]
-  dailyMoods      DailyMood[]
+  members      Profile[]     @relation("MemberOf")
+  transactions Transaction[]
+  budgets      Budget[]
+  posts        Post[]
+  dailyMoods   DailyMood[]
 
   @@map("couples")
 }
 
-model Transaction {
-  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  couple_id       String  @db.Uuid
-  amount          Decimal @db.Decimal(10, 2)
-  category        String
-  note            String?
-  payer           Payer?
-  created_by      String  @db.Uuid
-  transaction_date DateTime? @default(now()) @db.Timestamptz(6)
+model Budget {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id      String   @db.Uuid
+  month          String   // Format: "2026-02" for February 2026
+  monthly_total  Decimal  @db.Decimal(10, 2)
+  his_budget     Decimal  @db.Decimal(10, 2)
+  hers_budget    Decimal  @db.Decimal(10, 2)
+  shared_budget  Decimal  @db.Decimal(10, 2)
+  is_active      Boolean  @default(true)
 
   // Timestamps
-  created_at      DateTime @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime @updatedAt @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
 
   // Relations
-  couple          Couple  @relation(fields: [couple_id], references: [id], onDelete: Cascade)
-  creator         Profile @relation(fields: [created_by], references: [id], onDelete: Cascade) // Changed to Cascade because created_by is required
+  couple Couple @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+
+  @@unique([couple_id, month])
+  @@map("budgets")
+}
+
+model Transaction {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id        String          @db.Uuid
+  amount           Decimal         @db.Decimal(10, 2)
+  category         String
+  note             String?
+  payer            Payer?
+  type             TransactionType @default(EXPENSE)
+  created_by       String          @db.Uuid
+  transaction_date DateTime?       @default(now()) @db.Timestamptz(6)
+
+  // Timestamps
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  couple  Couple  @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+  creator Profile @relation(fields: [created_by], references: [id], onDelete: Cascade) // Changed to Cascade because created_by is required
 
   @@map("transactions")
 }
 
 model Post {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  couple_id   String   @db.Uuid
-  author_id   String   @db.Uuid
-  content     String   @db.Text
-  image_url   String?
-  metadata    Json?
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id String  @db.Uuid
+  author_id String  @db.Uuid
+  content   String  @db.Text
+  image_url String?
+  metadata  Json?
 
   // Timestamps
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
 
   // Relations
-  couple      Couple   @relation(fields: [couple_id], references: [id], onDelete: Cascade)
-  author      Profile  @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  couple Couple  @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+  author Profile @relation(fields: [author_id], references: [id], onDelete: Cascade)
 
   @@map("posts")
 }
 
 model DailyMood {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  couple_id   String   @db.Uuid
-  user_id     String   @db.Uuid
-  mood_date   DateTime @default(now()) @db.Date
-  mood_emoji  String
-  note        String?
-  metadata    Json?
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id  String   @db.Uuid
+  user_id    String   @db.Uuid
+  mood_date  DateTime @default(now()) @db.Date
+  mood_emoji String
+  note       String?
+  metadata   Json?
 
   // Timestamps
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
 
   // Relations
-  couple      Couple   @relation(fields: [couple_id], references: [id], onDelete: Cascade)
-  user        Profile  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  couple Couple  @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+  user   Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, mood_date])
   @@map("daily_moods")

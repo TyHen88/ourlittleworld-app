@@ -62,7 +62,6 @@ export async function submitDailyMood(data: {
             create: createData
         });
 
-        revalidatePath('/dashboard');
         return { success: true };
     } catch (error: any) {
         console.error('Submit mood error:', error);
@@ -142,7 +141,6 @@ export async function updateTodayMoodMessage(message: string) {
             });
         }
 
-        revalidatePath('/dashboard');
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };

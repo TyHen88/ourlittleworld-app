@@ -19,6 +19,7 @@ interface PostProps {
     imageUrl?: string | null;
     avatarUrl?: string | null;
     currentUserId?: string;
+    coupleId?: string;
     metadata?: {
         images?: string[];
         likes?: string[];
@@ -28,7 +29,7 @@ interface PostProps {
     };
 }
 
-export function CoupleFeedPost({ id, author, content, timestamp, reactions, comments, imageUrl, avatarUrl, metadata, currentUserId }: PostProps) {
+export function CoupleFeedPost({ id, author, content, timestamp, reactions, comments, imageUrl, avatarUrl, metadata, currentUserId, coupleId }: PostProps) {
     const queryClient = useQueryClient();
     const [modalOpen, setModalOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -83,8 +84,8 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
             // Revert on error
             setIsLiked(!nextLiked);
             setLikesCount(prev => !nextLiked ? prev + 1 : prev - 1);
-        } else {
-            queryClient.invalidateQueries({ queryKey: ['posts'], exact: false });
+        } else if (coupleId) {
+            queryClient.invalidateQueries({ queryKey: ['posts', coupleId] });
         }
     };
 
@@ -128,7 +129,9 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
         const result = await addComment(id, trimmed);
         if (result.success) {
             if (result.metadata) setLocalMetadata(result.metadata);
-            queryClient.invalidateQueries({ queryKey: ['posts'], exact: false });
+            if (coupleId) {
+                await queryClient.invalidateQueries({ queryKey: ['posts', coupleId] });
+            }
         } else {
             setLocalMetadata(prevMetadata);
         }
@@ -180,7 +183,9 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
         const result = await addReply(id, commentId, trimmed);
         if (result.success) {
             if (result.metadata) setLocalMetadata(result.metadata);
-            queryClient.invalidateQueries({ queryKey: ['posts'], exact: false });
+            if (coupleId) {
+                await queryClient.invalidateQueries({ queryKey: ['posts', coupleId] });
+            }
         } else {
             setLocalMetadata(prevMetadata);
         }

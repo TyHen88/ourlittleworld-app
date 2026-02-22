@@ -7,18 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, Camera, Edit2, Save, X, LogOut, Copy, Check } from "lucide-react";
-import { getCurrentUser, signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
+import { signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { FullPageLoader } from "@/components/FullPageLoader";
+import { useCouple } from "@/hooks/use-couple";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function ProfilePage() {
     const router = useRouter();
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const { user, profile, couple, isLoading } = useCouple();
+
     const [editing, setEditing] = useState(false);
-    const [user, setUser] = useState<any>(null);
-    const [profile, setProfile] = useState<any>(null);
-    const [couple, setCouple] = useState<any>(null);
     const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
     const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -37,40 +38,49 @@ export default function ProfilePage() {
     }, [formData.avatar_url]);
 
     useEffect(() => {
-        loadProfile();
-    }, []);
-
-    const loadProfile = async () => {
-        setLoading(true);
-        const result = await getCurrentUser();
-        if (!result.success || !result.user) {
+        if (!isLoading && !user) {
             router.push("/login");
-            return;
         }
+    }, [user, isLoading, router]);
 
-        setUser(result.user);
-        setProfile(result.profile);
-        setCouple((result.profile as any)?.couple ?? null);
-
-        setFormData({
-            full_name: (result.profile as any)?.full_name || "",
-            avatar_url: (result.profile as any)?.avatar_url || "",
-        });
-
-        setLoading(false);
-    };
+    useEffect(() => {
+        if (profile) {
+            setFormData({
+                full_name: (profile as any)?.full_name || "",
+                avatar_url: (profile as any)?.avatar_url || "",
+            });
+        }
+    }, [profile]);
 
     const handleSave = async () => {
         if (!user) return;
 
+        // Optimistic update - update UI immediately
+        const previousData = queryClient.getQueryData(['couple', user.id]);
+        queryClient.setQueryData(['couple', user.id], (old: any) => {
+            if (!old) return old;
+            return {
+                ...old,
+                full_name: formData.full_name,
+                avatar_url: formData.avatar_url,
+            };
+        });
+
+        setEditing(false);
+
+        // Save to server in background
         const result = await updateCurrentUserProfile({
             full_name: formData.full_name,
             avatar_url: formData.avatar_url,
         });
 
         if (result.success) {
-            setEditing(false);
-            loadProfile();
+            queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
+            queryClient.invalidateQueries({ queryKey: ['auth-user'] });
+        } else {
+            // Rollback on error
+            queryClient.setQueryData(['couple', user.id], previousData);
+            setEditing(true);
         }
     };
 
@@ -113,7 +123,7 @@ export default function ProfilePage() {
 
     const handleSignOut = async () => {
         await signOut();
-        router.push("/login");
+        router.push("/landing");
     };
 
     const copyInviteCode = () => {
@@ -124,7 +134,7 @@ export default function ProfilePage() {
         }
     };
 
-    if (loading) {
+    if (isLoading) {
         return <FullPageLoader />;
     }
 

@@ -3,6 +3,8 @@
 import prisma from "@/lib/prisma";
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getCachedUserOrThrow } from "@/lib/auth-cache";
+import { getCachedProfile } from "@/lib/db-utils";
 
 export async function createPost(input: {
     content: string;
@@ -10,19 +12,10 @@ export async function createPost(input: {
     metadata?: any;
 }) {
     try {
-        const supabase = await createClient();
-
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            return { success: false, error: "Not authenticated" };
-        }
-
+        const user = await getCachedUserOrThrow();
         const content = (input.content ?? "").trim();
 
-        const profile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { couple_id: true }
-        });
+        const profile = await getCachedProfile(user.id);
 
         if (!profile?.couple_id) {
             return { success: false, error: "No couple found" };
@@ -58,7 +51,6 @@ export async function createPost(input: {
             }
         });
 
-        revalidatePath('/feed');
         return { success: true, data };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -99,14 +91,8 @@ export async function uploadPostImage(file: File) {
 
 export async function toggleLikePost(postId: string) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) return { success: false, error: "Not authenticated" };
-
-        const profile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { couple_id: true }
-        });
+        const user = await getCachedUserOrThrow();
+        const profile = await getCachedProfile(user.id);
         if (!profile?.couple_id) return { success: false, error: "No couple found" };
 
         const post: any = await prisma.post.findUnique({
@@ -138,7 +124,6 @@ export async function toggleLikePost(postId: string) {
             data: { metadata: nextMetadata }
         });
 
-        revalidatePath('/feed');
         return { success: true, metadata: updated?.metadata ?? nextMetadata };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -147,20 +132,9 @@ export async function toggleLikePost(postId: string) {
 
 export async function addComment(postId: string, content: string) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) return { success: false, error: "Not authenticated" };
-
-        const coupleProfile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { couple_id: true }
-        });
-        if (!coupleProfile?.couple_id) return { success: false, error: "No couple found" };
-
-        const profile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { full_name: true, avatar_url: true }
-        });
+        const user = await getCachedUserOrThrow();
+        const profile = await getCachedProfile(user.id);
+        if (!profile?.couple_id) return { success: false, error: "No couple found" };
 
         const post: any = await prisma.post.findUnique({
             where: { id: postId },
@@ -168,7 +142,7 @@ export async function addComment(postId: string, content: string) {
         });
 
         if (!post) return { success: false, error: "Post not found" };
-        if (post.couple_id !== coupleProfile.couple_id) return { success: false, error: "Post not found" };
+        if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
 
         const metadata = (post.metadata as any) || {};
         const comments = Array.isArray(metadata.comments) ? metadata.comments : [];
@@ -198,7 +172,6 @@ export async function addComment(postId: string, content: string) {
             data: { metadata: nextMetadata }
         });
 
-        revalidatePath('/feed');
         return { success: true, comment: newComment, metadata: updated?.metadata ?? nextMetadata };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -207,20 +180,9 @@ export async function addComment(postId: string, content: string) {
 
 export async function addReply(postId: string, commentId: string, content: string) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) return { success: false, error: "Not authenticated" };
-
-        const coupleProfile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { couple_id: true }
-        });
-        if (!coupleProfile?.couple_id) return { success: false, error: "No couple found" };
-
-        const profile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { full_name: true, avatar_url: true }
-        });
+        const user = await getCachedUserOrThrow();
+        const profile = await getCachedProfile(user.id);
+        if (!profile?.couple_id) return { success: false, error: "No couple found" };
 
         const post: any = await prisma.post.findUnique({
             where: { id: postId },
@@ -228,7 +190,7 @@ export async function addReply(postId: string, commentId: string, content: strin
         });
 
         if (!post) return { success: false, error: "Post not found" };
-        if (post.couple_id !== coupleProfile.couple_id) return { success: false, error: "Post not found" };
+        if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
 
         const metadata = (post.metadata as any) || {};
         const comments = Array.isArray(metadata.comments) ? [...metadata.comments] : [];
@@ -263,7 +225,6 @@ export async function addReply(postId: string, commentId: string, content: strin
             data: { metadata: nextMetadata }
         });
 
-        revalidatePath('/feed');
         return { success: true, reply: newReply, metadata: updated?.metadata ?? nextMetadata };
     } catch (error: any) {
         return { success: false, error: error.message };

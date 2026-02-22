@@ -139,7 +139,6 @@ export async function createCouple(userId: string, coupleName?: string) {
                     return couple;
                 });
 
-                revalidatePath('/dashboard');
                 return { success: true, data, inviteCode };
             } catch (error: any) {
                 const isInviteCodeCollision =
@@ -217,7 +216,6 @@ export async function joinCouple(userId: string, inviteCode: string) {
             });
         });
 
-        revalidatePath('/dashboard');
         return { success: true, data: couple };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -287,7 +285,6 @@ export async function updateCurrentUserProfile(data: { full_name?: string; avata
             }
         });
 
-        revalidatePath('/profile');
         return { success: true, data: updated };
     } catch (error: any) {
         return { success: false, error: error.message };

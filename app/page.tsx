@@ -8,9 +8,9 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Simple simulation of authenticating/onboarding check
+    // Redirect to landing page
     const timer = setTimeout(() => {
-      router.push("/register");
+      router.push("/landing");
     }, 1500);
     return () => clearTimeout(timer);
   }, [router]);

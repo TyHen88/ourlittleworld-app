@@ -25,7 +25,7 @@ type PreviewImage = {
 
 export function AddPostForm({ embedded = false, className, onSuccess }: AddPostFormProps) {
     const queryClient = useQueryClient();
-    const { couple } = useCouple();
+    const { user, couple } = useCouple();
     const [content, setContent] = useState("");
     const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -121,30 +121,102 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
                 imageUrls = uploadedUrls.filter(Boolean);
             }
 
+            // Optimistic update - add post to cache immediately
+            const optimisticPost = {
+                id: `temp-${Date.now()}`,
+                couple_id: couple?.id,
+                author_id: user?.id,
+                content: trimmed,
+                image_url: imageUrls[0] || null,
+                metadata: {
+                    images: imageUrls,
+                    likes: [],
+                    likes_count: 0,
+                    comments: [],
+                    comments_count: 0,
+                },
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                author: {
+                    id: user?.id,
+                    full_name: user?.user_metadata?.full_name || 'You',
+                    avatar_url: user?.user_metadata?.avatar_url || null,
+                },
+            };
+
+            if (couple?.id) {
+                queryClient.setQueryData(['posts', couple.id], (old: any) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: any, idx: number) => {
+                            if (idx === 0) {
+                                return {
+                                    ...page,
+                                    data: [optimisticPost, ...page.data],
+                                };
+                            }
+                            return page;
+                        }),
+                    };
+                });
+            }
+
+            setContent("");
+            clearPreviews();
+            onSuccess?.();
+
+            // Save to server in background
             const result = await createPost({
                 content: trimmed,
                 imageUrls,
             });
 
-            if (!result?.success) throw new Error(result?.error || 'Failed to create post');
-
-            console.log("Post created successfully. Triggering cache refresh...");
-
-            // Fuzzy match all queries starting with 'posts'
-            // Using both to be absolutely sure
-            if (couple?.id) {
-                queryClient.invalidateQueries({ queryKey: ['posts', couple.id] });
+            if (!result?.success) {
+                // Rollback on error
+                if (couple?.id) {
+                    queryClient.setQueryData(['posts', couple.id], (old: any) => {
+                        if (!old) return old;
+                        return {
+                            ...old,
+                            pages: old.pages.map((page: any, idx: number) => {
+                                if (idx === 0) {
+                                    return {
+                                        ...page,
+                                        data: page.data.filter((p: any) => p.id !== optimisticPost.id),
+                                    };
+                                }
+                                return page;
+                            }),
+                        };
+                    });
+                }
+                throw new Error(result?.error || 'Failed to create post');
             }
-            queryClient.invalidateQueries({ queryKey: ['posts'], exact: false });
-            await queryClient.refetchQueries({
-                queryKey: ['posts'],
-                type: 'active',
-                exact: false
-            });
 
-            setContent("");
-            clearPreviews();
-            onSuccess?.();
+            // Replace temp post with real post from server
+            if (couple?.id && result.data) {
+                queryClient.setQueryData(['posts', couple.id], (old: any) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: any, idx: number) => {
+                            if (idx === 0) {
+                                return {
+                                    ...page,
+                                    data: page.data.map((p: any) =>
+                                        p.id === optimisticPost.id ? { ...result.data, author: optimisticPost.author } : p
+                                    ),
+                                };
+                            }
+                            return page;
+                        }),
+                    };
+                });
+
+                // Update Recent Memory on dashboard
+                queryClient.invalidateQueries({ queryKey: ['recent-posts', couple.id] });
+            }
         } catch (e: any) {
             setError(e?.message || 'Something went wrong');
         } finally {

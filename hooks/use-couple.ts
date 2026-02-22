@@ -15,6 +15,12 @@ export interface CoupleData {
     partner_2_nickname: string;
     partner_1_id: string;
     partner_2_id: string;
+    invite_code?: string;
+    members?: Array<{
+        id: string;
+        full_name: string | null;
+        avatar_url: string | null;
+    }>;
 }
 
 export interface UserProfile {
@@ -43,20 +49,18 @@ export function useCouple() {
         queryFn: async () => {
             if (!authQuery.data?.id) return null;
 
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*, couples!fk_profiles_couple(*)')
-                .eq('id', authQuery.data.id)
-                .maybeSingle();
-
-            if (error) throw error;
-            return data;
+            const res = await fetch('/api/me', { method: 'GET' });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(json?.error || 'Failed to load profile');
+            }
+            return json?.profile ?? null;
         },
         enabled: !!authQuery.data?.id,
     });
 
     const profile = coupleQuery.data;
-    const couple = profile?.couples as unknown as CoupleData | undefined;
+    const couple = (profile as any)?.couple as CoupleData | undefined;
     const daysTogether = couple ? calculateDaysTogether(couple.start_date) : 0;
 
     return {
