@@ -4,19 +4,23 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Wallet, Image as ImageIcon, Heart } from "lucide-react";
+import { Home, Wallet, Image as ImageIcon, Settings, Heart } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { icon: Home, label: "Home", href: "/dashboard" },
   { icon: Wallet, label: "Budget", href: "/budget" },
-  { icon: ImageIcon, label: "Feed", href: "/feed" },
-  { icon: Heart, label: "Us", href: "/profile" },
+  { icon: Heart, label: "Feed", href: "/feed" },
+  { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
+
+  if (pathname === "/create-post") {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-romantic-warm via-romantic-warm/95 to-transparent pointer-events-none">

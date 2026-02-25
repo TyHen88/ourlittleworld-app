@@ -37,8 +37,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js');
+                window.addEventListener('load', async () => {
+                  if ('${process.env.NODE_ENV}' === 'production') {
+                    navigator.serviceWorker.register('/sw.js');
+                    return;
+                  }
+
+                  const registrations = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(registrations.map((registration) => registration.unregister()));
                 });
               }
             `,

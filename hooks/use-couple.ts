@@ -36,11 +36,20 @@ export function useCouple() {
     const authQuery = useQuery({
         queryKey: ["auth-user"],
         queryFn: async () => {
-            const { data: { user }, error } = await supabase.auth.getUser();
-            if (error) throw error;
-            return user;
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error) {
+                    console.warn('Auth error:', error);
+                    return null;
+                }
+                return user;
+            } catch (err) {
+                console.warn('Failed to fetch user:', err);
+                return null;
+            }
         },
         staleTime: Infinity, // Auth guest session is stable
+        retry: false, // Don't retry auth failures
     });
 
     // 2. Fetch Profile & Couple
@@ -49,14 +58,21 @@ export function useCouple() {
         queryFn: async () => {
             if (!authQuery.data?.id) return null;
 
-            const res = await fetch('/api/me', { method: 'GET' });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                throw new Error(json?.error || 'Failed to load profile');
+            try {
+                const res = await fetch('/api/me', { method: 'GET' });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    console.warn('Failed to load profile:', json?.error);
+                    return null;
+                }
+                return json?.profile ?? null;
+            } catch (err) {
+                console.warn('Failed to fetch profile:', err);
+                return null;
             }
-            return json?.profile ?? null;
         },
         enabled: !!authQuery.data?.id,
+        retry: false, // Don't retry profile fetch failures
     });
 
     const profile = coupleQuery.data;

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X, Wallet, TrendingUp, Calendar, Bell, Upload, Target, ArrowRight, Zap, Clock, Gift } from "lucide-react";
+import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X, Wallet, TrendingUp, Calendar, Bell, Upload, Target, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
@@ -433,19 +433,51 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                     </motion.button>
 
                     <motion.a
-                        href="/feed"
+                        href="/calendar"
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-2xl border border-purple-100 hover:border-purple-200 transition-all group"
+                        className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group"
                     >
                         <div className="flex items-start justify-between">
-                            <div className="p-2 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors">
-                                <Sparkles className="text-purple-600" size={20} />
+                            <div className="p-2 bg-sky-100 rounded-xl group-hover:bg-sky-200 transition-colors">
+                                <Calendar className="text-sky-600" size={20} />
                             </div>
-                            <ArrowRight className="text-purple-300 group-hover:text-purple-400 transition-colors" size={16} />
+                            <ArrowRight className="text-sky-300 group-hover:text-sky-400 transition-colors" size={16} />
                         </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Share Memory</h4>
-                        <p className="text-xs text-slate-500 mt-1">Post a moment</p>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Calendar View</h4>
+                        <p className="text-xs text-slate-500 mt-1">Spending by date</p>
+                    </motion.a>
+
+                    <motion.a
+                        href="/create-post"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group"
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className="p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors">
+                                <Pencil className="text-pink-600" size={20} />
+                            </div>
+                            <ArrowRight className="text-pink-300 group-hover:text-pink-400 transition-colors" size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Create Memory</h4>
+                        <p className="text-xs text-slate-500 mt-1">Share a moment</p>
+                    </motion.a>
+
+                    <motion.a
+                        href="/settings"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="p-4 bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all group"
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
+                                <Settings className="text-slate-600" size={20} />
+                            </div>
+                            <ArrowRight className="text-slate-300 group-hover:text-slate-400 transition-colors" size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Settings</h4>
+                        <p className="text-xs text-slate-500 mt-1">Manage your account</p>
                     </motion.a>
                 </div>
             </motion.section>
@@ -489,7 +521,7 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
 
                         <div className="h-px bg-slate-100" />
 
-                        <div className="flex items-start gap-3 group">
+                        <a href="/calendar" className="flex items-start gap-3 group">
                             <div className="p-2 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
                                 <Calendar className="text-blue-600" size={18} />
                             </div>
@@ -497,11 +529,11 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                                 <h4 className="font-bold text-slate-800 text-sm">Calendar View</h4>
                                 <p className="text-xs text-slate-500 mt-1">Visualize spending by date & week</p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <Clock className="text-slate-400" size={12} />
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 3</span>
+                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
                                 </div>
                             </div>
-                        </div>
+                            <ArrowRight className="text-slate-300 group-hover:text-blue-400 transition-colors mt-1" size={16} />
+                        </a>
 
                         <div className="h-px bg-slate-100" />
 
@@ -521,7 +553,7 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
 
                         <div className="h-px bg-slate-100" />
 
-                        <div className="flex items-start gap-3 group">
+                        <a href="/goals" className="flex items-start gap-3 group">
                             <div className="p-2 bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors">
                                 <Target className="text-purple-600" size={18} />
                             </div>
@@ -529,11 +561,11 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                                 <h4 className="font-bold text-slate-800 text-sm">Savings Goals</h4>
                                 <p className="text-xs text-slate-500 mt-1">Track goals & multi-year planning</p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <Clock className="text-slate-400" size={12} />
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 5</span>
+                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
                                 </div>
                             </div>
-                        </div>
+                            <ArrowRight className="text-slate-300 group-hover:text-purple-400 transition-colors mt-1" size={16} />
+                        </a>
                     </div>
                 </Card>
             </motion.section>

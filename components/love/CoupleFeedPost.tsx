@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Heart, MessageCircle, Share2, MoreHorizontal, X, ChevronLeft, ChevronRight, Send, CornerDownRight } from "lucide-react";
+import { Heart, MessageCircle, Share2, MoreHorizontal, X, ChevronLeft, ChevronRight, Send, CornerDownRight, ZoomIn, ZoomOut, Download, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toggleLikePost, addComment, addReply } from "@/lib/actions/post";
 
@@ -35,6 +35,10 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isExpanded, setIsExpanded] = useState(false);
     const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+    const [imageScale, setImageScale] = useState(1);
+    const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [commentText, setCommentText] = useState("");
     const [submittingComment, setSubmittingComment] = useState(false);
     const [replyingToId, setReplyingToId] = useState<string | null>(null);
@@ -195,14 +199,52 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
     const openModal = (index: number) => {
         setCurrentImageIndex(index);
         setModalOpen(true);
+        setImageScale(1);
+        setImagePosition({ x: 0, y: 0 });
+    };
+
+    const handleZoomIn = () => {
+        setImageScale(prev => Math.min(prev + 0.5, 3));
+    };
+
+    const handleZoomOut = () => {
+        setImageScale(prev => Math.max(prev - 0.5, 1));
+        if (imageScale <= 1.5) {
+            setImagePosition({ x: 0, y: 0 });
+        }
+    };
+
+    const handleResetZoom = () => {
+        setImageScale(1);
+        setImagePosition({ x: 0, y: 0 });
+    };
+
+    const handleDownload = async () => {
+        const imageUrl = images[currentImageIndex];
+        try {
+            const response = await fetch(imageUrl);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `memory-${currentImageIndex + 1}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Download failed:', error);
+        }
     };
 
     const nextImage = () => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
+        handleResetZoom();
     };
 
     const prevImage = () => {
         setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+        handleResetZoom();
     };
 
     // Keyboard navigation for modal
@@ -299,65 +341,210 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
                 </div>
             )}
 
-            {/* Image Modal */}
+            {/* Enhanced Image Modal */}
             <AnimatePresence>
                 {modalOpen && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
+                        className="fixed inset-0 z-50 bg-black/98 flex items-center justify-center"
                         onClick={() => setModalOpen(false)}
                     >
-                        {/* Close Button */}
-                        <button
-                            onClick={() => setModalOpen(false)}
-                            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-10"
-                        >
-                            <X size={24} />
-                        </button>
+                        {/* Top Controls Bar */}
+                        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/50 to-transparent z-10">
+                            <div className="flex items-center gap-2">
+                                {/* Image Counter */}
+                                <div className="px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-white text-sm font-bold">
+                                    {currentImageIndex + 1} / {images.length}
+                                </div>
+                            </div>
 
-                        {/* Image Counter */}
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/10 rounded-full text-white text-sm font-medium">
-                            {currentImageIndex + 1} / {images.length}
+                            <div className="flex items-center gap-2">
+                                {/* Download Button */}
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownload();
+                                    }}
+                                    className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full text-white transition-colors"
+                                    title="Download image"
+                                >
+                                    <Download size={20} />
+                                </motion.button>
+
+                                {/* Close Button */}
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => setModalOpen(false)}
+                                    className="p-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full text-white transition-colors"
+                                >
+                                    <X size={20} />
+                                </motion.button>
+                            </div>
                         </div>
 
-                        {/* Main Image */}
+                        {/* Main Image Container */}
                         <div
-                            className="relative w-full h-full max-w-4xl max-h-[80vh]"
+                            className="relative w-full h-full flex items-center justify-center overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <Image
-                                src={images[currentImageIndex]}
-                                alt={`Image ${currentImageIndex + 1}`}
-                                fill
-                                className="object-contain"
-                                sizes="(max-width: 1024px) 100vw, 1024px"
-                            />
+                            <motion.div
+                                className="relative w-full h-full max-w-6xl max-h-[90vh] cursor-move"
+                                style={{
+                                    scale: imageScale,
+                                    x: imagePosition.x,
+                                    y: imagePosition.y,
+                                }}
+                                drag={imageScale > 1}
+                                dragConstraints={{
+                                    left: -200 * (imageScale - 1),
+                                    right: 200 * (imageScale - 1),
+                                    top: -200 * (imageScale - 1),
+                                    bottom: 200 * (imageScale - 1),
+                                }}
+                                dragElastic={0.1}
+                                onDragStart={() => setIsDragging(true)}
+                                onDragEnd={() => setIsDragging(false)}
+                                animate={{
+                                    scale: imageScale,
+                                    x: imagePosition.x,
+                                    y: imagePosition.y,
+                                }}
+                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            >
+                                <Image
+                                    src={images[currentImageIndex]}
+                                    alt={`Image ${currentImageIndex + 1}`}
+                                    fill
+                                    className="object-contain select-none"
+                                    sizes="(max-width: 1536px) 100vw, 1536px"
+                                    priority
+                                    draggable={false}
+                                />
+                            </motion.div>
+                        </div>
+
+                        {/* Bottom Controls Bar */}
+                        <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-center bg-gradient-to-t from-black/50 to-transparent z-10">
+                            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full p-2">
+                                {/* Zoom Out */}
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleZoomOut();
+                                    }}
+                                    disabled={imageScale <= 1}
+                                    className="p-2 hover:bg-white/20 rounded-full text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Zoom out"
+                                >
+                                    <ZoomOut size={20} />
+                                </motion.button>
+
+                                {/* Zoom Level Indicator */}
+                                <div className="px-3 py-1 text-white text-sm font-bold min-w-[60px] text-center">
+                                    {Math.round(imageScale * 100)}%
+                                </div>
+
+                                {/* Zoom In */}
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleZoomIn();
+                                    }}
+                                    disabled={imageScale >= 3}
+                                    className="p-2 hover:bg-white/20 rounded-full text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Zoom in"
+                                >
+                                    <ZoomIn size={20} />
+                                </motion.button>
+
+                                {/* Reset Zoom */}
+                                {imageScale > 1 && (
+                                    <motion.button
+                                        initial={{ opacity: 0, scale: 0 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0 }}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleResetZoom();
+                                        }}
+                                        className="p-2 hover:bg-white/20 rounded-full text-white transition-colors ml-2 border-l border-white/20 pl-3"
+                                        title="Reset zoom"
+                                    >
+                                        <Maximize2 size={20} />
+                                    </motion.button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Navigation Arrows */}
                         {images.length > 1 && (
                             <>
-                                <button
+                                <motion.button
+                                    whileHover={{ scale: 1.1, x: -5 }}
+                                    whileTap={{ scale: 0.9 }}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         prevImage();
                                     }}
-                                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                    className="absolute left-4 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full text-white transition-all shadow-2xl"
                                 >
-                                    <ChevronLeft size={32} />
-                                </button>
-                                <button
+                                    <ChevronLeft size={28} />
+                                </motion.button>
+                                <motion.button
+                                    whileHover={{ scale: 1.1, x: 5 }}
+                                    whileTap={{ scale: 0.9 }}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         nextImage();
                                     }}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-full text-white transition-all shadow-2xl"
                                 >
-                                    <ChevronRight size={32} />
-                                </button>
+                                    <ChevronRight size={28} />
+                                </motion.button>
                             </>
+                        )}
+
+                        {/* Thumbnail Strip */}
+                        {images.length > 1 && (
+                            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/30 backdrop-blur-sm rounded-full max-w-[90vw] overflow-x-auto scrollbar-hide">
+                                {images.map((img, idx) => (
+                                    <motion.button
+                                        key={idx}
+                                        whileHover={{ scale: 1.1 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCurrentImageIndex(idx);
+                                            handleResetZoom();
+                                        }}
+                                        className={cn(
+                                            "relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 transition-all",
+                                            currentImageIndex === idx
+                                                ? "ring-2 ring-white shadow-lg"
+                                                : "opacity-50 hover:opacity-100"
+                                        )}
+                                    >
+                                        <Image
+                                            src={img}
+                                            alt={`Thumbnail ${idx + 1}`}
+                                            fill
+                                            className="object-cover"
+                                            sizes="64px"
+                                        />
+                                    </motion.button>
+                                ))}
+                            </div>
                         )}
                     </motion.div>
                 )}

@@ -58,6 +58,7 @@ model Couple {
   budgets      Budget[]
   posts        Post[]
   dailyMoods   DailyMood[]
+  savingsGoals SavingsGoal[]
 
   @@map("couples")
 }
@@ -142,4 +143,29 @@ model DailyMood {
 
   @@unique([user_id, mood_date])
   @@map("daily_moods")
+}
+
+model SavingsGoal {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couple_id       String   @db.Uuid
+  title           String
+  description     String?
+  target_amount   Decimal  @db.Decimal(10, 2)
+  current_amount  Decimal  @default(0) @db.Decimal(10, 2)
+  icon            String?  @default("Target")
+  color           String?  @default("purple")
+  deadline        DateTime? @db.Date
+  priority        String?  @default("medium") // low, medium, high
+  is_completed    Boolean  @default(false)
+  completed_at    DateTime? @db.Timestamptz(6)
+  metadata        Json?    // For storing additional data like milestones, notes, etc.
+
+  // Timestamps
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  couple Couple @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+
+  @@map("savings_goals")
 }
