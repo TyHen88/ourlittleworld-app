@@ -47,6 +47,7 @@ export async function createPost(input: {
                 author_id: user.id,
                 content,
                 image_url: imageUrls[0] ?? null,
+                category: input.metadata?.category || null,
                 ...(nextMetadata ? { metadata: nextMetadata } : {}),
             }
         });

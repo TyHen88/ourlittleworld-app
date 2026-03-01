@@ -32,6 +32,9 @@ export default function CreatePostPage() {
     const [showFeelingPicker, setShowFeelingPicker] = useState<boolean>(false);
     const [showLocationDrawer, setShowLocationDrawer] = useState<boolean>(false);
     const [locationSearch, setLocationSearch] = useState("");
+    const [category, setCategory] = useState<string | null>(null);
+    const [categorySearch, setCategorySearch] = useState("");
+    const [showCategoryDrawer, setShowCategoryDrawer] = useState<boolean>(false);
 
     // Sample locations - in production, this would come from an API
     const popularLocations = [
@@ -47,9 +50,26 @@ export default function CreatePostPage() {
         { id: 10, name: "Museum", icon: "🏛️", category: "Culture" },
     ];
 
+    const categories = [
+        { id: 1, name: "Sweet Memories", icon: "✨" },
+        { id: 2, name: "Milestone", icon: "🏁" },
+        { id: 3, name: "Daily Life", icon: "🏠" },
+        { id: 4, name: "Travel", icon: "✈️" },
+        { id: 5, name: "Food", icon: "🍳" },
+        { id: 6, name: "Entertainment", icon: "🍿" },
+        { id: 7, name: "Shopping", icon: "🛍️" },
+        { id: 8, name: "Home", icon: "🛋️" },
+        { id: 9, name: "Other", icon: "🌈" },
+    ];
+
     const filteredLocations = popularLocations.filter(loc =>
         loc.name.toLowerCase().includes(locationSearch.toLowerCase()) ||
         loc.category.toLowerCase().includes(locationSearch.toLowerCase())
+    );
+
+    const filteredCategories = categories.filter(cat =>
+        cat.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
+        (cat.icon && cat.icon.toLowerCase().includes(categorySearch.toLowerCase()))
     );
 
     const MAX_CHARS = 500;
@@ -290,6 +310,10 @@ export default function CreatePostPage() {
                 metadata.location = location.trim();
             }
 
+            if (category) {
+                metadata.category = category;
+            }
+
             const result = await createPost({
                 content: trimmed,
                 imageUrls,
@@ -404,6 +428,20 @@ export default function CreatePostPage() {
                                 >
                                     <MapPin size={14} />
                                     <span>{location ? location : "Location"}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCategoryDrawer(true)}
+                                    className={cn(
+                                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors bg-white/70 backdrop-blur",
+                                        category
+                                            ? "border-purple-200 text-purple-700"
+                                            : "border-romantic-blush/30 text-slate-700 hover:bg-romantic-blush/20"
+                                    )}
+                                >
+                                    <Tag size={14} />
+                                    <span>{category ? category : "Category"}</span>
                                 </button>
                             </div>
                         </div>
@@ -594,6 +632,14 @@ export default function CreatePostPage() {
                             <MapPin size={18} className="text-slate-700" />
                             <span className="text-sm font-semibold text-slate-900">Location</span>
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowCategoryDrawer(true)}
+                            className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-romantic-blush/10 transition-colors"
+                        >
+                            <Tag size={18} className="text-slate-700" />
+                            <span className="text-sm font-semibold text-slate-900">Category</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -652,6 +698,66 @@ export default function CreatePostPage() {
                             </motion.div>
                         </div>
                     </motion.div>
+                )}
+            </AnimatePresence>
+            <AnimatePresence>
+                {/* category drawer */}
+                {showCategoryDrawer && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowCategoryDrawer(false)}
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+                        />
+                        <motion.div
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-50 max-h-[80vh] overflow-hidden"
+                        >
+                            <div className="max-w-2xl mx-auto p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-xl font-bold text-slate-900">Add Category</h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCategoryDrawer(false)}
+                                        className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                                    >
+                                        <X size={18} className="text-slate-700" />
+                                    </button>
+                                </div>
+                                <div className="mb-4">
+                                    <input
+                                        type="text"
+                                        value={categorySearch}
+                                        onChange={(e) => setCategorySearch(e.target.value)}
+                                        placeholder="Search category..."
+                                        className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-romantic-blush focus:border-transparent"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 overflow-y-auto max-h-[50vh]">
+                                    {filteredCategories.map((cat) => (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setCategory(cat.name);
+                                                setShowCategoryDrawer(false);
+                                                setCategorySearch("");
+                                            }}
+                                            className="flex items-center gap-2 p-3 rounded-2xl hover:bg-romantic-blush/20 transition-colors text-left"
+                                        >
+                                            <span className="text-2xl">{cat.icon}</span>
+                                            <span className="text-sm font-semibold text-slate-800 capitalize">{cat.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
                 )}
             </AnimatePresence>
 

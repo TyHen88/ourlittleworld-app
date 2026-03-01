@@ -112,6 +112,7 @@ model Post {
   author_id String  @db.Uuid
   content   String  @db.Text
   image_url String?
+  category  String?
   metadata  Json?
 
   // Timestamps
