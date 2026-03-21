@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircleHeart, Sparkles, X, Image as ImageIcon, Clock, Heart as HeartIcon, Filter, Search, ArrowLeft } from "lucide-react";
+import { toggleLikePost, addComment, addReply, deletePost } from "@/lib/actions/post";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useCouple } from "@/hooks/use-couple";
 import { usePosts } from "@/hooks/use-posts";
+import { useDebounce } from "@/hooks/use-debounce"; // I'll assume this exists or I'll create it
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { cn } from "@/lib/utils";
 
@@ -22,13 +24,14 @@ export default function FeedPage() {
 
     // Now both hooks use TanStack Query under the hood
     const { user, profile, couple, isLoading: coupleLoading } = useCouple();
+    const debouncedSearchQuery = useDebounce(searchQuery, 500);
     const {
         data,
         fetchNextPage,
         hasNextPage,
         isFetchingNextPage,
         isLoading: postsLoading
-    } = usePosts(couple?.id);
+    } = usePosts(couple?.id, debouncedSearchQuery);
 
     // Memoize the flattened and mapped posts with filtering
     const mappedPosts = useMemo(() => {
@@ -63,6 +66,7 @@ export default function FeedPage() {
                 avatarUrl: row?.author?.avatar_url ?? null,
                 metadata: row?.metadata ?? null,
                 category: row?.category ?? null,
+                authorId: row?.author_id ?? null,
             };
         });
     }, [data, user?.id, profile?.full_name]);
@@ -90,14 +94,8 @@ export default function FeedPage() {
             filtered = filtered.filter(p => p.metadata?.likes?.includes(currentUserId || ""));
         }
 
-        // Apply search
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(p =>
-                p.content.toLowerCase().includes(query) ||
-                p.author.toLowerCase().includes(query)
-            );
-        }
+        // Server-side search is now handled by usePosts with debouncedSearchQuery
+        // mappedPosts already contains the filtered results
 
         return filtered;
     }, [mappedPosts, filter, searchQuery, user?.id]);
@@ -349,6 +347,7 @@ export default function FeedPage() {
                                                 {...p}
                                                 currentUserId={user?.id}
                                                 coupleId={couple?.id}
+                                                authorId={p.authorId}
                                             />
                                         ))}
                                     </div>
@@ -371,6 +370,7 @@ export default function FeedPage() {
                                         {...p}
                                         currentUserId={user?.id}
                                         coupleId={couple?.id}
+                                        authorId={p.authorId}
                                     />
                                 </motion.div>
                             ))}

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Heart, Mail, User, ArrowRight, Loader2 } from "lucide-react";
 import { signUp } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
@@ -15,8 +15,6 @@ export default function RegisterPage() {
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
-        password: "",
-        confirmPassword: "",
     });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
@@ -25,20 +23,10 @@ export default function RegisterPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
-
-        if (formData.password !== formData.confirmPassword) {
-            setError("Passwords don't match");
-            return;
-        }
-
-        if (formData.password.length < 6) {
-            setError("Password must be at least 6 characters");
-            return;
-        }
-
         setLoading(true);
+
         try {
-            const result = await signUp(formData.email, formData.password, formData.fullName);
+            const result = await signUp(formData.email, formData.fullName);
 
             if (result.success) {
                 setRedirecting(true);
@@ -107,42 +95,6 @@ export default function RegisterPage() {
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="password" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
-                                Password
-                            </Label>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    placeholder="••••••••"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="h-14 pl-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="confirmPassword" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
-                                Confirm Password
-                            </Label>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    placeholder="••••••••"
-                                    value={formData.confirmPassword}
-                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                                    className="h-14 pl-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
-                                    required
-                                />
-                            </div>
-                        </div>
-
                         {error && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
@@ -158,8 +110,17 @@ export default function RegisterPage() {
                             disabled={loading}
                             className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg group"
                         >
-                            <span>{loading ? "Creating..." : "Create Account"}</span>
-                            {!loading && <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />}
+                            {loading ? (
+                                <>
+                                    <Loader2 className="mr-2 animate-spin" size={20} />
+                                    <span>Sending Code...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>Create Account</span>
+                                    <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                </>
+                            )}
                         </Button>
                     </form>
 

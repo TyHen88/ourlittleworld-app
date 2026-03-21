@@ -5,17 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Mail, Lock, ArrowRight } from "lucide-react";
-import { signIn } from "@/lib/actions/auth";
+import { Heart, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { requestLoginCode } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
+import { Lock, Eye, EyeOff } from "lucide-react";
+import { loginWithPassword } from "@/lib/actions/auth";
 
 export default function LoginPage() {
     const router = useRouter();
-    const [formData, setFormData] = useState({
-        email: "",
-        password: "",
-    });
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
@@ -26,15 +27,18 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const result = await signIn(formData.email, formData.password);
+            const result = await loginWithPassword({ email, password });
 
             if (result.success) {
                 setRedirecting(true);
-                router.push((result as any).redirectTo || "/dashboard");
+                router.push("/dashboard");
+                router.refresh();
                 return;
             }
 
-            setError(result.error || "Login failed");
+            setError(result.error || "Invalid email or password");
+        } catch (err: any) {
+            setError(err.message || "Something went wrong");
         } finally {
             setLoading(false);
         }
@@ -54,11 +58,11 @@ export default function LoginPage() {
                 <div className="text-center space-y-3">
                     <Heart className="mx-auto text-romantic-heart fill-romantic-heart animate-heart-beat" size={56} />
                     <h1 className="text-3xl font-bold text-slate-800">Welcome Back</h1>
-                    <p className="text-slate-500 font-medium">Sign in to your world</p>
+                    <p className="text-slate-500 font-medium">Safe & Sound in Our Little World</p>
                 </div>
 
                 <Card className="p-8 space-y-6 border-none shadow-2xl bg-white/70 backdrop-blur-xl rounded-4xl">
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
                                 Email
@@ -69,8 +73,8 @@ export default function LoginPage() {
                                     id="email"
                                     type="email"
                                     placeholder="you@example.com"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
                                     className="h-14 pl-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
                                     required
                                 />
@@ -85,13 +89,20 @@ export default function LoginPage() {
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                                 <Input
                                     id="password"
-                                    type="password"
+                                    type={showPassword ? "text" : "password"}
                                     placeholder="••••••••"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="h-14 pl-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="h-14 pl-12 pr-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 p-1 hover:text-romantic-heart transition-colors"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
                             </div>
                         </div>
 
@@ -110,8 +121,17 @@ export default function LoginPage() {
                             disabled={loading}
                             className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg group"
                         >
-                            <span>{loading ? "Signing in..." : "Sign In"}</span>
-                            {!loading && <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />}
+                            {loading ? (
+                                <>
+                                    <Loader2 className="mr-2 animate-spin" size={20} />
+                                    <span>Signing In...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>Sign In</span>
+                                    <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                </>
+                            )}
                         </Button>
                     </form>
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { getCachedUser } from "@/lib/auth-cache";
 import prisma from "@/lib/prisma";
 
 export async function PUT(
@@ -7,10 +7,9 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (userError || !user) {
+        if (!user || user.id === undefined) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -82,10 +81,9 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (userError || !user) {
+        if (!user || user.id === undefined) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 

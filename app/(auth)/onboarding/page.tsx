@@ -10,9 +10,9 @@ import {
     Calendar, Camera, Wand2, Upload, X
 } from "lucide-react";
 import { FloatingHearts } from "@/components/love/FloatingHearts";
-import { createWorld, joinWorld, generateWorldName, uploadCouplePhoto } from "@/lib/actions/world";
+import { createWorld, joinWorld, generateWorldName, uploadCouplePhoto, getUserCouple } from "@/lib/actions/world";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { useSession } from "next-auth/react";
 import confetti from "canvas-confetti";
 
 // Romantic name suggestions
@@ -23,6 +23,7 @@ const NAME_SUGGESTIONS = [
 
 export default function EnhancedOnboardingPage() {
     const router = useRouter();
+    const { data: session, status } = useSession();
     const [step, setStep] = useState<number>(1);
     const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
     const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
@@ -47,31 +48,25 @@ export default function EnhancedOnboardingPage() {
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
-        checkAuth();
-    }, []);
-
-    const checkAuth = async () => {
-        const supabase = createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !user) {
+        if (status === "unauthenticated") {
             router.push("/login");
             return;
         }
 
-        // Check if user already has a couple
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('couple_id')
-            .eq('id', user.id)
-            .maybeSingle();
+        if (session?.user?.id) {
+            setUserId(session.user.id);
+            checkProfile(session.user.id);
+        }
+    }, [status, session]);
 
-        if (profile?.couple_id) {
+    const checkProfile = async (uid: string) => {
+        // Check if user already has a couple
+        const result = await getUserCouple(uid);
+
+        if (result.success && result.data) {
             router.push("/dashboard");
             return;
         }
-
-        setUserId(user.id);
     };
 
     const handleGenerateName = async () => {
@@ -104,7 +99,9 @@ export default function EnhancedOnboardingPage() {
             // Upload photo if provided
             let photoUrl = null;
             if (photoFile) {
-                const uploadResult = await uploadCouplePhoto(photoFile, userId);
+                const formData = new FormData();
+                formData.append("file", photoFile);
+                const uploadResult = await uploadCouplePhoto(formData);
                 if (uploadResult.success) {
                     photoUrl = uploadResult.url;
                 }
@@ -189,7 +186,7 @@ export default function EnhancedOnboardingPage() {
         exit: { opacity: 0, scale: 0.95, transition: { duration: 0.3 } }
     };
 
-    if (!userId) {
+    if (status === "loading" || !userId) {
         return (
             <div className="flex items-center justify-center min-h-[100dvh] bg-gradient-love">
                 <Heart className="text-romantic-heart animate-heart-beat fill-romantic-heart" size={64} />

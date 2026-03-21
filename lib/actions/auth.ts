@@ -1,89 +1,155 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import { signIn as nextAuthSignIn, signOut as nextAuthSignOut } from "@/auth";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { AuthError } from "next-auth";
+import { getCachedUser } from "@/lib/auth-cache";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
-// Generate a unique 6-character invite code
-function generateInviteCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
-
-export async function signUp(email: string, password: string, fullName: string) {
+export async function signUp(email: string, fullName: string) {
     try {
-        const supabase = await createClient();
-
-        // Get the base URL for redirect
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001';
-        const callbackUrl = new URL('/auth/callback', baseUrl);
-        callbackUrl.searchParams.set('next', '/onboarding');
-
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: fullName,
-                },
-                // Redirect to onboarding after email confirmation
-                emailRedirectTo: callbackUrl.toString(),
-            },
+        const existingUser = await prisma.user.findUnique({
+            where: { email }
         });
 
-        if (error) {
-            // Handle rate limit error
-            if (error.message.includes('rate limit')) {
-                throw new Error('Too many signup attempts. Please wait a few minutes and try again.');
+        if (existingUser) {
+            // User exists, just trigger login code
+            return requestLoginCode(email);
+        }
+
+        const user = await prisma.user.create({
+            data: {
+                email,
+                full_name: fullName,
+                name: fullName, // NextAuth default
             }
-            throw error;
-        }
+        });
 
-        return { success: true, data };
+        // Trigger login code after signup
+        return requestLoginCode(email);
     } catch (error: any) {
+        console.error('Signup error:', error);
         return { success: false, error: error.message };
     }
 }
 
-export async function signIn(email: string, password: string) {
+export async function requestLoginCode(email: string) {
     try {
-        const supabase = await createClient();
-        const { data, error } = await supabase.auth.signInWithPassword({
+        await nextAuthSignIn("email", {
             email,
-            password,
+            redirect: false,
         });
 
-        if (error) throw error;
+        return { success: true };
+    } catch (error: any) {
+        console.error('Request login code error:', error);
+        return { success: false, error: "Failed to send code. Please check your email." };
+    }
+}
 
-        const userId = data.user?.id;
-        if (!userId) {
-            return { success: true, data, redirectTo: "/dashboard" };
+export async function loginWithPassword(data: any) {
+    try {
+        const result = await nextAuthSignIn("credentials", {
+            email: data.email,
+            password: data.password,
+            redirect: false,
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        if (error instanceof AuthError) {
+            switch (error.type) {
+                case "CredentialsSignin":
+                    return { success: false, error: "Invalid email or password" };
+                default:
+                    return { success: false, error: "Authentication failed" };
+            }
+        }
+        throw error;
+    }
+}
+
+/**
+ * Validates the OTP token before proceeding to password input
+ */
+export async function validateOtp(email: string, token: string) {
+    try {
+        const hashedToken = crypto
+            .createHash("sha256")
+            .update(`${token}${process.env.AUTH_SECRET}`)
+            .digest("hex");
+
+        const vt = await prisma.verificationToken.findFirst({
+            where: { 
+                identifier: email, 
+                token: hashedToken, 
+                expires: { gt: new Date() } 
+            }
+        });
+        
+        if (!vt) return { success: false, error: "Invalid or expired verification code" };
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        
+        return { 
+            success: true, 
+            isNewUser: !user?.password, // If no password, they need to SET one
+            fullName: user?.full_name || user?.name
+        };
+    } catch (error: any) {
+        return { success: false, error: "Verification failed" };
+    }
+}
+
+/**
+ * Completes the login/signup by verifying or setting the password
+ */
+export async function finalizeLoginWithPassword(email: string, token: string, password: string) {
+    try {
+        // 1. One last verification of the token
+        const hashedToken = crypto
+            .createHash("sha256")
+            .update(`${token}${process.env.AUTH_SECRET}`)
+            .digest("hex");
+
+        const vt = await prisma.verificationToken.findFirst({
+            where: { identifier: email, token: hashedToken, expires: { gt: new Date() } }
+        });
+        if (!vt) return { success: false, error: "Verification session expired. Please restart." };
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        
+        // 2. If user already has a password, check it. If not, set it (signup).
+        if (user?.password) {
+            const isValid = await bcrypt.compare(password, user.password);
+            if (!isValid) return { success: false, error: "Incorrect password" };
+        } else {
+            // New user or resetting password
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await prisma.user.update({
+                where: { email },
+                data: { 
+                    password: hashedPassword,
+                    emailVerified: new Date() // Mark as verified since they finished OTP + Password
+                }
+            });
         }
 
-        const profile = await prisma.profile.findUnique({
-            where: { id: userId },
-            select: { couple_id: true }
-        });
-
-        const redirectTo = profile?.couple_id ? "/dashboard" : "/onboarding";
-
-        return { success: true, data, redirectTo };
+        // 3. Construct the NextAuth callback URL to finalize the session
+        const callbackUrl = `/api/auth/callback/email?email=${encodeURIComponent(email)}&token=${token}`;
+        
+        return { success: true, callbackUrl };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        console.error("Finalize error:", error);
+        return { success: false, error: "Finalization failed" };
     }
 }
 
 export async function signOut() {
     try {
-        const supabase = await createClient();
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-
+        await nextAuthSignOut();
         revalidatePath('/');
         return { success: true };
     } catch (error: any) {
@@ -91,161 +157,13 @@ export async function signOut() {
     }
 }
 
-export async function createCouple(userId: string, coupleName?: string) {
-    try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-            return { success: false, error: "Not authenticated" };
-        }
-        if (userId && userId !== user.id) {
-            return { success: false, error: "Unauthorized" };
-        }
-        if (!user.email) {
-            return { success: false, error: "Missing user email" };
-        }
-
-        const existingProfile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { couple_id: true }
-        });
-        if (existingProfile?.couple_id) {
-            return { success: false, error: "Already a member of a couple" };
-        }
-
-        for (let attempt = 0; attempt < 5; attempt++) {
-            const inviteCode = generateInviteCode();
-            try {
-                const data = await prisma.$transaction(async (tx: any) => {
-                    const couple = await tx.couple.create({
-                        data: {
-                            invite_code: inviteCode,
-                            couple_name: coupleName,
-                        }
-                    });
-
-                    await tx.profile.upsert({
-                        where: { id: user.id },
-                        update: { couple_id: couple.id },
-                        create: {
-                            id: user.id,
-                            email: user.email,
-                            full_name: (user.user_metadata as any)?.full_name ?? null,
-                            couple_id: couple.id,
-                        }
-                    });
-
-                    return couple;
-                });
-
-                return { success: true, data, inviteCode };
-            } catch (error: any) {
-                const isInviteCodeCollision =
-                    error instanceof Prisma.PrismaClientKnownRequestError &&
-                    error.code === "P2002" &&
-                    Array.isArray((error.meta as any)?.target) &&
-                    ((error.meta as any).target as string[]).includes("invite_code");
-
-                if (isInviteCodeCollision) continue;
-                throw error;
-            }
-        }
-
-        return { success: false, error: "Failed to generate a unique invite code. Please try again." };
-    } catch (error: any) {
-        return { success: false, error: error.message };
-    }
-}
-
-export async function joinCouple(userId: string, inviteCode: string) {
-    try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-        if (userError || !user) {
-            return { success: false, error: "Not authenticated" };
-        }
-        if (userId && userId !== user.id) {
-            return { success: false, error: "Unauthorized" };
-        }
-        if (!user.email) {
-            return { success: false, error: "Missing user email" };
-        }
-
-        // Find the couple by invite code
-        const couple = await prisma.couple.findUnique({
-            where: { invite_code: inviteCode.toUpperCase() }
-        });
-
-        if (!couple) {
-            throw new Error('Invalid invite code');
-        }
-
-        // Check if couple already has 2 partners
-        const memberCount = await prisma.profile.count({
-            where: { couple_id: couple.id }
-        });
-
-        if (memberCount >= 2) {
-            throw new Error('This couple is already complete');
-        }
-
-        const existingProfile = await prisma.profile.findUnique({
-            where: { id: user.id },
-            select: { couple_id: true }
-        });
-        if (existingProfile?.couple_id === couple.id) {
-            return { success: true, data: couple };
-        }
-        if (existingProfile?.couple_id && existingProfile.couple_id !== couple.id) {
-            throw new Error('You are already a member of another couple');
-        }
-
-        await prisma.$transaction(async (tx: any) => {
-            // Update user's profile with couple_id
-            await tx.profile.upsert({
-                where: { id: user.id },
-                update: { couple_id: couple.id },
-                create: {
-                    id: user.id,
-                    email: user.email,
-                    full_name: (user.user_metadata as any)?.full_name ?? null,
-                    couple_id: couple.id,
-                }
-            });
-        });
-
-        return { success: true, data: couple };
-    } catch (error: any) {
-        return { success: false, error: error.message };
-    }
-}
-
 export async function getCurrentUser() {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const user = await getCachedUser();
+        if (!user || !user.id) return { success: false, error: 'Not authenticated' };
 
-        if (error) throw error;
-        if (!user) return { success: false, error: 'Not authenticated' };
-        if (!user.email) return { success: false, error: 'Missing user email' };
-
-        await prisma.profile.upsert({
-            where: { id: user.id },
-            update: {
-                email: user.email,
-                full_name: (user.user_metadata as any)?.full_name ?? undefined,
-            },
-            create: {
-                id: user.id,
-                email: user.email,
-                full_name: (user.user_metadata as any)?.full_name ?? null,
-            }
-        });
-
-        // Get profile with couple info using Prisma
-        const profile = await prisma.profile.findUnique({
+        // Get user with couple info using Prisma
+        const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             include: {
                 couple: {
@@ -256,7 +174,7 @@ export async function getCurrentUser() {
             }
         });
 
-        return { success: true, user, profile };
+        return { success: true, user, profile: dbUser };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -264,24 +182,16 @@ export async function getCurrentUser() {
 
 export async function updateCurrentUserProfile(data: { full_name?: string; avatar_url?: string }) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const user = await getCachedUser();
+        if (!user || !user.id) return { success: false, error: 'Not authenticated' };
 
-        if (error) throw error;
-        if (!user) return { success: false, error: 'Not authenticated' };
-        if (!user.email) return { success: false, error: 'Missing user email' };
-
-        const updated = await prisma.profile.upsert({
+        const updated = await prisma.user.update({
             where: { id: user.id },
-            update: {
+            data: {
                 full_name: typeof data.full_name === 'string' ? data.full_name : undefined,
+                name: typeof data.full_name === 'string' ? data.full_name : undefined,
                 avatar_url: typeof data.avatar_url === 'string' ? data.avatar_url : undefined,
-            },
-            create: {
-                id: user.id,
-                email: user.email,
-                full_name: typeof data.full_name === 'string' ? data.full_name : ((user.user_metadata as any)?.full_name ?? null),
-                avatar_url: typeof data.avatar_url === 'string' ? data.avatar_url : null,
+                image: typeof data.avatar_url === 'string' ? data.avatar_url : undefined,
             }
         });
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { getCachedUser } from "@/lib/auth-cache";
 import prisma from "@/lib/prisma";
 
 export async function PUT(
@@ -7,10 +7,9 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (userError || !user) {
+        if (!user || user.id === undefined) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -30,7 +29,7 @@ export async function PUT(
         const { id } = await params;
 
         // Fetch existing goal to verify ownership
-        const existingGoal = await (prisma as any).savingsGoal.findUnique({
+        const existingGoal = await prisma.savingsGoal.findUnique({
             where: { id },
             include: {
                 couple: {
@@ -54,7 +53,7 @@ export async function PUT(
         }
 
         // Update goal
-        const goal = await (prisma as any).savingsGoal.update({
+        const goal = await prisma.savingsGoal.update({
             where: { id },
             data: {
                 ...(title !== undefined && { title }),
@@ -90,10 +89,9 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (userError || !user) {
+        if (!user || user.id === undefined) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -124,7 +122,7 @@ export async function DELETE(
         }
 
         // Delete goal
-        await (prisma as any).savingsGoal.delete({
+        await prisma.savingsGoal.delete({
             where: { id },
         });
 

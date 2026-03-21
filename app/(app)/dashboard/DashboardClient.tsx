@@ -9,8 +9,7 @@ import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X, Wallet, TrendingUp, C
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
-import { updateTodayMoodMessage } from "@/lib/actions/moods";
-import { createClient } from "@/utils/supabase/client";
+import { updateTodayMoodMessage, getHeroMessage } from "@/lib/actions/moods";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface DashboardClientProps {
@@ -43,84 +42,15 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
         if (!couple?.id) return;
 
         const fetchHeroMessage = async () => {
-            const supabase = createClient();
-            const todayKey = new Date().toISOString().split('T')[0];
-            const today = new Date(todayKey);
-
-            const { data } = await supabase
-                .from('daily_moods')
-                .select('metadata')
-                .eq('couple_id', couple.id)
-                .eq('mood_date', today.toISOString())
-                .not('metadata', 'is', null)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-            if (data?.metadata) {
-                const message = (data.metadata as any)?.message;
-                if (typeof message === 'string') {
-                    setHeroMessageLocal(message);
-                }
+            const result = await getHeroMessage(couple.id);
+            if (result.success && typeof result.message === 'string') {
+                setHeroMessageLocal(result.message);
             }
             setLoadingHeroMessage(false);
         };
 
         fetchHeroMessage();
     }, [couple?.id]);
-
-    // Realtime subscription for hero message updates
-    useEffect(() => {
-        if (!couple?.id) return;
-
-        const supabase = createClient();
-        const todayKey = new Date().toISOString().split('T')[0];
-        const toDateKey = (value: any) => {
-            if (!value) return null;
-            if (typeof value === 'string') {
-                return value.includes('T') ? value.split('T')[0] : value;
-            }
-            try {
-                return new Date(value).toISOString().split('T')[0];
-            } catch {
-                return null;
-            }
-        };
-
-        const channel = supabase
-            .channel(`daily_moods:dashboard:${couple.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'daily_moods',
-                    filter: `couple_id=eq.${couple.id}`
-                },
-                (payload: any) => {
-                    if (editingHeroMessage) return;
-
-                    const row = payload?.new || payload?.old;
-                    const rowDateKey = toDateKey(row?.mood_date);
-                    if (rowDateKey !== todayKey) return;
-
-                    if (payload?.eventType === 'DELETE') {
-                        setHeroMessageLocal("");
-                        return;
-                    }
-
-                    const message = payload?.new?.metadata?.message ?? row?.metadata?.message;
-                    if (typeof message === 'string') {
-                        setHeroMessageLocal(message);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [couple?.id, editingHeroMessage]);
 
     useEffect(() => {
         const handler = (e: any) => {

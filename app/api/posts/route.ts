@@ -8,7 +8,7 @@ import { getCachedProfile } from "@/lib/db-utils";
 export async function GET(request: NextRequest) {
   try {
     const user = await getCachedUser();
-    if (!user) {
+    if (!user || !user.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
 
     const page = Number(url.searchParams.get("page") ?? 0);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 10);
+
+    const query = url.searchParams.get("q") ?? "";
 
     if (!coupleId) {
       return NextResponse.json({ error: "Missing coupleId" }, { status: 400 });
@@ -32,12 +34,25 @@ export async function GET(request: NextRequest) {
 
     const profile = await getCachedProfile(user.id);
 
-    if (!profile?.couple_id || profile.couple_id !== coupleId) {
+    if (!profile) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
+
+    if (!profile.couple_id || profile.couple_id !== coupleId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const posts = await prisma.post.findMany({
-      where: { couple_id: coupleId },
+      where: { 
+        couple_id: coupleId,
+        is_deleted: false,
+        ...(query ? {
+          content: {
+            contains: query,
+            mode: 'insensitive'
+          }
+        } : {})
+      },
       orderBy: { created_at: "desc" },
       skip: page * pageSize,
       take: pageSize,
@@ -72,8 +87,9 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error: any) {
+    console.error("API Error in /api/posts:", error);
     return NextResponse.json(
-      { error: error?.message ?? "Server error" },
+      { error: error?.message || "Server error" },
       { status: 500 }
     );
   }

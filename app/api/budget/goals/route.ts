@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { getCachedUser } from "@/lib/auth-cache";
 import prisma from "@/lib/prisma";
 
 export async function PUT(request: NextRequest) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (userError || !user) {
+        if (!user || user.id === undefined) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -19,12 +18,12 @@ export async function PUT(request: NextRequest) {
         }
 
         // Verify user belongs to this couple
-        const profile = await prisma.profile.findUnique({
+        const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true },
         });
 
-        if (!profile || profile.couple_id !== coupleId) {
+        if (!dbUser || dbUser.couple_id !== coupleId) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

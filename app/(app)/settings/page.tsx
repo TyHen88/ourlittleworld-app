@@ -16,7 +16,7 @@ import {
     Volume2, VolumeX, Eye, EyeOff, Info
 } from "lucide-react";
 import { signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
-import { createClient } from "@/utils/supabase/client";
+import { uploadAvatar } from "@/lib/actions/storage";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { useCouple } from "@/hooks/use-couple";
 import { useQueryClient } from "@tanstack/react-query";
@@ -107,27 +107,23 @@ export default function SettingsPage() {
 
         setUploadingAvatar(true);
         try {
-            const ext = file.name.split(".").pop() || "jpg";
-            const fileName = `${user.id}-${Date.now()}.${ext}`;
-            const filePath = `avatars/${fileName}`;
-            const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "couple-assets";
+            const formData = new FormData();
+            formData.append("file", file);
 
-            const supabase = createClient();
-
+            // Preview immediately
             const previewUrl = URL.createObjectURL(file);
             setFormData((prev) => ({ ...prev, avatar_url: previewUrl }));
 
-            const { error: uploadError } = await supabase.storage
-                .from(bucket)
-                .upload(filePath, file, { cacheControl: "3600", upsert: true });
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from(bucket)
-                .getPublicUrl(filePath);
-
-            setFormData((prev) => ({ ...prev, avatar_url: publicUrl }));
+            const result = await uploadAvatar(formData);
+            if (result.success && result.publicUrl) {
+                setFormData((prev) => ({ ...prev, avatar_url: result.publicUrl }));
+                queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
+            } else {
+                throw new Error(result.error || "Upload failed");
+            }
+        } catch (error: any) {
+            console.error("Avatar upload failed:", error);
+            // Revert preview on error if needed
         } finally {
             setUploadingAvatar(false);
         }

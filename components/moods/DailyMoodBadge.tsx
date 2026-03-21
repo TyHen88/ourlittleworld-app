@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { getUserMoodBadgeData } from "@/lib/actions/moods";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -15,71 +15,18 @@ export function DailyMoodBadge({ userId, coupleId, position = "top-right" }: Dai
     const [noteOpen, setNoteOpen] = useState(false);
     const todayKey = new Date().toISOString().split('T')[0];
 
-    const toDateKey = (value: any) => {
-        if (!value) return null;
-        if (typeof value === 'string') {
-            // 'YYYY-MM-DD' or ISO string
-            return value.includes('T') ? value.split('T')[0] : value;
-        }
-        try {
-            return new Date(value).toISOString().split('T')[0];
-        } catch {
-            return null;
-        }
-    };
-
     // Fetch mood with React Query
     const { data: moodData } = useQuery({
         queryKey: ['daily-mood', userId, todayKey],
         queryFn: async () => {
-            const supabase = createClient();
-            const { data } = await supabase
-                .from('daily_moods')
-                .select('mood_emoji, note')
-                .eq('user_id', userId)
-                .eq('mood_date', todayKey)
-                .maybeSingle();
-            return data;
+            const result = await getUserMoodBadgeData(userId);
+            return result.success ? result.data : null;
         },
         staleTime: 30 * 1000,
     });
 
     const mood = moodData?.mood_emoji || null;
     const note = moodData?.note || null;
-
-    // Realtime subscription
-    useEffect(() => {
-        const supabase = createClient();
-
-        // Subscribe to realtime updates
-        const channel = supabase
-            .channel(`daily_moods:${coupleId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'daily_moods',
-                    filter: `couple_id=eq.${coupleId}`
-                },
-                (payload: any) => {
-                    const row = payload?.new || payload?.old;
-                    const rowUserId = row?.user_id;
-                    const rowDateKey = toDateKey(row?.mood_date);
-
-                    // Update if it's this user's mood for today
-                    if (rowUserId === userId && rowDateKey === todayKey) {
-                        queryClient.invalidateQueries({ queryKey: ['daily-mood', userId, todayKey] });
-                        setNoteOpen(false);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [userId, coupleId]);
 
     useEffect(() => {
         if (!noteOpen) return;

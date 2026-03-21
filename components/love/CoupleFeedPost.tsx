@@ -7,11 +7,12 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageCircle, Share2, MoreHorizontal, X, ChevronLeft, ChevronRight, Send, CornerDownRight, ZoomIn, ZoomOut, Download, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toggleLikePost, addComment, addReply } from "@/lib/actions/post";
+import { toggleLikePost, addComment, addReply, deletePost } from "@/lib/actions/post";
 
 interface PostProps {
     id: string;
     author: string;
+    authorId?: string; // Added to check for deletion rights
     content: string;
     timestamp: string;
     reactions: number;
@@ -29,7 +30,7 @@ interface PostProps {
     };
 }
 
-export function CoupleFeedPost({ id, author, content, timestamp, reactions, comments, imageUrl, avatarUrl, metadata, currentUserId, coupleId }: PostProps) {
+export function CoupleFeedPost({ id, author, authorId, content, timestamp, reactions, comments, imageUrl, avatarUrl, metadata, currentUserId, coupleId }: PostProps) {
     const queryClient = useQueryClient();
     const [modalOpen, setModalOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -43,6 +44,8 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
     const [submittingComment, setSubmittingComment] = useState(false);
     const [replyingToId, setReplyingToId] = useState<string | null>(null);
     const [replyText, setReplyText] = useState("");
+    const [showOptions, setShowOptions] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const [localMetadata, setLocalMetadata] = useState<PostProps["metadata"]>(metadata);
 
@@ -279,9 +282,67 @@ export function CoupleFeedPost({ id, author, content, timestamp, reactions, comm
                         <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">{timestamp}</p>
                     </div>
                 </div>
-                <button className="text-slate-300 hover:text-slate-600 transition-colors">
-                    <MoreHorizontal size={20} />
-                </button>
+                <div className="relative">
+                    <button 
+                        onClick={() => setShowOptions(!showOptions)}
+                        className="text-slate-300 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100"
+                    >
+                        <MoreHorizontal size={20} />
+                    </button>
+
+                    <AnimatePresence>
+                        {showOptions && (
+                            <>
+                                <div 
+                                    className="fixed inset-0 z-10" 
+                                    onClick={() => setShowOptions(false)} 
+                                />
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                    className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-20 overflow-hidden"
+                                >
+                                    <button
+                                        onClick={() => {
+                                            setShowOptions(false);
+                                            // Handle sharing or other options
+                                        }}
+                                        className="w-full px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                    >
+                                        <Share2 size={16} />
+                                        Share Memory
+                                    </button>
+                                    
+                                    {(currentUserId === authorId) && (
+                                        <button
+                                            onClick={async () => {
+                                                if (window.confirm("Are you sure you want to delete this memory?")) {
+                                                    setIsDeleting(true);
+                                                    const res = await deletePost(id);
+                                                    if (res.success) {
+                                                        if (coupleId) {
+                                                            queryClient.invalidateQueries({ queryKey: ["posts", coupleId] });
+                                                        }
+                                                    } else {
+                                                        alert(res.error || "Failed to delete post");
+                                                        setIsDeleting(false);
+                                                    }
+                                                }
+                                                setShowOptions(false);
+                                            }}
+                                            disabled={isDeleting}
+                                            className="w-full px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                        >
+                                            <X size={16} />
+                                            {isDeleting ? "Deleting..." : "Delete Memory"}
+                                        </button>
+                                    )}
+                                </motion.div>
+                            </>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
 
             {/* Post Content - Separated by borders, no rounding, with Read More */}

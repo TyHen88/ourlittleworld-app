@@ -1,9 +1,10 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import fs from "fs/promises";
+import path from "path";
 import { revalidatePath } from "next/cache";
-import { getCachedUserOrThrow } from "@/lib/auth-cache";
+import { getCachedUserOrThrow, getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
 
 export async function createPost(input: {
@@ -13,6 +14,8 @@ export async function createPost(input: {
 }) {
     try {
         const user = await getCachedUserOrThrow();
+        if (!user.id) throw new Error("User ID is missing");
+
         const content = (input.content ?? "").trim();
 
         const profile = await getCachedProfile(user.id);
@@ -40,8 +43,7 @@ export async function createPost(input: {
             if (typeof nextMetadata.comments_count !== 'number') nextMetadata.comments_count = 0;
         }
 
-        const postDelegate: any = (prisma as any).post;
-        const data = await postDelegate.create({
+        const data = await prisma.post.create({
             data: {
                 couple_id: profile.couple_id,
                 author_id: user.id,
@@ -58,34 +60,54 @@ export async function createPost(input: {
     }
 }
 
-export async function uploadPostImage(file: File) {
+export async function uploadPostImage(formData: FormData) {
     try {
-        const supabase = await createClient();
-
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
+        const user = await getCachedUser();
+        if (!user || !user.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}-${Math.random().toString(16).slice(2)}.${fileExt}`;
-        const filePath = `post-images/${fileName}`;
+        const file = formData.get("file") as File;
+        if (!file) return { success: false, error: "No file provided" };
 
-        const { error } = await supabase.storage
-            .from('couple-assets')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `post-${user.id}-${Date.now()}-${Math.random().toString(16).slice(2)}.${fileExt}`;
+        
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const relativePath = `/uploads/${fileName}`;
+        const absolutePath = path.join(process.cwd(), "public", "uploads", fileName);
 
-        if (error) throw error;
+        await fs.writeFile(absolutePath, buffer);
 
-        const { data: { publicUrl } } = supabase.storage
-            .from('couple-assets')
-            .getPublicUrl(filePath);
-
-        return { success: true, url: publicUrl };
+        return { success: true, url: relativePath };
     } catch (error: any) {
+        console.error("Local post image upload error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function deletePost(postId: string) {
+    try {
+        const user = await getCachedUserOrThrow();
+        if (!user.id) throw new Error("User ID is missing");
+
+        // Verify ownership
+        const post = await prisma.post.findUnique({
+            where: { id: postId },
+            select: { author_id: true }
+        });
+
+        if (!post) throw new Error("Post not found");
+        if (post.author_id !== user.id) throw new Error("Unauthorized to delete this post");
+
+        await prisma.post.update({
+            where: { id: postId },
+            data: { is_deleted: true }
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Delete post error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -93,15 +115,17 @@ export async function uploadPostImage(file: File) {
 export async function toggleLikePost(postId: string) {
     try {
         const user = await getCachedUserOrThrow();
+        if (!user.id) throw new Error("User ID is missing");
+
         const profile = await getCachedProfile(user.id);
         if (!profile?.couple_id) return { success: false, error: "No couple found" };
 
         const post: any = await prisma.post.findUnique({
             where: { id: postId },
-            select: { metadata: true, couple_id: true }
+            select: { metadata: true, couple_id: true, is_deleted: true }
         });
 
-        if (!post) return { success: false, error: "Post not found" };
+        if (!post || post.is_deleted) return { success: false, error: "Post not found" };
         if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
 
         const metadata = (post.metadata as any) || {};
@@ -120,7 +144,7 @@ export async function toggleLikePost(postId: string) {
             likes_count: likes.length
         };
 
-        const updated = await (prisma as any).post.update({
+        const updated = await prisma.post.update({
             where: { id: postId },
             data: { metadata: nextMetadata }
         });
@@ -134,15 +158,17 @@ export async function toggleLikePost(postId: string) {
 export async function addComment(postId: string, content: string) {
     try {
         const user = await getCachedUserOrThrow();
+        if (!user.id) throw new Error("User ID is missing");
+
         const profile = await getCachedProfile(user.id);
         if (!profile?.couple_id) return { success: false, error: "No couple found" };
 
         const post: any = await prisma.post.findUnique({
             where: { id: postId },
-            select: { metadata: true, couple_id: true }
+            select: { metadata: true, couple_id: true, is_deleted: true }
         });
 
-        if (!post) return { success: false, error: "Post not found" };
+        if (!post || post.is_deleted) return { success: false, error: "Post not found" };
         if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
 
         const metadata = (post.metadata as any) || {};
@@ -168,7 +194,7 @@ export async function addComment(postId: string, content: string) {
             comments_count: totalComments
         };
 
-        const updated = await (prisma as any).post.update({
+        const updated = await prisma.post.update({
             where: { id: postId },
             data: { metadata: nextMetadata }
         });
@@ -182,15 +208,17 @@ export async function addComment(postId: string, content: string) {
 export async function addReply(postId: string, commentId: string, content: string) {
     try {
         const user = await getCachedUserOrThrow();
+        if (!user.id) throw new Error("User ID is missing");
+
         const profile = await getCachedProfile(user.id);
         if (!profile?.couple_id) return { success: false, error: "No couple found" };
 
         const post: any = await prisma.post.findUnique({
             where: { id: postId },
-            select: { metadata: true, couple_id: true }
+            select: { metadata: true, couple_id: true, is_deleted: true }
         });
 
-        if (!post) return { success: false, error: "Post not found" };
+        if (!post || post.is_deleted) return { success: false, error: "Post not found" };
         if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
 
         const metadata = (post.metadata as any) || {};
@@ -221,7 +249,7 @@ export async function addReply(postId: string, commentId: string, content: strin
             comments_count: totalComments
         };
 
-        const updated = await (prisma as any).post.update({
+        const updated = await prisma.post.update({
             where: { id: postId },
             data: { metadata: nextMetadata }
         });

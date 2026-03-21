@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Heart, Camera, Smile, Send, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createPost } from "@/lib/actions/post";
-import { createClient } from "@/utils/supabase/client";
+import { createPost, uploadPostImage } from "@/lib/actions/post";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCouple } from "@/hooks/use-couple";
 import { FullPageLoader } from "@/components/FullPageLoader";
+import { useSession } from "next-auth/react";
 
 interface AddPostFormProps {
     embedded?: boolean;
@@ -25,7 +25,8 @@ type PreviewImage = {
 
 export function AddPostForm({ embedded = false, className, onSuccess }: AddPostFormProps) {
     const queryClient = useQueryClient();
-    const { user, couple } = useCouple();
+    const { data: session } = useSession();
+    const { user, couple, profile } = useCouple();
     const [content, setContent] = useState("");
     const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -190,59 +191,23 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
             let imageUrls: string[] = [];
 
             if (previewImages.length > 0) {
-                const supabase = createClient();
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
-                if (userError || !user) throw new Error('Not authenticated');
-
-                const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'couple-assets';
-
-                const makeId = () => {
-                    try {
-                        return crypto.randomUUID();
-                    } catch {
-                        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-                    }
-                };
-
                 const uploadedUrls = await Promise.all(
                     previewImages.map(async (img, index) => {
                         setUploadProgress(Math.round(((index + 1) / previewImages.length) * 100));
-                        const fileExt = img.file.name.split('.').pop();
-                        const fileName = `${user.id}-${Date.now()}-${makeId()}.${fileExt}`;
-                        const filePath = `post-images/${fileName}`;
-
-                        const { error: uploadError } = await supabase.storage
-                            .from(bucket)
-                            .upload(filePath, img.file, { cacheControl: '3600', upsert: false });
-
-                        if (uploadError) {
-                            const msg = (uploadError as any)?.message || '';
-                            const statusCode = (uploadError as any)?.statusCode;
-                            if (msg.toLowerCase().includes('bucket not found')) {
-                                throw new Error(`Bucket not found: ${bucket}. Create it in Supabase Storage or set NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET to an existing bucket name.`);
-                            }
-                            if (
-                                statusCode === 403 ||
-                                statusCode === '403' ||
-                                msg.toLowerCase().includes('row-level security') ||
-                                msg.toLowerCase().includes('violates row-level security')
-                            ) {
-                                throw new Error(
-                                    `Unauthorized to upload to Storage bucket: ${bucket}. This is a Supabase Storage RLS policy issue. Add an INSERT policy on storage.objects for bucket_id='${bucket}' for authenticated users.`
-                                );
-                            }
-                            throw uploadError;
+                        
+                        const formData = new FormData();
+                        formData.append("file", img.file);
+                        const result = await uploadPostImage(formData);
+                        
+                        if (!result.success) {
+                            throw new Error(result.error || `Failed to upload image ${index + 1}`);
                         }
-
-                        const { data: { publicUrl } } = supabase.storage
-                            .from(bucket)
-                            .getPublicUrl(filePath);
-
-                        return publicUrl;
+                        
+                        return result.url;
                     })
                 );
 
-                imageUrls = uploadedUrls.filter(Boolean);
+                imageUrls = uploadedUrls.filter(Boolean) as string[];
             }
 
             // Optimistic update - add post to cache immediately
@@ -262,9 +227,9 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 author: {
-                    id: user?.id,
-                    full_name: user?.user_metadata?.full_name || 'You',
-                    avatar_url: user?.user_metadata?.avatar_url || null,
+                    id: session?.user?.id,
+                    full_name: profile?.full_name || session?.user?.name || 'You',
+                    avatar_url: profile?.avatar_url || session?.user?.image || null,
                 },
             };
 

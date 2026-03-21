@@ -11,17 +11,17 @@ export default function DashboardPage() {
     const { user, profile, couple, daysTogether, isLoading } = useCouple();
 
     useEffect(() => {
-        if (!isLoading && !user) {
-            router.push("/login");
+        if (!isLoading) {
+            if (!user) {
+                router.push("/login");
+            } else if (!couple) {
+                router.push("/onboarding");
+            }
         }
-    }, [user, isLoading, router]);
+    }, [user, couple, isLoading, router]);
 
-    if (isLoading) {
+    if (isLoading || !user || !profile || !couple) {
         return <FullPageLoader />;
-    }
-
-    if (!user || !profile || !couple) {
-        return null;
     }
 
     return (

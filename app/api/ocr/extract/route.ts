@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/utils/supabase/server";
+import { getCachedUser } from "@/lib/auth-cache";
 
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (authError || !user) {
+        if (!user || user.id === undefined) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 

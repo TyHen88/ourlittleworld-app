@@ -3,12 +3,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, X, Image as ImageIcon, Loader2, Tag, Smile, MapPin, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createPost } from "@/lib/actions/post";
-import { createClient } from "@/utils/supabase/client";
+import { createPost, uploadPostImage } from "@/lib/actions/post";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCouple } from "@/hooks/use-couple";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useSession } from "next-auth/react";
 
 type PreviewImage = {
     id: string;
@@ -19,6 +19,7 @@ type PreviewImage = {
 export default function CreatePostPage() {
     const queryClient = useQueryClient();
     const router = useRouter();
+    const { data: session } = useSession();
     const { user, profile, couple, isLoading } = useCouple();
     const [content, setContent] = useState("");
     const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
@@ -234,56 +235,23 @@ export default function CreatePostPage() {
             let imageUrls: string[] = [];
 
             if (previewImages.length > 0) {
-                const supabase = createClient();
-                const { data: { user }, error: userError } = await supabase.auth.getUser();
-                if (userError || !user) throw new Error('Not authenticated');
-
-                const bucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || 'couple-assets';
-
-                const makeId = () => {
-                    try {
-                        return crypto.randomUUID();
-                    } catch {
-                        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-                    }
-                };
-
                 const uploadedUrls = await Promise.all(
                     previewImages.map(async (img, index) => {
                         setUploadProgress(Math.round(((index + 1) / previewImages.length) * 100));
-                        const fileExt = img.file.name.split('.').pop();
-                        const fileName = `${user.id}-${Date.now()}-${makeId()}.${fileExt}`;
-                        const filePath = `post-images/${fileName}`;
-
-                        const { error: uploadError } = await supabase.storage
-                            .from(bucket)
-                            .upload(filePath, img.file, { cacheControl: '3600', upsert: false });
-
-                        if (uploadError) {
-                            const msg = (uploadError as any)?.message || '';
-                            const statusCode = (uploadError as any)?.statusCode;
-                            if (msg.toLowerCase().includes('bucket not found')) {
-                                throw new Error(`Bucket not found: ${bucket}`);
-                            }
-                            if (
-                                statusCode === 403 ||
-                                statusCode === '403' ||
-                                msg.toLowerCase().includes('row-level security')
-                            ) {
-                                throw new Error(`Unauthorized to upload to Storage bucket: ${bucket}`);
-                            }
-                            throw uploadError;
+                        
+                        const formData = new FormData();
+                        formData.append("file", img.file);
+                        const result = await uploadPostImage(formData);
+                        
+                        if (!result.success) {
+                            throw new Error(result.error || `Failed to upload image ${index + 1}`);
                         }
-
-                        const { data: { publicUrl } } = supabase.storage
-                            .from(bucket)
-                            .getPublicUrl(filePath);
-
-                        return publicUrl;
+                        
+                        return result.url;
                     })
                 );
 
-                imageUrls = uploadedUrls.filter(Boolean);
+                imageUrls = uploadedUrls.filter(Boolean) as string[];
             }
 
             // Add tagged partner and other metadata

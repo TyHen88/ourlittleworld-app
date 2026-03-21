@@ -6,11 +6,13 @@ import { getCachedProfileWithCouple } from "@/lib/db-utils";
 export async function GET() {
   try {
     const user = await getCachedUser();
-    if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    if (!user || !user.id) {
+        return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    console.log("API/ME: fetching profile for user", user.id);
     const profile = await getCachedProfileWithCouple(user.id);
+    console.log("API/ME: profile found:", !!profile, "couple found:", !!profile?.couple);
 
     const response = NextResponse.json({
       user,

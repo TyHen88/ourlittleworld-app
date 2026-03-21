@@ -1,9 +1,13 @@
 "use server";
 
+console.log(">>> World actions file loaded");
+
 import prisma from "@/lib/prisma";
-import { createClient } from "@/utils/supabase/server";
+import fs from "fs/promises";
+import path from "path";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import { getCachedUser } from "@/lib/auth-cache";
 
 // Romantic world name suggestions 
 const ROMANTIC_NAMES = [
@@ -35,16 +39,19 @@ interface CreateWorldData {
     worldName: string;
     startDate?: string;
     couplePhotoUrl?: string;
+    photoFile?: any; // Added for internal photo handling if needed
     partnerNickname?: string;
     theme?: string;
 }
 
 export async function createWorld(data: CreateWorldData) {
+    console.log(">>> createWorld action called with data:", data.worldName);
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        console.log(">>> createWorld: fetching cached user...");
+        const user = await getCachedUser();
+        console.log(">>> createWorld: user fetched:", user?.id);
 
-        if (userError || !user) {
+        if (!user || !user.id) {
             return { success: false, error: "Not authenticated" };
         }
         if (data.userId && data.userId !== user.id) {
@@ -54,45 +61,62 @@ export async function createWorld(data: CreateWorldData) {
             return { success: false, error: "Missing user email" };
         }
 
-        const existingProfile = await prisma.profile.findUnique({
+        console.log("CreateWorld: authenticated user", user.id, user.email);
+
+        const existingUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true }
         });
-        if (existingProfile?.couple_id) {
+
+        console.log("CreateWorld: existing user couple_id", existingUser?.couple_id);
+
+        if (existingUser?.couple_id) {
             return { success: false, error: "Already a member of a world" };
+        }
+
+        let finalCouplePhotoUrl: string | null = data.couplePhotoUrl || null;
+
+        if (data.photoFile) {
+            console.log(">>> createWorld: photoFile provided, attempting upload...");
+            const formData = new FormData();
+            formData.append("file", data.photoFile);
+            const uploadResult = await uploadCouplePhoto(formData);
+
+            if (uploadResult.success && uploadResult.url) {
+                finalCouplePhotoUrl = uploadResult.url;
+                console.log(">>> createWorld: photo uploaded successfully:", finalCouplePhotoUrl);
+            } else {
+                console.error(">>> createWorld: Photo upload failed:", uploadResult.error);
+                return { success: false, error: uploadResult.error || "Failed to upload couple photo." };
+            }
         }
 
         for (let attempt = 0; attempt < 5; attempt++) {
             const inviteCode = generateInviteCode();
             try {
-                // Use Prisma transaction to ensure both operations succeed
-                const couple = await prisma.$transaction(async (tx: any) => {
-                    // 1. Create the couple
-                    const newCouple = await tx.couple.create({
-                        data: {
-                            invite_code: inviteCode,
-                            couple_name: data.worldName,
-                            start_date: data.startDate ? new Date(data.startDate) : null,
-                            couple_photo_url: data.couplePhotoUrl || null,
-                            partner_1_nickname: data.partnerNickname || null,
-                            world_theme: data.theme || 'blush',
-                        }
-                    });
-
-                    // 2. Update user's profile with couple_id
-                    await tx.profile.upsert({
-                        where: { id: user.id },
-                        update: { couple_id: newCouple.id },
-                        create: {
-                            id: user.id,
-                            email: user.email,
-                            full_name: (user.user_metadata as any)?.full_name ?? null,
-                            couple_id: newCouple.id,
-                        }
-                    });
-
-                    return newCouple;
+                console.log(">>> createWorld: Attempting to create couple with code:", inviteCode);
+                
+                // 1. Create the couple
+                const couple = await prisma.couple.create({
+                    data: {
+                        invite_code: inviteCode,
+                        couple_name: data.worldName,
+                        start_date: data.startDate ? new Date(data.startDate) : null,
+                        couple_photo_url: finalCouplePhotoUrl, // Use the uploaded URL or existing one
+                        partner_1_nickname: data.partnerNickname || null,
+                        world_theme: data.theme || 'blush',
+                    }
                 });
+
+                console.log(">>> createWorld: couple created", couple.id);
+
+                // 2. Update user's profile with couple_id
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { couple_id: couple.id }
+                });
+
+                console.log(">>> createWorld: user updated with couple_id");
 
                 return {
                     success: true,
@@ -101,13 +125,16 @@ export async function createWorld(data: CreateWorldData) {
                     worldName: data.worldName
                 };
             } catch (error: any) {
+                console.error(">>> createWorld transaction error:", error);
                 const isInviteCodeCollision =
                     error instanceof Prisma.PrismaClientKnownRequestError &&
                     error.code === "P2002" &&
-                    Array.isArray((error.meta as any)?.target) &&
-                    ((error.meta as any).target as string[]).includes("invite_code");
+                    (error.meta as any)?.target?.includes("invite_code");
 
-                if (isInviteCodeCollision) continue;
+                if (isInviteCodeCollision) {
+                    console.log(">>> createWorld: code collision, retrying...");
+                    continue;
+                }
                 throw error;
             }
         }
@@ -127,10 +154,9 @@ interface JoinWorldData {
 
 export async function joinWorld(data: JoinWorldData) {
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
 
-        if (userError || !user) {
+        if (!user || !user.id) {
             return { success: false, error: "Not authenticated" };
         }
         if (data.userId && data.userId !== user.id) {
@@ -150,7 +176,7 @@ export async function joinWorld(data: JoinWorldData) {
         }
 
         // Check if couple already has 2 partners
-        const memberCount = await prisma.profile.count({
+        const memberCount = await prisma.user.count({
             where: { couple_id: couple.id }
         });
 
@@ -159,15 +185,15 @@ export async function joinWorld(data: JoinWorldData) {
         }
 
         // Check if user is already in this world
-        const userProfile = await prisma.profile.findUnique({
+        const currentUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true }
         });
 
-        if (userProfile?.couple_id === couple.id) {
+        if (currentUser?.couple_id === couple.id) {
             throw new Error('You are already a member of this world!');
         }
-        if (userProfile?.couple_id && userProfile.couple_id !== couple.id) {
+        if (currentUser?.couple_id && currentUser.couple_id !== couple.id) {
             throw new Error('You are already a member of another world.');
         }
 
@@ -182,13 +208,13 @@ export async function joinWorld(data: JoinWorldData) {
             });
 
             // 2. Update user's profile with couple_id
-            await tx.profile.upsert({
+            await tx.user.upsert({
                 where: { id: user.id },
                 update: { couple_id: couple.id },
                 create: {
                     id: user.id,
                     email: user.email,
-                    full_name: (user.user_metadata as any)?.full_name ?? null,
+                    full_name: user.name ?? null,
                     couple_id: couple.id,
                 }
             });
@@ -205,42 +231,33 @@ export async function joinWorld(data: JoinWorldData) {
     }
 }
 
-// Upload couple photo to Supabase Storage
-export async function uploadCouplePhoto(file: File, userId: string) {
+// Upload couple photo to Local Storage
+export async function uploadCouplePhoto(formData: FormData) {
+    console.log(">>> uploadCouplePhoto called");
     try {
-        const supabase = await createClient();
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const user = await getCachedUser();
+        console.log(">>> uploadCouplePhoto: user fetched:", user?.id);
 
-        if (userError || !user) {
+        if (!user || !user.id) {
             return { success: false, error: "Not authenticated" };
         }
-        if (userId && userId !== user.id) {
-            return { success: false, error: "Unauthorized" };
-        }
+        // Verification is done via session, no need for client-provided userId
 
-        // Create unique filename
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const filePath = `couple-photos/${fileName}`;
+        const file = formData.get("file") as File;
+        if (!file) return { success: false, error: "No file provided" };
 
-        // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
-            .from('couple-assets')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `couple-${user.id}-${Date.now()}.${fileExt}`;
+        
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const relativePath = `/uploads/${fileName}`;
+        const absolutePath = path.join(process.cwd(), "public", "uploads", fileName);
 
-        if (error) throw error;
+        await fs.writeFile(absolutePath, buffer);
 
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-            .from('couple-assets')
-            .getPublicUrl(filePath);
-
-        return { success: true, url: publicUrl };
+        return { success: true, url: relativePath };
     } catch (error: any) {
-        console.error('Upload photo error:', error);
+        console.error('Local couple photo upload error:', error);
         return { success: false, error: error.message };
     }
 }
@@ -249,12 +266,12 @@ export async function uploadCouplePhoto(file: File, userId: string) {
 export async function getUserCouple(userId: string) {
     try {
         // Find the couple the user belongs to
-        const profile = await prisma.profile.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { couple: true }
         });
 
-        return { success: true, data: profile?.couple || null };
+        return { success: true, data: user?.couple || null };
     } catch (error: any) {
         console.error('Get user couple error:', error);
         return { success: false, error: error.message };

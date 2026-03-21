@@ -1,10 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/utils/supabase/client";
+import { useSession } from "next-auth/react";
 import { calculateDaysTogether } from "@/lib/utils/date-utilities";
-
-const supabase = createClient();
 
 export interface CoupleData {
     id: string;
@@ -32,31 +30,14 @@ export interface UserProfile {
 }
 
 export function useCouple() {
-    // 1. Fetch Auth User
-    const authQuery = useQuery({
-        queryKey: ["auth-user"],
-        queryFn: async () => {
-            try {
-                const { data: { user }, error } = await supabase.auth.getUser();
-                if (error) {
-                    console.warn('Auth error:', error);
-                    return null;
-                }
-                return user;
-            } catch (err) {
-                console.warn('Failed to fetch user:', err);
-                return null;
-            }
-        },
-        staleTime: Infinity, // Auth guest session is stable
-        retry: false, // Don't retry auth failures
-    });
+    const { data: session, status } = useSession();
+    const user = session?.user;
 
     // 2. Fetch Profile & Couple
     const coupleQuery = useQuery({
-        queryKey: ["couple", authQuery.data?.id],
+        queryKey: ["couple", user?.id],
         queryFn: async () => {
-            if (!authQuery.data?.id) return null;
+            if (!user?.id) return null;
 
             try {
                 const res = await fetch('/api/me', { method: 'GET' });
@@ -71,8 +52,8 @@ export function useCouple() {
                 return null;
             }
         },
-        enabled: !!authQuery.data?.id,
-        retry: false, // Don't retry profile fetch failures
+        enabled: !!user?.id,
+        retry: false,
     });
 
     const profile = coupleQuery.data;
@@ -80,14 +61,13 @@ export function useCouple() {
     const daysTogether = couple ? calculateDaysTogether(couple.start_date) : 0;
 
     return {
-        user: authQuery.data,
+        user,
         profile,
         couple,
         daysTogether,
-        isLoading: authQuery.isLoading || coupleQuery.isLoading,
-        error: authQuery.error || coupleQuery.error,
+        isLoading: status === "loading" || coupleQuery.isLoading,
+        error: coupleQuery.error,
         refresh: () => {
-            authQuery.refetch();
             coupleQuery.refetch();
         }
     };

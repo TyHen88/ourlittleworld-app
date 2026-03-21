@@ -1,20 +1,27 @@
-import { updateSession } from '@/utils/supabase/proxy'
-import { type NextRequest } from 'next/server'
+import NextAuth from "next-auth"
+import authConfig from "./auth.config"
 
-export default async function proxy(request: NextRequest) {
-    return await updateSession(request)
-}
+const { auth } = NextAuth(authConfig)
+
+export default auth((req) => {
+  const isLoggedIn = !!req.auth
+  const isOnDashboard = req.nextUrl.pathname.startsWith("/(app)") || 
+                         req.nextUrl.pathname.startsWith("/dashboard") ||
+                         req.nextUrl.pathname.startsWith("/budget") ||
+                         req.nextUrl.pathname.startsWith("/calendar") ||
+                         req.nextUrl.pathname.startsWith("/goals") ||
+                         req.nextUrl.pathname.startsWith("/profile") ||
+                         req.nextUrl.pathname.startsWith("/settings")
+
+  if (isOnDashboard && !isLoggedIn) {
+    return Response.redirect(new URL("/login", req.nextUrl))
+  }
+  
+  if (isLoggedIn && req.nextUrl.pathname.startsWith("/login")) {
+    return Response.redirect(new URL("/dashboard", req.nextUrl))
+  }
+})
 
 export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - icon and apple-icon (metadata icon routes)
-         * Feel free to modify this pattern to include more paths.
-         */
-        '/((?!_next/static|_next/image|favicon.ico|icon(?:$|/)|apple-icon(?:$|/)|sw\\.js|manifest\\.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-    ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 }
