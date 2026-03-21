@@ -15,12 +15,13 @@ import {
     ArrowLeft, Sparkles, Calendar, DollarSign, Image as ImageIcon,
     Volume2, VolumeX, Eye, EyeOff, Info
 } from "lucide-react";
-import { signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
+import { signOut, updateCurrentUserProfile, deleteAccount } from "@/lib/actions/auth";
 import { uploadAvatar } from "@/lib/actions/storage";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { useCouple } from "@/hooks/use-couple";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { AlertTriangle } from "lucide-react";
 
 type SettingsSection = "profile" | "couple" | "preferences" | "notifications" | "privacy" | "help";
 
@@ -51,6 +52,8 @@ export default function SettingsPage() {
 
     const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deletingAccount, setDeletingAccount] = useState(false);
 
     const [formData, setFormData] = useState({
         full_name: "",
@@ -89,16 +92,16 @@ export default function SettingsPage() {
 
         setEditing(false);
 
-        const result = await updateCurrentUserProfile({
-            full_name: formData.full_name,
-            avatar_url: formData.avatar_url,
-        });
-
-        if (result.success) {
+        try {
+            await updateCurrentUserProfile({
+                full_name: formData.full_name,
+                avatar_url: formData.avatar_url,
+            });
             queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
-        } else {
+        } catch (error: any) {
             queryClient.setQueryData(['couple', user.id], previousData);
             setEditing(true);
+            alert(error.message || 'Failed to update profile');
         }
     };
 
@@ -139,6 +142,20 @@ export default function SettingsPage() {
             navigator.clipboard.writeText(couple.invite_code);
             setInviteCodeCopied(true);
             setTimeout(() => setInviteCodeCopied(false), 2000);
+        }
+    };
+
+    const handleAccountDelete = async () => {
+        setDeletingAccount(true);
+        try {
+            await deleteAccount();
+        } catch (err: any) {
+            // Next.js redirects throw a special error that we should ignore on the client
+            if (err.message?.includes("NEXT_REDIRECT")) return;
+            
+            console.error("Delete failed:", err);
+            alert(err.message || "Failed to delete account");
+            setDeletingAccount(false);
         }
     };
 
@@ -365,65 +382,86 @@ export default function SettingsPage() {
                         )}
 
                         {/* Couple Section */}
-                        {activeSection === "couple" && couple && (
+                        {activeSection === "couple" && (
                             <Card className="p-6 border-none shadow-lg bg-white rounded-3xl">
                                 <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
                                     <Heart className="text-pink-600" size={24} />
                                     Couple Settings
                                 </h2>
 
-                                <div className="space-y-6">
-                                    {/* Couple Name */}
-                                    <div>
-                                        <Label className="text-xs font-bold text-slate-600 uppercase">Couple Name</Label>
-                                        <p className="text-lg font-bold text-slate-800 mt-1">{couple.couple_name || "Our Little World"}</p>
-                                    </div>
-
-                                    {/* Anniversary */}
-                                    {couple.start_date && (
+                                {couple ? (
+                                    <div className="space-y-6">
+                                        {/* Couple Name */}
                                         <div>
-                                            <Label className="text-xs font-bold text-slate-600 uppercase">Anniversary</Label>
-                                            <p className="text-lg font-bold text-slate-800 mt-1">
-                                                {new Date(couple.start_date).toLocaleDateString()}
-                                            </p>
-                                            <p className="text-sm text-pink-600 font-medium mt-1">
-                                                {daysTogether} days together ✨
-                                            </p>
+                                            <Label className="text-xs font-bold text-slate-600 uppercase">Couple Name</Label>
+                                            <p className="text-lg font-bold text-slate-800 mt-1">{couple.couple_name || "Our Little World"}</p>
                                         </div>
-                                    )}
 
-                                    {/* Invite Code */}
-                                    {couple.members && couple.members.length < 2 && (
-                                        <div className="p-4 bg-pink-50 rounded-2xl border border-pink-200">
-                                            <Label className="text-xs font-bold text-slate-600 uppercase mb-2 block">Invite Your Partner</Label>
-                                            <div className="relative">
-                                                <div className="p-4 bg-gradient-to-r from-pink-100 to-rose-100 rounded-xl text-center">
-                                                    <p className="text-2xl font-black text-slate-800 tracking-widest">
-                                                        {couple.invite_code}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={copyInviteCode}
-                                                    className="absolute top-2 right-2 p-2 bg-white rounded-full hover:bg-slate-50 transition-colors shadow-sm"
-                                                >
-                                                    {inviteCodeCopied ? (
-                                                        <Check size={16} className="text-green-600" />
-                                                    ) : (
-                                                        <Copy size={16} className="text-slate-600" />
-                                                    )}
-                                                </button>
+                                        {/* Anniversary */}
+                                        {couple.start_date && (
+                                            <div>
+                                                <Label className="text-xs font-bold text-slate-600 uppercase">Anniversary</Label>
+                                                <p className="text-lg font-bold text-slate-800 mt-1">
+                                                    {new Date(couple.start_date).toLocaleDateString()}
+                                                </p>
+                                                <p className="text-sm text-pink-600 font-medium mt-1">
+                                                    {daysTogether} days together ✨
+                                                </p>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {couple.members && couple.members.length >= 2 && (
-                                        <div className="p-4 bg-green-50 rounded-2xl border border-green-200">
-                                            <p className="text-sm font-bold text-green-700 text-center">
-                                                ✨ Your world is complete! Both partners connected.
+                                        {/* Invite Code */}
+                                        {couple.members && couple.members.length < 2 && (
+                                            <div className="p-4 bg-pink-50 rounded-2xl border border-pink-200">
+                                                <Label className="text-xs font-bold text-slate-600 uppercase mb-2 block">Invite Your Partner</Label>
+                                                <div className="relative">
+                                                    <div className="p-4 bg-gradient-to-r from-pink-100 to-rose-100 rounded-xl text-center">
+                                                        <p className="text-2xl font-black text-slate-800 tracking-widest">
+                                                            {couple.invite_code}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={copyInviteCode}
+                                                        className="absolute top-2 right-2 p-2 bg-white rounded-full hover:bg-slate-50 transition-colors shadow-sm"
+                                                    >
+                                                        {inviteCodeCopied ? (
+                                                            <Check size={16} className="text-green-600" />
+                                                        ) : (
+                                                            <Copy size={16} className="text-slate-600" />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {couple.members && couple.members.length >= 2 && (
+                                            <div className="p-4 bg-green-50 rounded-2xl border border-green-200">
+                                                <p className="text-sm font-bold text-green-700 text-center">
+                                                    ✨ Your world is complete! Both partners connected.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-10 space-y-6">
+                                        <div className="mx-auto w-20 h-20 bg-romantic-blush/30 rounded-full flex items-center justify-center">
+                                            <Heart className="text-romantic-heart/40" size={40} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h3 className="text-lg font-bold text-slate-800">No Couple Connected</h3>
+                                            <p className="text-sm text-slate-500 max-w-[240px] mx-auto">
+                                                Share your world with someone special to unlock memories, budgets, and more.
                                             </p>
                                         </div>
-                                    )}
-                                </div>
+                                        <Button 
+                                            onClick={() => router.push("/onboarding")}
+                                            className="rounded-full bg-gradient-button px-8 shadow-lg shadow-romantic-heart/20"
+                                        >
+                                            <Sparkles className="mr-2" size={18} />
+                                            Connect Your World
+                                        </Button>
+                                    </div>
+                                )}
                             </Card>
                         )}
 
@@ -541,7 +579,7 @@ export default function SettingsPage() {
                                     {[
                                         { label: "Change Password", icon: Lock, action: () => {} },
                                         { label: "Download Your Data", icon: Download, action: () => {} },
-                                        { label: "Delete Account", icon: Trash2, action: () => {}, danger: true },
+                                        { label: "Delete Account", icon: Trash2, action: () => setShowDeleteConfirm(true), danger: true },
                                     ].map((item) => {
                                         const Icon = item.icon;
                                         return (
@@ -606,6 +644,46 @@ export default function SettingsPage() {
                     </motion.div>
                 </AnimatePresence>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {showDeleteConfirm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-white rounded-4xl p-8 max-w-sm w-full shadow-2xl space-y-6 text-center"
+                        >
+                            <div className="mx-auto w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+                                <AlertTriangle className="text-red-600" size={32} />
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-black text-slate-800">Delete Account?</h3>
+                                <p className="text-sm text-slate-500">
+                                    This action is permanent and cannot be undone. You will lose all your data and memories.
+                                </p>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <Button
+                                    onClick={handleAccountDelete}
+                                    disabled={deletingAccount}
+                                    className="h-12 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold"
+                                >
+                                    {deletingAccount ? "Deleting..." : "Yes, Delete Account"}
+                                </Button>
+                                <Button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    variant="ghost"
+                                    className="h-12 rounded-2xl text-slate-500 hover:text-slate-800 font-bold"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

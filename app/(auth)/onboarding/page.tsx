@@ -243,6 +243,13 @@ export default function EnhancedOnboardingPage() {
                                 <span>Join with Code</span>
                                 <ArrowRight className="ml-2" size={20} />
                             </Button>
+
+                            <button
+                                onClick={() => router.push("/dashboard")}
+                                className="w-full mt-4 text-slate-400 font-bold text-sm tracking-wide hover:text-slate-600 transition-colors"
+                            >
+                                Skip for Now
+                            </button>
                         </div>
                     </motion.div>
                 )}

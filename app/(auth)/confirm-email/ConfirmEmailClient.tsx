@@ -65,15 +65,10 @@ export default function ConfirmEmailClient() {
 
         try {
             const result = await validateOtp(email, code);
-
-            if (result.success) {
-                setIsNewUser(result.isNewUser || false);
-                setStep("password");
-            } else {
-                setError(result.error || "Invalid code. Please try again.");
-            }
+            setIsNewUser(result.isNewUser || false);
+            setStep("password");
         } catch (err: any) {
-            setError(err.message || "Something went wrong");
+            setError(err.message || "Invalid code. Please try again.");
         } finally {
             setVerifying(false);
         }
@@ -91,18 +86,14 @@ export default function ConfirmEmailClient() {
 
         try {
             const code = otp.join("");
-            const result = await finalizeLoginWithPassword(email, code, password);
+            const callbackUrl = await finalizeLoginWithPassword(email, code, password);
 
-            if (result.success) {
-                setConfirmed(true);
-                setTimeout(() => {
-                    window.location.href = (result as any).callbackUrl;
-                }, 1500);
-            } else {
-                setError(result.error || "Failed to finalize login");
-            }
+            setConfirmed(true);
+            setTimeout(() => {
+                window.location.href = callbackUrl;
+            }, 1500);
         } catch (err: any) {
-            setError(err.message || "Something went wrong");
+            setError(err.message || "Failed to finalize login");
         } finally {
             setVerifying(false);
         }
@@ -112,12 +103,10 @@ export default function ConfirmEmailClient() {
         setResending(true);
         setError("");
         try {
-            const result = await requestLoginCode(email);
-            if (result.success) {
-                // Success feedback
-            } else {
-                setError(result.error || "Failed to resend code");
-            }
+            await requestLoginCode(email);
+            // No feedback needed or just toast
+        } catch (err: any) {
+            setError(err.message || "Failed to resend code");
         } finally {
             setResending(false);
         }

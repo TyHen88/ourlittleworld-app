@@ -70,47 +70,61 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
         <div className="p-6 space-y-8 max-w-2xl mx-auto">
             {/* Header Section */}
             <header className="flex items-center justify-between">
-                <div className="flex items-center -space-x-3">
-                    <div className="relative">
+                <div className="space-y-1">
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
+                        <Heart className="text-romantic-heart fill-romantic-heart animate-heart-beat" size={24} />
+                        OurLittleWorld
+                    </h1>
+                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest pl-1">
+                        Welcome, {profile?.full_name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Love'}! ✨
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    {couple ? (
+                        <div className="flex items-center -space-x-3">
+                            <div className="relative">
+                                <Avatar className="w-10 h-10 border-4 border-white shadow-md">
+                                    <AvatarFallback className="bg-romantic-blush text-romantic-heart font-bold">
+                                        {profile?.avatar_url ? (
+                                            <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (profile?.full_name?.[0] || 'M')}
+                                    </AvatarFallback>
+                                </Avatar>
+                                {user && couple && (
+                                    <DailyMoodBadge
+                                        userId={user.id}
+                                        coupleId={couple.id}
+                                        position="bottom-right"
+                                    />
+                                )}
+                            </div>
+
+                            <div className="relative">
+                                <Avatar className="w-10 h-10 border-4 border-white shadow-md">
+                                    <AvatarFallback className="bg-romantic-lavender text-slate-600 font-bold overflow-hidden">
+                                        {otherPartner?.avatar_url ? (
+                                            <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (otherPartner?.full_name?.[0] || 'L')}
+                                    </AvatarFallback>
+                                </Avatar>
+                                {otherPartner && couple && (
+                                    <DailyMoodBadge
+                                        userId={otherPartner.id}
+                                        coupleId={couple.id}
+                                        position="bottom-right"
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    ) : (
                         <Avatar className="w-12 h-12 border-4 border-white shadow-md">
-                            <AvatarFallback className="bg-romantic-blush text-romantic-heart font-bold">
+                            <AvatarFallback className="bg-gradient-love text-white font-bold">
                                 {profile?.avatar_url ? (
                                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                                ) : (profile?.full_name?.[0] || 'M')}
+                                ) : (profile?.full_name?.[0] || user?.name?.[0] || 'U')}
                             </AvatarFallback>
                         </Avatar>
-                        {user && couple && (
-                            <DailyMoodBadge
-                                userId={user.id}
-                                coupleId={couple.id}
-                                position="bottom-right"
-                            />
-                        )}
-                    </div>
-
-                    <div className="relative">
-                        <Avatar className="w-12 h-12 border-4 border-white shadow-md">
-                            <AvatarFallback className="bg-romantic-lavender text-slate-600 font-bold overflow-hidden">
-                                {otherPartner?.avatar_url ? (
-                                    <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
-                                ) : (otherPartner?.full_name?.[0] || 'L')}
-                            </AvatarFallback>
-                        </Avatar>
-                        {otherPartner && couple && (
-                            <DailyMoodBadge
-                                userId={otherPartner.id}
-                                coupleId={couple.id}
-                                position="bottom-right"
-                            />
-                        )}
-                    </div>
-                </div>
-                <div className="text-right">
-                    <h1 className="text-xl font-bold text-slate-800 tracking-tight">Hi, Love</h1>
-                    {daysTogether > 0 && (
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
-                            Day {daysTogether.toLocaleString()} Together
-                        </p>
                     )}
                 </div>
             </header>
@@ -315,13 +329,15 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
             </motion.section>
 
             {/* Main Widgets */}
-            <section className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-slate-800">Finances</h3>
-                    <span className="text-xs font-bold text-romantic-heart uppercase tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
-                </div>
-                <BudgetOverview coupleId={couple?.id} />
-            </section>
+            {couple && (
+                <section className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-slate-800">Finances</h3>
+                        <span className="text-xs font-bold text-romantic-heart uppercase tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
+                    </div>
+                    <BudgetOverview coupleId={couple?.id} />
+                </section>
+            )}
 
             {/* Coming Soon Features */}
             <motion.section

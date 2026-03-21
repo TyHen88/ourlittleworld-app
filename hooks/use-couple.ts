@@ -40,7 +40,17 @@ export function useCouple() {
             if (!user?.id) return null;
 
             try {
-                const res = await fetch('/api/me', { method: 'GET' });
+                // Add a small timeout to the fetch to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+                const res = await fetch('/api/me', { 
+                    method: 'GET',
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) {
                     console.warn('Failed to load profile:', json?.error);
@@ -52,21 +62,27 @@ export function useCouple() {
                 return null;
             }
         },
-        enabled: !!user?.id,
-        retry: false,
+        enabled: status === "authenticated" && !!user?.id,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        retry: 2, // Allow a few retries for the main context
     });
 
     const profile = coupleQuery.data;
     const couple = (profile as any)?.couple as CoupleData | undefined;
     const daysTogether = couple ? calculateDaysTogether(couple.start_date) : 0;
 
+    // Determine if we are truly loading or if we should show a fallback
+    const isSessionLoading = status === "loading";
+    const isDataLoading = coupleQuery.isLoading && status === "authenticated";
+    
     return {
         user,
         profile,
         couple,
         daysTogether,
-        isLoading: status === "loading" || coupleQuery.isLoading,
+        isLoading: isSessionLoading || isDataLoading,
         error: coupleQuery.error,
+        status,
         refresh: () => {
             coupleQuery.refetch();
         }

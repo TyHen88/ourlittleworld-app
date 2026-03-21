@@ -25,7 +25,7 @@ export default function LandingPage() {
 
     const handleInstallClick = async () => {
         if (!deferredPrompt) {
-            alert("To install this app:\n\niOS: Tap the Share button and select 'Add to Home Screen'\n\nAndroid: Tap the menu (⋮) and select 'Add to Home Screen' or 'Install App'");
+            alert("To install this app:\n\niOS: Tap the Share button and select 'Add to Home Screen'\n\nAndroid: Tap the menu (⋮) and select 'Add to Home Screen'");
             return;
         }
 
@@ -79,14 +79,14 @@ export default function LandingPage() {
                 className="relative z-10 pb-12 px-6 flex flex-col items-center gap-3"
             >
                 <div className="flex flex-col sm:flex-row gap-2 w-full max-w-md">
-                    <Button
+                    {/* <Button
                         onClick={handleInstallClick}
                         className="rounded-full bg-gradient-button shadow-lg text-sm px-6 py-3 group flex-1"
                     >
                         <Download className="mr-2 group-hover:animate-bounce" size={16} />
                         {isInstallable ? "Install App" : "Add to Home Screen"}
                         <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={14} />
-                    </Button>
+                    </Button> */}
 
                     <Button
                         onClick={() => window.location.href = "/register"}

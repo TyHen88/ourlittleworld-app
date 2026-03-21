@@ -26,6 +26,7 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?   // For credentials auth
+  is_deleted    Boolean   @default(false)
 
   // Custom fields from Profile
   full_name     String?
@@ -43,6 +44,8 @@ model User {
   transactions Transaction[]
   posts        Post[]
   dailyMoods   DailyMood[]
+
+  @@index([is_deleted])
 
   @@map("users")
 }
@@ -172,6 +175,10 @@ model Post {
   couple Couple @relation(fields: [couple_id], references: [id], onDelete: Cascade)
   author User   @relation(fields: [author_id], references: [id], onDelete: Cascade)
 
+  @@index([couple_id])
+  @@index([author_id])
+  @@index([is_deleted])
+  @@index([created_at(sort: Desc)])
   @@map("posts")
 }
 

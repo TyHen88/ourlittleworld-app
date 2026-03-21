@@ -177,9 +177,7 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
 
     const commonEmojis = ['❤️', '😍', '🥰', '😊', '😘', '💕', '💖', '✨', '🎉', '🌟', '💝', '🌹', '🎈', '🎁', '💑', '👫'];
 
-    if (submitting && !embedded) {
-        return <FullPageLoader />;
-    }
+    // Removed FullPageLoader to allow optimistic update to be visible
 
     const handleSubmit = async () => {
         if (submitting) return;

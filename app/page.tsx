@@ -1,19 +1,25 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Heart } from "lucide-react";
 
 export default function RootPage() {
   const router = useRouter();
+  const { status } = useSession();
 
   useEffect(() => {
-    // Redirect to landing page
+    // After a short animation, redirect based on session status
     const timer = setTimeout(() => {
-      router.push("/landing");
-    }, 1500);
+      if (status === "authenticated") {
+        router.push("/dashboard");
+      } else if (status === "unauthenticated") {
+        router.push("/landing");
+      }
+    }, 1200);
     return () => clearTimeout(timer);
-  }, [router]);
+  }, [router, status]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-gradient-love">

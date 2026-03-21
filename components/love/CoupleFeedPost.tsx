@@ -319,15 +319,37 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                             onClick={async () => {
                                                 if (window.confirm("Are you sure you want to delete this memory?")) {
                                                     setIsDeleting(true);
-                                                    const res = await deletePost(id);
-                                                    if (res.success) {
-                                                        if (coupleId) {
+                                                    
+                                                    // Optimistic Delete
+                                                    if (coupleId) {
+                                                        const previousPosts = queryClient.getQueryData(['posts', coupleId]);
+                                                        
+                                                        queryClient.setQueryData(['posts', coupleId], (old: any) => {
+                                                            if (!old) return old;
+                                                            return {
+                                                                ...old,
+                                                                pages: old.pages.map((page: any) => ({
+                                                                    ...page,
+                                                                    data: page.data.filter((p: any) => p.id !== id)
+                                                                }))
+                                                            };
+                                                        });
+                                                        
+                                                        const res = await deletePost(id);
+                                                        if (res.success) {
+                                                            // Success - invalidate to ensure consistency
                                                             queryClient.invalidateQueries({ queryKey: ["posts", coupleId] });
+                                                        } else {
+                                                            // Revert
+                                                            queryClient.setQueryData(['posts', coupleId], previousPosts);
+                                                            alert(res.error || "Failed to delete post");
                                                         }
                                                     } else {
-                                                        alert(res.error || "Failed to delete post");
-                                                        setIsDeleting(false);
+                                                        const res = await deletePost(id);
+                                                        if (!res.success) alert(res.error || "Failed to delete post");
                                                     }
+                                                    
+                                                    setIsDeleting(false);
                                                 }
                                                 setShowOptions(false);
                                             }}

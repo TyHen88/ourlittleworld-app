@@ -26,15 +26,15 @@ export default function RegisterPage() {
         setLoading(true);
 
         try {
-            const result = await signUp(formData.email, formData.fullName);
+            const success = await signUp(formData.email, formData.fullName);
 
-            if (result.success) {
+            if (success) {
                 setRedirecting(true);
                 router.push(`/confirm-email?email=${encodeURIComponent(formData.email)}`);
                 return;
             }
-
-            setError(result.error || "Registration failed");
+        } catch (err: any) {
+            setError(err.message || "Registration failed");
         } finally {
             setLoading(false);
         }

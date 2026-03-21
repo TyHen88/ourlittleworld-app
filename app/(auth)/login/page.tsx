@@ -10,7 +10,7 @@ import { requestLoginCode } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { Lock, Eye, EyeOff } from "lucide-react";
-import { loginWithPassword } from "@/lib/actions/auth";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -27,18 +27,22 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const result = await loginWithPassword({ email, password });
+            const result = await signIn("credentials", {
+                email,
+                password,
+                redirect: false,
+            });
 
-            if (result.success) {
+            if (result && !result.error) {
                 setRedirecting(true);
                 router.push("/dashboard");
                 router.refresh();
                 return;
             }
 
-            setError(result.error || "Invalid email or password");
+            setError("Invalid email or password");
         } catch (err: any) {
-            setError(err.message || "Something went wrong");
+            setError("Something went wrong. Please check your credentials.");
         } finally {
             setLoading(false);
         }

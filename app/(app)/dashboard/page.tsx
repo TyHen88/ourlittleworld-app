@@ -1,35 +1,34 @@
-"use client";
-
-import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useCouple } from "@/hooks/use-couple";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { getCachedProfileWithCouple } from "@/lib/db-utils";
 import { DashboardClient } from "./DashboardClient";
-import { FullPageLoader } from "@/components/FullPageLoader";
+import { calculateDaysTogether } from "@/lib/utils/date-utilities";
+import { Metadata } from "next";
 
-export default function DashboardPage() {
-    const router = useRouter();
-    const { user, profile, couple, daysTogether, isLoading } = useCouple();
+export const metadata: Metadata = {
+  title: "Dashboard | OurLittleWorld",
+};
 
-    useEffect(() => {
-        if (!isLoading) {
-            if (!user) {
-                router.push("/login");
-            } else if (!couple) {
-                router.push("/onboarding");
-            }
-        }
-    }, [user, couple, isLoading, router]);
+export default async function DashboardPage() {
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
 
-    if (isLoading || !user || !profile || !couple) {
-        return <FullPageLoader />;
-    }
+  const profileWithCouple = await getCachedProfileWithCouple(session.user.id);
 
-    return (
-        <DashboardClient
-            user={user}
-            profile={profile}
-            couple={couple}
-            daysTogether={daysTogether}
-        />
-    );
+  const { calculateDaysTogetherSafe } = await import("@/lib/utils/date-utilities");
+  const daysTogether = profileWithCouple?.couple 
+    ? calculateDaysTogetherSafe(profileWithCouple.couple.start_date)
+    : 0;
+
+  return (
+    <DashboardClient
+      user={session.user}
+      profile={profileWithCouple}
+      couple={profileWithCouple?.couple || null}
+      daysTogether={daysTogether}
+    />
+  );
 }

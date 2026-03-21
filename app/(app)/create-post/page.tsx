@@ -255,7 +255,7 @@ export default function CreatePostPage() {
             }
 
             // Add tagged partner and other metadata
-            const metadata: any = {
+            const nextMetadata: any = {
                 images: imageUrls,
                 likes: [],
                 likes_count: 0,
@@ -263,41 +263,84 @@ export default function CreatePostPage() {
                 comments_count: 0,
             };
 
-            if (taggedPartner && couple?.members) {
-                const partner = couple.members.find((m: any) => m.id !== user?.id);
-                if (partner) {
-                    metadata.tagged_users = [partner.id];
-                }
+            if (feeling) nextMetadata.feeling = feeling;
+            if (location.trim()) nextMetadata.location = location.trim();
+            if (category) nextMetadata.category = category;
+
+            // Optimistic Update
+            const optimisticPost = {
+                id: `temp-${Date.now()}`,
+                couple_id: couple?.id,
+                author_id: user?.id,
+                content: trimmed,
+                image_url: imageUrls[0] || null,
+                category: category || null,
+                metadata: nextMetadata,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                author: {
+                    id: user?.id,
+                    full_name: profile?.full_name || 'You',
+                    avatar_url: profile?.avatar_url || null,
+                },
+            };
+
+            if (couple?.id) {
+                queryClient.setQueryData(['posts', couple.id], (old: any) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: any, idx: number) => {
+                            if (idx === 0) {
+                                return {
+                                    ...page,
+                                    data: [optimisticPost, ...page.data],
+                                };
+                            }
+                            return page;
+                        }),
+                    };
+                });
             }
 
-            if (feeling) {
-                metadata.feeling = feeling;
-            }
-
-            if (location.trim()) {
-                metadata.location = location.trim();
-            }
-
-            if (category) {
-                metadata.category = category;
-            }
+            // Redirect immediately
+            router.push('/feed');
 
             const result = await createPost({
                 content: trimmed,
                 imageUrls,
-                metadata,
+                metadata: nextMetadata,
             });
 
             if (!result?.success) {
+                // Rollback on error if possible (though we already redirected)
+                if (couple?.id) {
+                    queryClient.invalidateQueries({ queryKey: ['posts', couple.id] });
+                }
                 throw new Error(result?.error || 'Failed to create post');
             }
 
-            if (couple?.id) {
-                queryClient.invalidateQueries({ queryKey: ['posts', couple.id] });
+            // Replace temp post with real post
+            if (couple?.id && result.data) {
+                queryClient.setQueryData(['posts', couple.id], (old: any) => {
+                    if (!old) return old;
+                    return {
+                        ...old,
+                        pages: old.pages.map((page: any, idx: number) => {
+                            if (idx === 0) {
+                                return {
+                                    ...page,
+                                    data: page.data.map((p: any) =>
+                                        p.id === optimisticPost.id ? { ...result.data, author: optimisticPost.author } : p
+                                    ),
+                                };
+                            }
+                            return page;
+                        }),
+                    };
+                });
                 queryClient.invalidateQueries({ queryKey: ['recent-posts', couple.id] });
             }
-
-            router.push('/feed');
         } catch (e: any) {
             setError(e?.message || 'Something went wrong');
             setSubmitting(false);

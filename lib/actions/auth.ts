@@ -9,29 +9,26 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
 export async function signUp(email: string, fullName: string) {
+    const existingUser = await prisma.user.findFirst({
+        where: { email, is_deleted: false }
+    });
+
+    if (existingUser) {
+        return await requestLoginCode(email);
+    }
+
     try {
-        const existingUser = await prisma.user.findUnique({
-            where: { email }
-        });
-
-        if (existingUser) {
-            // User exists, just trigger login code
-            return requestLoginCode(email);
-        }
-
-        const user = await prisma.user.create({
+        await prisma.user.create({
             data: {
                 email,
                 full_name: fullName,
-                name: fullName, // NextAuth default
+                name: fullName,
             }
         });
-
-        // Trigger login code after signup
-        return requestLoginCode(email);
+        return await requestLoginCode(email);
     } catch (error: any) {
-        console.error('Signup error:', error);
-        return { success: false, error: error.message };
+        console.error('[SIGNUP_ERROR]', error);
+        throw new Error(error.message || 'Failed to create account');
     }
 }
 
@@ -41,30 +38,29 @@ export async function requestLoginCode(email: string) {
             email,
             redirect: false,
         });
-
-        return { success: true };
+        return true;
     } catch (error: any) {
-        console.error('Request login code error:', error);
-        return { success: false, error: "Failed to send code. Please check your email." };
+        console.error('[LOGIN_CODE_ERROR]', error);
+        throw new Error("Failed to send code. Please check your email.");
     }
 }
 
 export async function loginWithPassword(data: any) {
     try {
-        const result = await nextAuthSignIn("credentials", {
+        await nextAuthSignIn("credentials", {
             email: data.email,
             password: data.password,
             redirect: false,
         });
-
-        return { success: true };
+        return true;
     } catch (error: any) {
         if (error instanceof AuthError) {
+            console.error('[LOGIN_PASSWORD_ERROR]', error.type);
             switch (error.type) {
                 case "CredentialsSignin":
-                    return { success: false, error: "Invalid email or password" };
+                    throw new Error("Invalid email or password");
                 default:
-                    return { success: false, error: "Authentication failed" };
+                    throw new Error("Authentication failed");
             }
         }
         throw error;
@@ -75,116 +71,116 @@ export async function loginWithPassword(data: any) {
  * Validates the OTP token before proceeding to password input
  */
 export async function validateOtp(email: string, token: string) {
-    try {
-        const hashedToken = crypto
-            .createHash("sha256")
-            .update(`${token}${process.env.AUTH_SECRET}`)
-            .digest("hex");
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(`${token}${process.env.AUTH_SECRET}`)
+        .digest("hex");
 
-        const vt = await prisma.verificationToken.findFirst({
-            where: { 
-                identifier: email, 
-                token: hashedToken, 
-                expires: { gt: new Date() } 
-            }
-        });
-        
-        if (!vt) return { success: false, error: "Invalid or expired verification code" };
-
-        const user = await prisma.user.findUnique({ where: { email } });
-        
-        return { 
-            success: true, 
-            isNewUser: !user?.password, // If no password, they need to SET one
-            fullName: user?.full_name || user?.name
-        };
-    } catch (error: any) {
-        return { success: false, error: "Verification failed" };
+    const vt = await prisma.verificationToken.findFirst({
+        where: { 
+            identifier: email, 
+            token: hashedToken, 
+            expires: { gt: new Date() } 
+        }
+    });
+    
+    if (!vt) {
+        console.error('[OTP_VALIDATION_ERROR] Token invalid or expired', { email });
+        throw new Error("Invalid or expired verification code");
     }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+    return { 
+        isNewUser: !user?.password,
+        fullName: user?.full_name || user?.name
+    };
 }
 
 /**
  * Completes the login/signup by verifying or setting the password
  */
 export async function finalizeLoginWithPassword(email: string, token: string, password: string) {
-    try {
-        // 1. One last verification of the token
-        const hashedToken = crypto
-            .createHash("sha256")
-            .update(`${token}${process.env.AUTH_SECRET}`)
-            .digest("hex");
+    // 1. One last verification of the token
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(`${token}${process.env.AUTH_SECRET}`)
+        .digest("hex");
 
-        const vt = await prisma.verificationToken.findFirst({
-            where: { identifier: email, token: hashedToken, expires: { gt: new Date() } }
-        });
-        if (!vt) return { success: false, error: "Verification session expired. Please restart." };
-
-        const user = await prisma.user.findUnique({ where: { email } });
-        
-        // 2. If user already has a password, check it. If not, set it (signup).
-        if (user?.password) {
-            const isValid = await bcrypt.compare(password, user.password);
-            if (!isValid) return { success: false, error: "Incorrect password" };
-        } else {
-            // New user or resetting password
-            const hashedPassword = await bcrypt.hash(password, 10);
-            await prisma.user.update({
-                where: { email },
-                data: { 
-                    password: hashedPassword,
-                    emailVerified: new Date() // Mark as verified since they finished OTP + Password
-                }
-            });
-        }
-
-        // 3. Construct the NextAuth callback URL to finalize the session
-        const callbackUrl = `/api/auth/callback/email?email=${encodeURIComponent(email)}&token=${token}`;
-        
-        return { success: true, callbackUrl };
-    } catch (error: any) {
-        console.error("Finalize error:", error);
-        return { success: false, error: "Finalization failed" };
+    const vt = await prisma.verificationToken.findFirst({
+        where: { identifier: email, token: hashedToken, expires: { gt: new Date() } }
+    });
+    
+    if (!vt) {
+        console.error('[FINALIZE_AUTH_ERROR] Verification session expired', { email });
+        throw new Error("Verification session expired. Please restart.");
     }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+    // 2. If user already has a password, check it. If not, set it (signup).
+    if (user?.password) {
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) {
+            console.error('[FINALIZE_AUTH_ERROR] Incorrect password', { email });
+            throw new Error("Incorrect password");
+        }
+    } else {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await prisma.user.update({
+            where: { email },
+            data: { 
+                password: hashedPassword,
+                emailVerified: new Date()
+            }
+        });
+    }
+
+    // 3. Construct the NextAuth callback URL
+    return `/api/auth/callback/email?email=${encodeURIComponent(email)}&token=${token}&callbackUrl=/onboarding`;
 }
 
 export async function signOut() {
     try {
         await nextAuthSignOut();
         revalidatePath('/');
-        return { success: true };
+        return true;
     } catch (error: any) {
-        return { success: false, error: error.message };
+        if (error.message?.includes("NEXT_REDIRECT")) throw error;
+        console.error('[SIGNOUT_ERROR]', error);
+        throw new Error("Failed to sign out");
     }
 }
 
 export async function getCurrentUser() {
-    try {
-        const user = await getCachedUser();
-        if (!user || !user.id) return { success: false, error: 'Not authenticated' };
+    const user = await getCachedUser();
+    if (!user || !user.id) {
+        throw new Error('Not authenticated');
+    }
 
-        // Get user with couple info using Prisma
+    try {
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             include: {
                 couple: {
-                    include: {
-                        members: true
-                    }
+                    include: { members: true }
                 }
             }
         });
 
-        return { success: true, user, profile: dbUser };
+        if (!dbUser) throw new Error('User not found');
+        return dbUser;
     } catch (error: any) {
-        return { success: false, error: error.message };
+        console.error('[GET_CURRENT_USER_ERROR]', error);
+        throw new Error('Failed to fetch profile');
     }
 }
 
 export async function updateCurrentUserProfile(data: { full_name?: string; avatar_url?: string }) {
-    try {
-        const user = await getCachedUser();
-        if (!user || !user.id) return { success: false, error: 'Not authenticated' };
+    const user = await getCachedUser();
+    if (!user || !user.id) throw new Error('Not authenticated');
 
+    try {
         const updated = await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -194,9 +190,40 @@ export async function updateCurrentUserProfile(data: { full_name?: string; avata
                 image: typeof data.avatar_url === 'string' ? data.avatar_url : undefined,
             }
         });
-
-        return { success: true, data: updated };
+        return updated;
     } catch (error: any) {
-        return { success: false, error: error.message };
+        console.error('[UPDATE_PROFILE_ERROR]', error);
+        throw new Error(error.message || 'Failed to update profile');
+    }
+}
+
+export async function deleteAccount() {
+    const sessionUser = await getCachedUser();
+    if (!sessionUser || !sessionUser.id) throw new Error('Not authenticated');
+
+    const user = await prisma.user.findUnique({
+        where: { id: sessionUser.id }
+    });
+
+    if (!user) throw new Error('User not found');
+
+    const timestamp = Date.now();
+    const deletedEmail = `deleted_${timestamp}_${user.email}`;
+
+    try {
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                is_deleted: true,
+                email: deletedEmail,
+                couple_id: null,
+            }
+        });
+        await nextAuthSignOut();
+        return true;
+    } catch (error: any) {
+        if (error.message?.includes("NEXT_REDIRECT")) throw error;
+        console.error('[DELETE_ACCOUNT_ERROR]', error);
+        throw new Error('Failed to delete account');
     }
 }
