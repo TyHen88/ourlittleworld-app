@@ -10,6 +10,9 @@ export const getCachedProfile = cache(async (userId: string) => {
       full_name: true,
       avatar_url: true,
       email: true,
+      user_type: true,
+      onboarding_completed: true,
+      created_at: true,
     },
   });
 });
@@ -23,6 +26,9 @@ export const getCachedProfileWithCouple = cache(async (userId: string) => {
       full_name: true,
       avatar_url: true,
       email: true,
+      user_type: true,
+      onboarding_completed: true,
+      created_at: true,
       couple: {
         select: {
           id: true,

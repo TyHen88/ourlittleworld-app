@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
     Heart, ArrowRight, Sparkles, Plus, Users, Copy, Check,
-    Calendar, Camera, Wand2, Upload, X
+    Calendar, Camera, Wand2, Upload, X, Globe, User, Book, Map, Target, Wallet
 } from "lucide-react";
 import { FloatingHearts } from "@/components/love/FloatingHearts";
 import { createWorld, joinWorld, generateWorldName, uploadCouplePhoto, getUserCouple } from "@/lib/actions/world";
+import { completeOnboarding, getCurrentUser } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import confetti from "canvas-confetti";
@@ -21,15 +22,44 @@ const NAME_SUGGESTIONS = [
     "OurSweetEscape", "TwoHearts", "EndlessLove", "DreamTogether"
 ];
 
+const SOLO_GUIDE_SLIDES = [
+    {
+        title: "Welcome, Explorer!",
+        description: "Every journey starts with a single step. OurLittleWorld is your personal sanctuary for self-discovery and solo adventures.",
+        icon: <Globe className="text-emerald-500" size={48} />,
+        color: "emerald"
+    },
+    {
+        title: "Personal Journal",
+        description: "Capture your private moments, milestones, and daily reflections. A safe space for your unique journey.",
+        icon: <Book className="text-indigo-500" size={48} />,
+        color: "indigo"
+    },
+    {
+        title: "Solo Goals & Habits",
+        description: "Set personal growth targets and track your daily progress. Watch yourself bloom every day.",
+        icon: <Target className="text-emerald-500" size={48} />,
+        color: "emerald"
+    },
+    {
+        title: "Wealth & Trips",
+        description: "Plan your personal savings and map out your next big solo adventure. Dreams are just plans in progress.",
+        icon: <Map className="text-indigo-500" size={48} />,
+        color: "indigo"
+    }
+];
+
 export default function EnhancedOnboardingPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const [onboardingType, setOnboardingType] = useState<"SINGLE" | "COUPLE" | "CHOOSE">("CHOOSE");
     const [step, setStep] = useState<number>(1);
     const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
     const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
     const [userId, setUserId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [guideStep, setGuideStep] = useState(0);
 
     // Create world state
     const [worldName, setWorldName] = useState("");
@@ -37,7 +67,6 @@ export default function EnhancedOnboardingPage() {
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [partnerNickname, setPartnerNickname] = useState("");
-    const [showSuggestions, setShowSuggestions] = useState(false);
 
     // Join world state
     const [inviteCode, setInviteCode] = useState("");
@@ -55,17 +84,19 @@ export default function EnhancedOnboardingPage() {
 
         if (session?.user?.id) {
             setUserId(session.user.id);
-            checkProfile(session.user.id);
+            checkProfile();
         }
     }, [status, session]);
 
-    const checkProfile = async (uid: string) => {
-        // Check if user already has a couple
-        const result = await getUserCouple(uid);
-
-        if (result.success && result.data) {
-            router.push("/dashboard");
-            return;
+    const checkProfile = async () => {
+        try {
+            const userProfile = await getCurrentUser();
+            if ((userProfile as any).onboarding_completed) {
+                router.push("/dashboard");
+                return;
+            }
+        } catch (err) {
+            console.error("Profile check failed", err);
         }
     };
 
@@ -118,6 +149,7 @@ export default function EnhancedOnboardingPage() {
             });
 
             if (result.success && result.inviteCode) {
+                await completeOnboarding('COUPLE');
                 setGeneratedCode(result.inviteCode);
                 setCreatedWorldName(result.worldName || worldName);
                 setStep(4); // Success screen
@@ -157,6 +189,7 @@ export default function EnhancedOnboardingPage() {
         setLoading(false);
 
         if (result.success) {
+            await completeOnboarding('COUPLE');
             setCreatedWorldName(result.worldName || "Your World");
             setStep(4); // Success screen
 
@@ -186,6 +219,12 @@ export default function EnhancedOnboardingPage() {
         exit: { opacity: 0, scale: 0.95, transition: { duration: 0.3 } }
     };
 
+    const coupleStepVariants = {
+        hidden: { opacity: 0, x: 32, scale: 0.98 },
+        visible: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" } },
+        exit: { opacity: 0, x: -32, scale: 0.98, transition: { duration: 0.25, ease: "easeInOut" } },
+    };
+
     if (status === "loading" || !userId) {
         return (
             <div className="flex items-center justify-center min-h-[100dvh] bg-gradient-love">
@@ -194,13 +233,171 @@ export default function EnhancedOnboardingPage() {
         );
     }
 
+    const handleFinishSingle = async () => {
+        setLoading(true);
+        try {
+            await completeOnboarding('SINGLE');
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#10B981', '#6366F1', '#34D399', '#818CF8']
+            });
+            setTimeout(() => router.push("/dashboard"), 1500);
+        } catch (err: any) {
+            setError(err.message || "Failed to finish onboarding");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
-        <div className="flex flex-col items-center justify-center min-h-[100dvh] p-6 bg-gradient-love overflow-hidden">
-            <FloatingHearts />
+        <div className={`flex flex-col items-center justify-center min-h-[100dvh] p-6 overflow-hidden transition-colors duration-700 ${onboardingType === 'SINGLE' ? 'bg-slate-50 text-slate-900 border-emerald-500' : 'bg-gradient-love'}`}>
+            {onboardingType !== 'SINGLE' && <FloatingHearts />}
 
             <AnimatePresence mode="wait">
-                {/* Step 1: Choose Mode */}
-                {step === 1 && mode === "choose" && (
+                {/* Step 0: Selection */}
+                {onboardingType === "CHOOSE" && (
+                    <motion.div
+                        key="selection"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="w-full max-w-2xl text-center space-y-12 relative z-10"
+                    >
+                        <div className="space-y-4">
+                            <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 3, repeat: Infinity }}>
+                                <Globe className="mx-auto text-romantic-heart" size={84} />
+                            </motion.div>
+                            <h1 className="text-5xl font-black tracking-tight text-slate-800">
+                                Welcome to Your World
+                            </h1>
+                            <p className="text-slate-500 font-medium text-xl">
+                                How would you like to start your journey?
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <button
+                                onClick={() => setOnboardingType("SINGLE")}
+                                className="group p-8 bg-white/80 backdrop-blur-xl rounded-4xl border-4 border-transparent hover:border-emerald-500 shadow-2xl transition-all text-left space-y-4"
+                            >
+                                <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                    <User size={32} />
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="text-2xl font-bold text-slate-800">Single Explorer</h3>
+                                    <p className="text-slate-500">Capture your personal journey, set solo goals, and plan your own adventures.</p>
+                                </div>
+                                <div className="flex items-center text-emerald-600 font-bold group-hover:translate-x-2 transition-transform pt-2">
+                                    Start Solo Journey <ArrowRight size={18} className="ml-2" />
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => setOnboardingType("COUPLE")}
+                                className="group p-8 bg-white/80 backdrop-blur-xl rounded-4xl border-4 border-transparent hover:border-romantic-heart shadow-2xl transition-all text-left space-y-4"
+                            >
+                                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-romantic-heart group-hover:scale-110 transition-transform">
+                                    <Heart size={32} />
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="text-2xl font-bold text-slate-800">Couple&apos;s World</h3>
+                                    <p className="text-slate-500">A private space for two. Share memories, budget together, and build your life.</p>
+                                </div>
+                                <div className="flex items-center text-romantic-heart font-bold group-hover:translate-x-2 transition-transform pt-2">
+                                    Start Together <ArrowRight size={18} className="ml-2" />
+                                </div>
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* SINGLE MODE GUIDE */}
+                {onboardingType === "SINGLE" && (
+                    <motion.div
+                        key="single-guide"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="w-full max-w-lg relative z-10"
+                    >
+                        <Card className="p-10 space-y-8 border-none shadow-2xl bg-white/90 backdrop-blur-2xl rounded-5xl overflow-hidden relative">
+                            {/* Slide Indicator */}
+                            <div className="flex justify-center gap-2 mb-4">
+                                {SOLO_GUIDE_SLIDES.map((_, i) => (
+                                    <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === guideStep ? 'w-8 bg-emerald-500' : 'w-2 bg-slate-200'}`} />
+                                ))}
+                            </div>
+
+                            {error && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600 text-center"
+                                >
+                                    {error}
+                                </motion.div>
+                            )}
+
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={guideStep}
+                                    initial={{ x: 50, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: -50, opacity: 0 }}
+                                    className="text-center space-y-6"
+                                >
+                                    <div className="mx-auto w-24 h-24 bg-slate-50 rounded-3xl flex items-center justify-center shadow-inner">
+                                        {SOLO_GUIDE_SLIDES[guideStep].icon}
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h2 className="text-3xl font-black text-slate-800 tracking-tight">
+                                            {SOLO_GUIDE_SLIDES[guideStep].title}
+                                        </h2>
+                                        <p className="text-lg text-slate-600 leading-relaxed font-medium">
+                                            {SOLO_GUIDE_SLIDES[guideStep].description}
+                                        </p>
+                                    </div>
+                                </motion.div>
+                            </AnimatePresence>
+
+                            <div className="flex gap-4 items-center justify-between pt-6">
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => guideStep > 0 ? setGuideStep(gs => gs - 1) : setOnboardingType("CHOOSE")}
+                                    className="text-slate-400 font-bold hover:text-slate-700"
+                                >
+                                    {guideStep === 0 ? "Change Mode" : "Previous"}
+                                </Button>
+                                
+                                {guideStep < SOLO_GUIDE_SLIDES.length - 1 ? (
+                                    <Button
+                                        onClick={() => setGuideStep(gs => gs + 1)}
+                                        className="rounded-full h-14 px-8 bg-slate-900 hover:bg-black text-white shadow-xl group"
+                                    >
+                                        Next
+                                        <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={handleFinishSingle}
+                                        disabled={loading}
+                                        className="rounded-full h-14 px-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-200"
+                                    >
+                                        {loading ? "Preparing Your World..." : "Start My Journey"}
+                                        {!loading && <Sparkles className="ml-2" />}
+                                    </Button>
+                                )}
+                            </div>
+                        </Card>
+                    </motion.div>
+                )}
+
+                {/* Step 1 Choose (Couple) */}
+                {onboardingType === "COUPLE" && step === 1 && mode === "choose" && (
                     <motion.div
                         key="choose"
                         variants={containerVariants}
@@ -245,17 +442,17 @@ export default function EnhancedOnboardingPage() {
                             </Button>
 
                             <button
-                                onClick={() => router.push("/dashboard")}
+                                onClick={() => setOnboardingType("CHOOSE")}
                                 className="w-full mt-4 text-slate-400 font-bold text-sm tracking-wide hover:text-slate-600 transition-colors"
                             >
-                                Skip for Now
+                                Back to Selection
                             </button>
                         </div>
                     </motion.div>
                 )}
 
                 {/* Step 2: Create World Form */}
-                {step === 2 && mode === "create" && (
+                {onboardingType === "COUPLE" && step === 2 && mode === "create" && (
                     <motion.div
                         key="create"
                         variants={containerVariants}
@@ -293,8 +490,16 @@ export default function EnhancedOnboardingPage() {
                             )}
 
                             <div className="space-y-5">
+                                <AnimatePresence mode="wait">
                                 {createStep === 1 && (
-                                    <>
+                                    <motion.div
+                                        key="create-step-1"
+                                        variants={coupleStepVariants}
+                                        initial="hidden"
+                                        animate="visible"
+                                        exit="exit"
+                                        className="space-y-5"
+                                    >
                                         <div className="space-y-2">
                                             <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
                                                 World Name *
@@ -345,11 +550,18 @@ export default function EnhancedOnboardingPage() {
                                                 Back
                                             </button>
                                         </div>
-                                    </>
+                                    </motion.div>
                                 )}
 
                                 {createStep === 2 && (
-                                    <>
+                                    <motion.div
+                                        key="create-step-2"
+                                        variants={coupleStepVariants}
+                                        initial="hidden"
+                                        animate="visible"
+                                        exit="exit"
+                                        className="space-y-5"
+                                    >
                                         <div className="space-y-2">
                                             <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
                                                 <Calendar size={16} />
@@ -419,11 +631,18 @@ export default function EnhancedOnboardingPage() {
                                                 Back
                                             </button>
                                         </div>
-                                    </>
+                                    </motion.div>
                                 )}
 
                                 {createStep === 3 && (
-                                    <>
+                                    <motion.div
+                                        key="create-step-3"
+                                        variants={coupleStepVariants}
+                                        initial="hidden"
+                                        animate="visible"
+                                        exit="exit"
+                                        className="space-y-5"
+                                    >
                                         <div className="space-y-2">
                                             <Label className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2 flex items-center gap-2">
                                                 <Heart size={16} />
@@ -464,15 +683,16 @@ export default function EnhancedOnboardingPage() {
                                                 Back
                                             </button>
                                         </div>
-                                    </>
+                                    </motion.div>
                                 )}
+                                </AnimatePresence>
                             </div>
                         </Card>
                     </motion.div>
                 )}
 
-                {/* Step 3: Join World Form */}
-                {step === 3 && mode === "join" && (
+                {/* Step 3: Join World Form (Couple) */}
+                {onboardingType === "COUPLE" && step === 3 && mode === "join" && (
                     <motion.div
                         key="join"
                         variants={containerVariants}
@@ -548,8 +768,8 @@ export default function EnhancedOnboardingPage() {
                     </motion.div>
                 )}
 
-                {/* Step 4: Success Screen */}
-                {step === 4 && (
+                {/* Step 4: Success Screen (Couple) */}
+                {onboardingType === "COUPLE" && step === 4 && (
                     <motion.div
                         key="success"
                         variants={containerVariants}

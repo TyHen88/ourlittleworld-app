@@ -1,7 +1,8 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
+import { POST_KEYS, removePostFromCaches, updatePostInCaches } from "@/hooks/use-posts";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,16 +39,18 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
     const [isCommentsOpen, setIsCommentsOpen] = useState(false);
     const [imageScale, setImageScale] = useState(1);
     const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [commentText, setCommentText] = useState("");
     const [submittingComment, setSubmittingComment] = useState(false);
     const [replyingToId, setReplyingToId] = useState<string | null>(null);
     const [replyText, setReplyText] = useState("");
     const [showOptions, setShowOptions] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isDeleted, setIsDeleted] = useState(false);
+    const [isLiking, setIsLiking] = useState(false);
+    const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
 
     const [localMetadata, setLocalMetadata] = useState<PostProps["metadata"]>(metadata);
+    const targetId = coupleId || currentUserId;
 
     useEffect(() => {
         if (submittingComment) return;
@@ -56,43 +59,83 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
     // Get dynamic counts from arrays
     const dynamicLikesCount = useMemo(() => {
-        return metadata?.likes?.length ?? reactions;
-    }, [metadata?.likes, reactions]);
+        return localMetadata?.likes?.length ?? reactions;
+    }, [localMetadata?.likes, reactions]);
 
     const dynamicCommentsCount = useMemo(() => {
         const list = localMetadata?.comments || [];
         return list.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0) || comments;
     }, [localMetadata?.comments, comments]);
 
-    const [isLiked, setIsLiked] = useState(metadata?.likes?.includes(currentUserId || "") || false);
+    const [isLiked, setIsLiked] = useState(localMetadata?.likes?.includes(currentUserId || "") || false);
     const [likesCount, setLikesCount] = useState(dynamicLikesCount);
 
     // Sync state with metadata updates from realtime
     useEffect(() => {
-        setIsLiked(metadata?.likes?.includes(currentUserId || "") || false);
+        setIsLiked(localMetadata?.likes?.includes(currentUserId || "") || false);
         setLikesCount(dynamicLikesCount);
-    }, [metadata?.likes, dynamicLikesCount, currentUserId]);
+    }, [localMetadata?.likes, dynamicLikesCount, currentUserId]);
 
     // Get images from metadata, fallback to imageUrl
-    const images = metadata?.images && metadata.images.length > 0
-        ? metadata.images
+    const images = localMetadata?.images && localMetadata.images.length > 0
+        ? localMetadata.images
         : imageUrl
             ? [imageUrl]
             : [];
 
+    const syncMetadataAcrossCaches = (nextMetadata: any) => {
+        if (!targetId) return;
+
+        updatePostInCaches(queryClient, targetId, id, (post: any) => ({
+            ...post,
+            metadata: nextMetadata,
+        }));
+    };
+
     const toggleLike = async () => {
+        if (isLiking) return;
+        setIsLiking(true);
+
         // Optimistic update
         const nextLiked = !isLiked;
         setIsLiked(nextLiked);
         setLikesCount(prev => nextLiked ? prev + 1 : prev - 1);
 
-        const result = await toggleLikePost(id);
-        if (!result.success) {
-            // Revert on error
-            setIsLiked(!nextLiked);
-            setLikesCount(prev => !nextLiked ? prev + 1 : prev - 1);
-        } else if (coupleId) {
-            queryClient.invalidateQueries({ queryKey: ['posts', coupleId] });
+        const currentMetadata = localMetadata;
+        const currentLikes = Array.isArray(localMetadata?.likes) ? [...localMetadata.likes] : [];
+        if (nextLiked && currentUserId) currentLikes.push(currentUserId);
+        else if (!nextLiked && currentUserId) {
+            const i = currentLikes.indexOf(currentUserId);
+            if (i > -1) currentLikes.splice(i, 1);
+        }
+
+        setLocalMetadata(prev => ({
+            ...(prev || {}),
+            likes: currentLikes,
+            likes_count: currentLikes.length
+        }));
+
+        const optimisticMetadata = {
+            ...(currentMetadata || {}),
+            likes: currentLikes,
+            likes_count: currentLikes.length,
+        };
+
+        syncMetadataAcrossCaches(optimisticMetadata);
+
+        try {
+            const result = await toggleLikePost(id);
+            if (!result.success) {
+                setIsLiked(!nextLiked);
+                setLikesCount(prev => !nextLiked ? prev + 1 : prev - 1);
+                setLocalMetadata(currentMetadata);
+                syncMetadataAcrossCaches(currentMetadata);
+            } else if (result.metadata) {
+                setLocalMetadata(result.metadata);
+                syncMetadataAcrossCaches(result.metadata);
+            }
+        } finally {
+            setIsLiking(false);
         }
     };
 
@@ -126,21 +169,24 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             const base: any = prev && typeof prev === 'object' ? prev : {};
             const nextComments = Array.isArray(base.comments) ? [...base.comments, optimisticComment] : [optimisticComment];
             const totalComments = nextComments.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0);
-            return {
+            const nextMetadata = {
                 ...base,
                 comments: nextComments,
                 comments_count: totalComments,
             };
+            syncMetadataAcrossCaches(nextMetadata);
+            return nextMetadata;
         });
 
         const result = await addComment(id, trimmed);
         if (result.success) {
-            if (result.metadata) setLocalMetadata(result.metadata);
-            if (coupleId) {
-                await queryClient.invalidateQueries({ queryKey: ['posts', coupleId] });
+            if (result.metadata) {
+                setLocalMetadata(result.metadata);
+                syncMetadataAcrossCaches(result.metadata);
             }
         } else {
             setLocalMetadata(prevMetadata);
+            syncMetadataAcrossCaches(prevMetadata);
         }
         setSubmittingComment(false);
     };
@@ -148,6 +194,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
     const handleReplySubmit = async (commentId: string) => {
         if (!replyText.trim() || submittingComment) return;
         setSubmittingComment(true);
+        setSubmittingReplyId(commentId);
 
         const trimmed = replyText.trim();
         const prevMetadata = localMetadata;
@@ -180,23 +227,27 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             target.replies = Array.isArray(target.replies) ? [...target.replies, optimisticReply] : [optimisticReply];
             list[idx] = target;
             const totalComments = list.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0);
-            return {
+            const nextMetadata = {
                 ...base,
                 comments: list,
                 comments_count: totalComments,
             };
+            syncMetadataAcrossCaches(nextMetadata);
+            return nextMetadata;
         });
 
         const result = await addReply(id, commentId, trimmed);
         if (result.success) {
-            if (result.metadata) setLocalMetadata(result.metadata);
-            if (coupleId) {
-                await queryClient.invalidateQueries({ queryKey: ['posts', coupleId] });
+            if (result.metadata) {
+                setLocalMetadata(result.metadata);
+                syncMetadataAcrossCaches(result.metadata);
             }
         } else {
             setLocalMetadata(prevMetadata);
+            syncMetadataAcrossCaches(prevMetadata);
         }
         setSubmittingComment(false);
+        setSubmittingReplyId(null);
     };
 
     const openModal = (index: number) => {
@@ -240,15 +291,15 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
         }
     };
 
-    const nextImage = () => {
+    const nextImage = useCallback(() => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
         handleResetZoom();
-    };
+    }, [images.length]);
 
-    const prevImage = () => {
+    const prevImage = useCallback(() => {
         setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
         handleResetZoom();
-    };
+    }, [images.length]);
 
     // Keyboard navigation for modal
     useEffect(() => {
@@ -266,10 +317,25 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [modalOpen, images.length]);
+    }, [modalOpen, images.length, nextImage, prevImage]);
+
+    if (isDeleted) {
+        return null;
+    }
 
     return (
-        <Card className="overflow-hidden border-none shadow-xl bg-white/90 backdrop-blur-sm rounded-4xl group">
+        <Card className={cn(
+            "overflow-hidden border-none shadow-xl bg-white/90 backdrop-blur-sm rounded-4xl group relative",
+            isDeleting && "opacity-50 pointer-events-none"
+        )}>
+            {isDeleting && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+                    <div className="flex flex-col items-center">
+                        <div className="w-8 h-8 rounded-full border-2 border-slate-300 border-t-slate-800 animate-spin mb-2" />
+                        <span className="text-xs font-bold text-slate-800">Deleting...</span>
+                    </div>
+                </div>
+            )}
             {/* Post Header */}
             <div className="border-b border-slate-100 p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -318,40 +384,29 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                         <button
                                             onClick={async () => {
                                                 if (window.confirm("Are you sure you want to delete this memory?")) {
+                                                    const previousFeeds = queryClient.getQueriesData({ queryKey: POST_KEYS.all });
+                                                    const previousRecent = targetId
+                                                        ? queryClient.getQueryData(POST_KEYS.recent(targetId))
+                                                        : undefined;
+
+                                                    setShowOptions(false);
                                                     setIsDeleting(true);
-                                                    
-                                                    // Optimistic Delete
-                                                    if (coupleId) {
-                                                        const previousPosts = queryClient.getQueryData(['posts', coupleId]);
-                                                        
-                                                        queryClient.setQueryData(['posts', coupleId], (old: any) => {
-                                                            if (!old) return old;
-                                                            return {
-                                                                ...old,
-                                                                pages: old.pages.map((page: any) => ({
-                                                                    ...page,
-                                                                    data: page.data.filter((p: any) => p.id !== id)
-                                                                }))
-                                                            };
-                                                        });
-                                                        
-                                                        const res = await deletePost(id);
-                                                        if (res.success) {
-                                                            // Success - invalidate to ensure consistency
-                                                            queryClient.invalidateQueries({ queryKey: ["posts", coupleId] });
-                                                        } else {
-                                                            // Revert
-                                                            queryClient.setQueryData(['posts', coupleId], previousPosts);
-                                                            alert(res.error || "Failed to delete post");
+                                                    removePostFromCaches(queryClient, targetId, id);
+
+                                                    const res = await deletePost(id);
+                                                    if (!res.success) {
+                                                        for (const [key, value] of previousFeeds) {
+                                                            queryClient.setQueryData(key, value);
                                                         }
+                                                        if (targetId) {
+                                                            queryClient.setQueryData(POST_KEYS.recent(targetId), previousRecent);
+                                                        }
+                                                        alert(res.error || "Failed to delete post.");
+                                                        setIsDeleting(false);
                                                     } else {
-                                                        const res = await deletePost(id);
-                                                        if (!res.success) alert(res.error || "Failed to delete post");
+                                                        setIsDeleted(true);
                                                     }
-                                                    
-                                                    setIsDeleting(false);
                                                 }
-                                                setShowOptions(false);
                                             }}
                                             disabled={isDeleting}
                                             className="w-full px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2"
@@ -490,8 +545,6 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                     bottom: 200 * (imageScale - 1),
                                 }}
                                 dragElastic={0.1}
-                                onDragStart={() => setIsDragging(true)}
-                                onDragEnd={() => setIsDragging(false)}
                                 animate={{
                                     scale: imageScale,
                                     x: imagePosition.x,
@@ -637,6 +690,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             <div className="px-5 pb-5 flex items-center gap-6">
                 <button
                     onClick={toggleLike}
+                    disabled={isLiking}
                     className="group/btn relative flex items-center gap-2"
                 >
                     <div className="relative">
@@ -661,7 +715,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                         </AnimatePresence>
                     </div>
                     <span className={cn("text-xs font-bold", isLiked ? "text-romantic-heart" : "text-slate-400")}>
-                        {likesCount}
+                        {isLiking ? "..." : likesCount}
                     </span>
                 </button>
 
@@ -704,6 +758,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                         placeholder="Add a sweet comment..."
                                         className="w-full bg-white border border-slate-200 rounded-full px-4 py-2 text-sm outline-none focus:border-romantic-blush h-9"
                                         onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit()}
+                                        disabled={submittingComment}
                                     />
                                     <button
                                         onClick={handleCommentSubmit}
@@ -783,13 +838,18 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                                                         placeholder="Write a reply..."
                                                                         className="w-full bg-white border border-slate-200 rounded-full px-3 py-1.5 text-xs outline-none focus:border-romantic-blush h-8"
                                                                         onKeyDown={(e) => e.key === 'Enter' && handleReplySubmit(comment.id)}
+                                                                        disabled={submittingComment}
                                                                     />
                                                                     <button
                                                                         onClick={() => handleReplySubmit(comment.id)}
                                                                         disabled={!replyText.trim() || submittingComment}
                                                                         className="absolute right-2 top-1/2 -translate-y-1/2 text-romantic-heart disabled:opacity-30"
                                                                     >
-                                                                        <Send size={14} />
+                                                                        {submittingReplyId === comment.id ? (
+                                                                            <span className="text-[10px] font-bold">...</span>
+                                                                        ) : (
+                                                                            <Send size={14} />
+                                                                        )}
                                                                     </button>
                                                                 </div>
                                                             </motion.div>

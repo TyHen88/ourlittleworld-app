@@ -17,7 +17,7 @@ export default async function FeedPage() {
     <FeedClient
       user={session.user}
       profile={profileWithCouple}
-      couple={profileWithCouple?.couple || null}
+      couple={(profileWithCouple as any)?.couple || null}
     />
   );
 }

@@ -46,9 +46,15 @@ export async function PUT(
             return NextResponse.json({ error: "Goal not found" }, { status: 404 });
         }
 
-        // Verify user is member of the couple
-        const isMember = existingGoal.couple.members.some((m: any) => m.id === user.id);
-        if (!isMember) {
+        // Verify ownership: member of couple or the solo user
+        let hasAccess = false;
+        if (existingGoal.couple_id) {
+            hasAccess = (existingGoal as any).couple?.members.some((m: any) => m.id === user.id);
+        } else if ((existingGoal as any).user_id) {
+            hasAccess = (existingGoal as any).user_id === user.id;
+        }
+
+        if (!hasAccess) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -71,8 +77,14 @@ export async function PUT(
             },
         });
 
+        const sanitizedGoal = {
+            ...goal,
+            target_amount: goal.target_amount ? Number(goal.target_amount.toString()) : 0,
+            current_amount: goal.current_amount ? Number(goal.current_amount.toString()) : 0,
+        };
+
         return NextResponse.json(
-            { success: true, data: goal },
+            { success: true, data: sanitizedGoal },
             { status: 200 }
         );
     } catch (error: any) {
@@ -115,9 +127,15 @@ export async function DELETE(
             return NextResponse.json({ error: "Goal not found" }, { status: 404 });
         }
 
-        // Verify user is member of the couple
-        const isMember = existingGoal.couple.members.some((m: any) => m.id === user.id);
-        if (!isMember) {
+        // Verify ownership: member of couple or the solo user
+        let hasAccess = false;
+        if (existingGoal.couple_id) {
+            hasAccess = (existingGoal as any).couple?.members.some((m: any) => m.id === user.id);
+        } else if ((existingGoal as any).user_id) {
+            hasAccess = (existingGoal as any).user_id === user.id;
+        }
+
+        if (!hasAccess) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

@@ -10,6 +10,7 @@ import crypto from "crypto";
 
 export async function signUp(email: string, fullName: string) {
     const existingUser = await prisma.user.findFirst({
+        // @ts-ignore
         where: { email, is_deleted: false }
     });
 
@@ -214,6 +215,7 @@ export async function deleteAccount() {
         await prisma.user.update({
             where: { id: user.id },
             data: {
+                // @ts-ignore
                 is_deleted: true,
                 email: deletedEmail,
                 couple_id: null,
@@ -225,5 +227,27 @@ export async function deleteAccount() {
         if (error.message?.includes("NEXT_REDIRECT")) throw error;
         console.error('[DELETE_ACCOUNT_ERROR]', error);
         throw new Error('Failed to delete account');
+    }
+}
+
+export async function completeOnboarding(userType: 'SINGLE' | 'COUPLE') {
+    const user = await getCachedUser();
+    if (!user || !user.id) throw new Error('Not authenticated');
+
+    try {
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                // @ts-ignore
+                user_type: userType,
+                // @ts-ignore
+                onboarding_completed: true,
+            }
+        });
+        revalidatePath('/');
+        return true;
+    } catch (error: any) {
+        console.error('[COMPLETE_ONBOARDING_ERROR]', error);
+        throw new Error(error.message || 'Failed to complete onboarding');
     }
 }

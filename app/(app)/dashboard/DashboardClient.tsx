@@ -11,6 +11,7 @@ import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { updateTodayMoodMessage, getHeroMessage } from "@/lib/actions/moods";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
 interface DashboardClientProps {
     user: any;
@@ -28,6 +29,9 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
     const [savingHeroMessage, setSavingHeroMessage] = useState(false);
     const [loadingHeroMessage, setLoadingHeroMessage] = useState(true);
     const [displayMode, setDisplayMode] = useState<"days" | "months">("days");
+    const isSingle = profile?.user_type === 'SINGLE';
+    const displayColor = isSingle ? "emerald" : "romantic";
+    const accentColor = isSingle ? "indigo" : "heart";
 
     // Derived values for the partner
     const otherPartner = couple?.members?.find((m: any) => m.id !== user?.id);
@@ -72,11 +76,15 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
             <header className="flex items-center justify-between">
                 <div className="space-y-1">
                     <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
-                        <Heart className="text-romantic-heart fill-romantic-heart animate-heart-beat" size={24} />
-                        OurLittleWorld
+                        {isSingle ? (
+                            <Stars className="text-emerald-500 fill-emerald-500" size={24} />
+                        ) : (
+                            <Heart className="text-romantic-heart fill-romantic-heart animate-heart-beat" size={24} />
+                        )}
+                        {isSingle ? "Personal Sanctuary" : "OurLittleWorld"}
                     </h1>
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest pl-1">
-                        Welcome, {profile?.full_name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Love'}! ✨
+                    <p className={`text-sm font-bold uppercase tracking-widest pl-1 ${isSingle ? 'text-emerald-600/60' : 'text-slate-400'}`}>
+                        Welcome, {profile?.full_name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Explorer'}! {isSingle ? '🌿' : '✨'}
                     </p>
                 </div>
 
@@ -129,92 +137,119 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                 </div>
             </header>
 
-            {/* Anniversary Card */}
-            {couple?.couple_name && daysTogether > 0 && (
+            {/* Milestone Card (Single or Couple) */}
+            {isSingle ? (
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
                 >
-                    <Card className="relative overflow-hidden p-5 border-none bg-gradient-to-br from-romantic-blush/40 via-romantic-lavender/40 to-white shadow-xl rounded-3xl">
-                        <div className="relative z-10 text-center space-y-4">
-                            <div className="flex flex-col items-center space-y-3">
-                                <div className="flex items-center justify-center -space-x-3">
-                                    <div className="relative group">
-                                        <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
-                                            <AvatarFallback className="bg-romantic-blush text-romantic-heart text-lg font-bold overflow-hidden">
-                                                {profile?.avatar_url ? (
-                                                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                                                ) : (profile?.full_name?.[0] || 'M')}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        {user && couple && (
-                                            <DailyMoodBadge
-                                                userId={user.id}
-                                                coupleId={couple.id}
-                                                position="bottom-right"
-                                            />
-                                        )}
-                                    </div>
-                                    <div className="z-10 bg-white rounded-full p-1.5 shadow-md -rotate-12">
-                                        <Heart className="text-romantic-heart fill-romantic-heart w-5 h-5 animate-heart-beat" />
-                                    </div>
-                                    <div className="relative group">
-                                        <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
-                                            <AvatarFallback className="bg-romantic-lavender text-slate-600 text-lg font-bold overflow-hidden">
-                                                {otherPartner?.avatar_url ? (
-                                                    <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
-                                                ) : (otherPartner?.full_name?.[0] || 'L')}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        {otherPartner && couple && (
-                                            <DailyMoodBadge
-                                                userId={otherPartner.id}
-                                                coupleId={couple.id}
-                                                position="bottom-right"
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <h3 className="text-lg font-bold text-slate-800">
-                                        {couple.partner_1_nickname || "Partner 1"} & {couple.partner_2_nickname || "Partner 2"}
-                                    </h3>
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white/50 px-2.5 py-0.5 rounded-full">
-                                        {couple.couple_name}
+                    <Card className="relative overflow-hidden p-6 border-none bg-gradient-to-br from-emerald-50 via-teal-50 to-white shadow-xl rounded-3xl">
+                        <div className="relative z-10 flex items-center gap-5">
+                            <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center shadow-inner group">
+                                <Stars className="text-emerald-600 group-hover:rotate-12 transition-transform" size={40} />
+                            </div>
+                            <div className="space-y-1 text-left">
+                                <h3 className="text-xl font-bold text-slate-800">Your Personal Journey</h3>
+                                <p className="text-slate-500 font-medium">Capture moments and grow daily.</p>
+                                <div className="pt-2 flex gap-2">
+                                    <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                        Day {Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24))} explorer
                                     </span>
                                 </div>
                             </div>
-
-                            <div className="space-y-2 flex flex-col items-center">
-                                <button
-                                    onClick={() => setDisplayMode(displayMode === "days" ? "months" : "days")}
-                                    className="text-lg font-bold text-slate-800 hover:text-romantic-heart transition-colors cursor-pointer"
-                                >
-                                    {displayMode === "days"
-                                        ? `Day ${daysTogether.toLocaleString()} Together`
-                                        : `${monthsTogether} Months Together`
-                                    }
-                                </button>
-
-                                <div className="flex items-center justify-center gap-1.5 bg-slate-50/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/50 shadow-sm w-fit mx-auto">
-                                    <Calendar className="text-romantic-heart w-3 h-3" />
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                                        {formatAnniversaryDate(couple.start_date) || "Special Day"}
-                                    </p>
-                                </div>
-                            </div>
                         </div>
-
-                        <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
-                            <Heart className="w-20 h-20 text-romantic-heart fill-romantic-heart" />
-                        </div>
-                        <div className="absolute bottom-0 left-0 p-3 opacity-10 pointer-events-none">
-                            <Heart className="w-16 h-16 text-romantic-lavender fill-romantic-lavender" />
+                        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                            <Stars size={80} className="text-emerald-600" />
                         </div>
                     </Card>
                 </motion.div>
+            ) : (
+                couple?.couple_name && daysTogether > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5 }}
+                    >
+                        <Card className="relative overflow-hidden p-5 border-none bg-gradient-to-br from-romantic-blush/40 via-romantic-lavender/40 to-white shadow-xl rounded-3xl">
+                            <div className="relative z-10 text-center space-y-4">
+                                <div className="flex flex-col items-center space-y-3">
+                                    <div className="flex items-center justify-center -space-x-3">
+                                        <div className="relative group">
+                                            <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
+                                                <AvatarFallback className="bg-romantic-blush text-romantic-heart text-lg font-bold overflow-hidden">
+                                                    {profile?.avatar_url ? (
+                                                        <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                                                    ) : (profile?.full_name?.[0] || 'M')}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            {user && couple && (
+                                                <DailyMoodBadge
+                                                    userId={user.id}
+                                                    coupleId={couple.id}
+                                                    position="bottom-right"
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="z-10 bg-white rounded-full p-1.5 shadow-md -rotate-12">
+                                            <Heart className="text-romantic-heart fill-romantic-heart w-5 h-5 animate-heart-beat" />
+                                        </div>
+                                        <div className="relative group">
+                                            <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
+                                                <AvatarFallback className="bg-romantic-lavender text-slate-600 text-lg font-bold overflow-hidden">
+                                                    {otherPartner?.avatar_url ? (
+                                                        <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
+                                                    ) : (otherPartner?.full_name?.[0] || 'L')}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            {otherPartner && couple && (
+                                                <DailyMoodBadge
+                                                    userId={otherPartner.id}
+                                                    coupleId={couple.id}
+                                                    position="bottom-right"
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <h3 className="text-lg font-bold text-slate-800">
+                                            {couple.partner_1_nickname || "Partner 1"} & {couple.partner_2_nickname || "Partner 2"}
+                                        </h3>
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white/50 px-2.5 py-0.5 rounded-full">
+                                            {couple.couple_name}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 flex flex-col items-center">
+                                    <button
+                                        onClick={() => setDisplayMode(displayMode === "days" ? "months" : "days")}
+                                        className="text-lg font-bold text-slate-800 hover:text-romantic-heart transition-colors cursor-pointer"
+                                    >
+                                        {displayMode === "days"
+                                            ? `Day ${daysTogether.toLocaleString()} Together`
+                                            : `${monthsTogether} Months Together`
+                                        }
+                                    </button>
+
+                                    <div className="flex items-center justify-center gap-1.5 bg-slate-50/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/50 shadow-sm w-fit mx-auto">
+                                        <Calendar className="text-romantic-heart w-3 h-3" />
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                            {formatAnniversaryDate(couple.start_date) || "Special Day"}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
+                                <Heart className="w-20 h-20 text-romantic-heart fill-romantic-heart" />
+                            </div>
+                            <div className="absolute bottom-0 left-0 p-3 opacity-10 pointer-events-none">
+                                <Heart className="w-16 h-16 text-romantic-lavender fill-romantic-lavender" />
+                            </div>
+                        </Card>
+                    </motion.div>
+                )
             )}
 
 
@@ -226,7 +261,7 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                 className="space-y-4"
             >
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Zap className="text-romantic-heart" size={20} />
+                    <Zap className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={20} />
                     Quick Actions
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -298,16 +333,32 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                         href="/create-post"
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group"
+                        className={`p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group ${isSingle ? 'from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200' : ''}`}
                     >
                         <div className="flex items-start justify-between">
-                            <div className="p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors">
-                                <Pencil className="text-pink-600" size={20} />
+                            <div className={`p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors ${isSingle ? 'bg-emerald-100 group-hover:bg-emerald-200' : ''}`}>
+                                {isSingle ? <Pencil className="text-emerald-600" size={20} /> : <Heart className="text-pink-600" size={20} />}
                             </div>
-                            <ArrowRight className="text-pink-300 group-hover:text-pink-400 transition-colors" size={16} />
+                            <ArrowRight className={`${isSingle ? 'text-emerald-300 group-hover:text-emerald-400' : 'text-pink-300 group-hover:text-pink-400'} transition-colors`} size={16} />
                         </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Create Memory</h4>
-                        <p className="text-xs text-slate-500 mt-1">Share a moment</p>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">{isSingle ? 'Personal Journal' : 'Our Memories'}</h4>
+                        <p className="text-xs text-slate-500 mt-1">{isSingle ? 'Write your thoughts' : 'Share a moment'}</p>
+                    </motion.a>
+
+                    <motion.a
+                        href="/trips"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group ${isSingle ? 'from-indigo-50 to-blue-50 border-indigo-100 hover:border-indigo-200' : ''}`}
+                    >
+                        <div className="flex items-start justify-between">
+                            <div className={`p-2 bg-sky-100 rounded-xl group-hover:bg-sky-200 transition-colors ${isSingle ? 'bg-indigo-100 group-hover:bg-indigo-200' : ''}`}>
+                                <MapPin className={isSingle ? "text-indigo-600" : "text-sky-600"} size={20} />
+                            </div>
+                            <ArrowRight className={`${isSingle ? 'text-indigo-300 group-hover:text-indigo-400' : 'text-sky-300 group-hover:text-sky-400'} transition-colors`} size={16} />
+                        </div>
+                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Trip Planner</h4>
+                        <p className="text-xs text-slate-500 mt-1">Plan your next adventure</p>
                     </motion.a>
 
                     <motion.a
@@ -329,14 +380,25 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
             </motion.section>
 
             {/* Main Widgets */}
-            {couple && (
+            {isSingle ? (
                 <section className="space-y-6">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-slate-800">Finances</h3>
-                        <span className="text-xs font-bold text-romantic-heart uppercase tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
+                        <h3 className="text-lg font-bold text-slate-800">Wealth Planner</h3>
+                        <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest px-3 py-1 bg-emerald-50 rounded-full italic">Growing</span>
                     </div>
-                    <BudgetOverview coupleId={couple?.id} />
+                    {/* Reuse BudgetOverview or create a solo version if needed, but for now it should handle null coupleId */}
+                    <BudgetOverview id={user?.id} />
                 </section>
+            ) : (
+                couple && (
+                    <section className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-800">Finances</h3>
+                            <span className="text-xs font-bold text-romantic-heart uppercase tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
+                        </div>
+                        <BudgetOverview id={couple?.id} />
+                    </section>
+                )
             )}
 
             {/* Coming Soon Features */}
@@ -418,8 +480,8 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                 </Card>
             </motion.section>
 
-            {/* Floating Heart Button for Mood Check-in */}
-            {couple && (
+            {/* Floating Button for Mood Check-in */}
+            {(couple || isSingle) && (
                 <motion.button
                     initial={{ opacity: 0, scale: 0 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -427,9 +489,12 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                     onClick={() => setMoodModalOpen(true)}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-button rounded-full shadow-2xl flex items-center justify-center z-50 border-2 border-white"
+                    className={cn(
+                        "fixed bottom-24 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-50 border-2 border-white",
+                        isSingle ? "bg-gradient-to-br from-emerald-500 to-teal-600" : "bg-gradient-button"
+                    )}
                 >
-                    <Heart className="text-white fill-white" size={24} />
+                    {isSingle ? <Sparkles className="text-white fill-white" size={24} /> : <Heart className="text-white fill-white" size={24} />}
                 </motion.button>
             )}
 

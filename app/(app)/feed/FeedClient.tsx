@@ -2,16 +2,18 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { PostSkeleton } from "@/components/love/PostSkeleton";
-import { AnimatePresence, motion } from "framer-motion";
-import { MessageCircleHeart, Sparkles, X, Image as ImageIcon, Clock, Heart as HeartIcon, Filter, Search, ArrowLeft } from "lucide-react";
-import { toggleLikePost, addComment, addReply, deletePost } from "@/lib/actions/post";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { usePosts } from "@/hooks/use-posts";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { MessageCircleHeart, Sparkles, Image as ImageIcon, Clock, Heart as HeartIcon, Search, ArrowLeft, ChevronRight, FolderOpen } from "lucide-react";
+import { usePosts, prependPostToCaches } from "@/hooks/use-posts";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Stars, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 
 type FilterType = "all" | "photos" | "recent" | "favorites";
 
@@ -22,20 +24,41 @@ interface FeedClientProps {
 }
 
 export default function FeedClient({ user, profile, couple }: FeedClientProps) {
+    const isSingle = profile?.user_type === 'SINGLE';
     const router = useRouter();
+    const queryClient = useQueryClient();
+    const shouldReduceMotion = useReducedMotion();
     const [filter, setFilter] = useState<FilterType>("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const sentinelRef = React.useRef<HTMLDivElement>(null);
 
     const debouncedSearchQuery = useDebounce(searchQuery, 500);
+    const id = couple?.id || user?.id;
     const {
         data,
         fetchNextPage,
         hasNextPage,
         isFetchingNextPage,
         isLoading: postsLoading
-    } = usePosts(couple?.id, debouncedSearchQuery);
+    } = usePosts(id, debouncedSearchQuery || undefined);
+
+    useEffect(() => {
+        if (!id || typeof window === "undefined") return;
+
+        const storageKey = `pending-created-post:${id}`;
+        const pendingPost = sessionStorage.getItem(storageKey);
+        if (!pendingPost) return;
+
+        try {
+            const parsed = JSON.parse(pendingPost);
+            prependPostToCaches(queryClient, id, parsed);
+        } catch (error) {
+            console.error("Failed to hydrate pending post", error);
+        } finally {
+            sessionStorage.removeItem(storageKey);
+        }
+    }, [id, queryClient]);
 
     const mappedPosts = useMemo(() => {
         if (!data) return [];
@@ -49,27 +72,38 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
             }
         };
 
-        return data.pages.flatMap(page => page.data).map((row: any) => {
+        const seen = new Set<string>();
+
+        return data.pages
+            .flatMap(page => page.data)
+            .filter((row: any) => {
+                const postId = row?.id;
+                if (!postId) return true;
+                if (seen.has(postId)) return false;
+                seen.add(postId);
+                return true;
+            })
+            .map((row: any) => {
             const authorName =
                 row?.author?.full_name ||
                 (row?.author_id && user?.id && row.author_id === user.id ? profile?.full_name : null) ||
-                "My Forever";
+                (isSingle ? "You" : "My Forever");
 
-            return {
-                id: row?.id,
-                author: authorName,
-                content: row?.content ?? "",
-                timestamp: formatTimestamp(row?.created_at),
-                reactions: Number(row?.metadata?.likes_count ?? 0),
-                comments: Number(row?.metadata?.comments_count ?? 0),
-                imageUrl: row?.image_url ?? null,
-                avatarUrl: row?.author?.avatar_url ?? null,
-                metadata: row?.metadata ?? null,
-                category: row?.category ?? null,
-                authorId: row?.author_id ?? null,
-            };
-        });
-    }, [data, user?.id, profile?.full_name]);
+                return {
+                    id: row?.id,
+                    author: authorName,
+                    content: row?.content ?? "",
+                    timestamp: formatTimestamp(row?.created_at),
+                    reactions: Number(row?.metadata?.likes_count ?? 0),
+                    comments: Number(row?.metadata?.comments_count ?? 0),
+                    imageUrl: row?.image_url ?? null,
+                    avatarUrl: row?.author?.avatar_url ?? null,
+                    metadata: row?.metadata ?? null,
+                    category: row?.category ?? null,
+                    authorId: row?.author_id ?? null,
+                };
+            });
+    }, [data, user?.id, profile?.full_name, isSingle]);
 
     const filteredPosts = useMemo(() => {
         let filtered = mappedPosts;
@@ -128,17 +162,17 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    const categories = [
-        { id: 1, name: "Sweet Memories", icon: "✨", color: "from-pink-100 to-rose-50" },
-        { id: 2, name: "Milestone", icon: "🏁", color: "from-amber-100 to-orange-50" },
-        { id: 3, name: "Daily Life", icon: "🏠", color: "from-blue-100 to-sky-50" },
+    const categories = useMemo(() => ([
+        { id: 1, name: isSingle ? "Deep Thoughts" : "Sweet Memories", icon: isSingle ? "🧘" : "✨", color: isSingle ? "from-emerald-100 to-teal-50" : "from-pink-100 to-rose-50" },
+        { id: 2, name: isSingle ? "Personal Wins" : "Milestone", icon: "🏁", color: isSingle ? "from-indigo-100 to-blue-50" : "from-amber-100 to-orange-50" },
+        { id: 3, name: "Daily Life", icon: "🏠", color: isSingle ? "from-emerald-50 to-teal-50" : "from-blue-100 to-sky-50" },
         { id: 4, name: "Travel", icon: "✈️", color: "from-emerald-100 to-teal-50" },
-        { id: 5, name: "Food", icon: "🍳", color: "from-orange-100 to-amber-50" },
-        { id: 6, name: "Entertainment", icon: "🍿", color: "from-purple-100 to-violet-50" },
-        { id: 7, name: "Shopping", icon: "🛍️", color: "from-fuchsia-100 to-pink-50" },
+        { id: 5, name: "Food & Wellness", icon: "🥗", color: isSingle ? "from-green-100 to-emerald-50" : "from-orange-100 to-amber-50" },
+        { id: 6, name: "Hobbies", icon: "🎨", color: "from-purple-100 to-violet-50" },
+        { id: 7, name: isSingle ? "Productivity" : "Shopping", icon: isSingle ? "🚀" : "🛍️", color: "from-fuchsia-100 to-pink-50" },
         { id: 8, name: "Home", icon: "🛋️", color: "from-indigo-100 to-blue-50" },
         { id: 9, name: "Other", icon: "🌈", color: "from-slate-100 to-gray-50" },
-    ];
+    ]), [isSingle]);
 
     const groupedPosts = useMemo(() => {
         if (filter !== "all" || searchQuery.trim() || selectedCategory) return null;
@@ -150,14 +184,53 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
             groups[cat].push(post);
         });
 
-        return Object.entries(groups).filter(([_, posts]) => posts.length > 0);
+        return Object.entries(groups).filter(([, posts]) => posts.length > 0);
     }, [mappedPosts, filter, searchQuery, selectedCategory]);
+
+    const collectionGroups = useMemo(() => {
+        if (!groupedPosts) return [];
+
+        return groupedPosts
+            .map(([catName, posts]) => {
+                const catInfo = categories.find(c => c.name === catName) || categories[categories.length - 1];
+                const coverImages = posts
+                    .flatMap((post) => {
+                        const galleryImages = Array.isArray(post.metadata?.images) ? post.metadata.images : [];
+                        if (galleryImages.length > 0) return galleryImages;
+                        return post.imageUrl ? [post.imageUrl] : [];
+                    })
+                    .filter(Boolean)
+                    .slice(0, 4);
+
+                return {
+                    catName,
+                    posts,
+                    catInfo,
+                    coverImages,
+                    photoCount: posts.reduce((count, post) => {
+                        const galleryImages = Array.isArray(post.metadata?.images) ? post.metadata.images.length : 0;
+                        return count + Math.max(galleryImages, post.imageUrl ? 1 : 0);
+                    }, 0),
+                    latestTimestamp: posts[0]?.timestamp ?? "",
+                };
+            })
+            .sort((a, b) => {
+                const aTime = new Date(a.latestTimestamp).getTime();
+                const bTime = new Date(b.latestTimestamp).getTime();
+                return bTime - aTime;
+            });
+    }, [categories, groupedPosts]);
 
     const isLoadingInitial = postsLoading && mappedPosts.length === 0;
 
     if (isLoadingInitial) {
         return (
-            <div className="p-6 space-y-6 max-w-2xl mx-auto pb-32">
+            <motion.div
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: "easeOut" }}
+                className="p-6 space-y-6 max-w-2xl mx-auto pb-32"
+            >
                 <div className="space-y-4">
                     <Skeleton className="h-10 w-48 rounded-lg" />
                     <Skeleton className="h-4 w-64 rounded-lg" />
@@ -168,7 +241,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                         <PostSkeleton key={i} />
                     ))}
                 </div>
-            </div>
+            </motion.div>
         );
     }
 
@@ -177,8 +250,13 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
         : filteredPosts;
 
     return (
-        <div className="p-6 space-y-6 max-w-2xl mx-auto pb-32">
-            {!couple ? (
+        <motion.div
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            className="p-6 space-y-6 max-w-2xl mx-auto pb-32"
+        >
+            {!couple && !isSingle ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
                     <div className="w-32 h-32 bg-romantic-blush/30 rounded-full flex items-center justify-center animate-pulse">
                         <MessageCircleHeart className="text-romantic-heart/40" size={64} />
@@ -204,10 +282,16 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                         <div className="flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-                                    <Sparkles className="text-romantic-heart h-6 w-6" />
-                                    Our Memories
+                                    {isSingle ? (
+                                        <Stars className="text-emerald-500 h-6 w-6" />
+                                    ) : (
+                                        <Sparkles className="text-romantic-heart h-6 w-6" />
+                                    )}
+                                    {isSingle ? "Personal Journal" : "Our Memories"}
                                 </h1>
-                                <p className="text-sm text-slate-500 mt-1">Every moment with you is a gift</p>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    {isSingle ? "A collection of your journey and growth" : "Every moment with you is a gift"}
+                                </p>
                             </div>
                             <button onClick={() => router.push("/dashboard")} className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors">
                                 <ArrowLeft className="text-slate-500" size={20} />
@@ -229,7 +313,9 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                         onClick={() => { setFilter(tab.value as FilterType); setSelectedCategory(null); }}
                                         className={cn(
                                             "flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap",
-                                            isActive ? "bg-romantic-heart text-white shadow-lg" : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+                                            isActive 
+                                                ? (isSingle ? "bg-emerald-500 text-white shadow-lg" : "bg-romantic-heart text-white shadow-lg")
+                                                : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
                                         )}
                                     >
                                         <Icon size={16} />
@@ -246,43 +332,147 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search memories..."
-                                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-romantic-heart focus:outline-none bg-white font-medium"
+                                placeholder={isSingle ? "Search your journal..." : "Search memories..."}
+                                className={cn(
+                                    "w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none bg-white font-medium",
+                                    isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart"
+                                )}
                             />
                         </div>
                     </header>
 
                     <section className="space-y-6">
                         {postsToDisplay.length === 0 ? (
-                            <div className="text-center py-20 bg-gradient-to-br from-romantic-blush/20 to-white rounded-3xl border-2 border-dashed border-romantic-blush/30">
-                                <p className="text-slate-600 font-bold text-lg">No memories found</p>
+                            <div className={cn(
+                                "text-center py-20 rounded-3xl border-2 border-dashed",
+                                isSingle ? "bg-emerald-50/50 border-emerald-100" : "bg-gradient-to-br from-romantic-blush/20 to-white border-romantic-blush/30"
+                            )}>
+                                <p className="text-slate-600 font-bold text-lg">
+                                    {isSingle ? "Your journal is empty. What's on your mind today?" : "No memories found"}
+                                </p>
+                                {isSingle && (
+                                    <Button 
+                                        onClick={() => router.push('/create-post')}
+                                        className="mt-4 bg-emerald-500 hover:bg-emerald-600 rounded-full font-bold"
+                                    >
+                                        Write First Entry
+                                    </Button>
+                                )}
                             </div>
                         ) : groupedPosts && !selectedCategory ? (
-                           <div className="space-y-12">
-                                {groupedPosts.map(([catName, posts], groupIndex) => {
-                                    const catInfo = categories.find(c => c.name === catName) || categories[categories.length - 1];
-                                    return (
-                                        <motion.div key={catName} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: groupIndex * 0.1 }} className="space-y-5">
-                                            <div className="flex items-center justify-between px-1">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-md bg-gradient-to-br", catInfo.color)}>{catInfo.icon}</div>
-                                                    <div>
-                                                        <h3 className="text-xl font-black text-slate-800 tracking-tight leading-none">{catName}</h3>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">{posts.length} {posts.length === 1 ? 'Memory' : 'Memories'}</p>
-                                                    </div>
+                           <div className="space-y-8">
+                                <div className="flex items-end justify-between px-1">
+                                    <div>
+                                        <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                                            {isSingle ? "Collections" : "Memory Collections"}
+                                        </h2>
+                                        <p className="text-sm text-slate-500 mt-1">
+                                            {isSingle ? "Browse your moments like a photo library" : "Open a category to revisit your favorite moments"}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                                            {collectionGroups.length} folders
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                    {collectionGroups.map((group, groupIndex) => (
+                                        <motion.button
+                                            key={group.catName}
+                                            type="button"
+                                            initial={{ opacity: 0, y: 24 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: groupIndex * 0.06 }}
+                                            onClick={() => setSelectedCategory(group.catName)}
+                                            className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 text-left shadow-[0_20px_50px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm transition-transform hover:-translate-y-1"
+                                        >
+                                            <div className="p-3">
+                                                <div className="grid grid-cols-2 gap-2 rounded-[1.5rem] bg-slate-100/80 p-2">
+                                                    {Array.from({ length: 4 }).map((_, imageIndex) => {
+                                                        const coverImage = group.coverImages[imageIndex];
+                                                        return (
+                                                            <div
+                                                                key={`${group.catName}-${imageIndex}`}
+                                                                className={cn(
+                                                                    "relative overflow-hidden rounded-2xl bg-gradient-to-br",
+                                                                    group.catInfo.color,
+                                                                    imageIndex === 0 ? "aspect-[1.2/1]" : "aspect-square"
+                                                                )}
+                                                            >
+                                                                {coverImage ? (
+                                                                    <Image
+                                                                        src={coverImage}
+                                                                        alt={`${group.catName} preview ${imageIndex + 1}`}
+                                                                        fill
+                                                                        className="object-cover"
+                                                                        sizes="(max-width: 640px) 45vw, 260px"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="flex h-full w-full items-center justify-center text-3xl">
+                                                                        {group.catInfo.icon}
+                                                                    </div>
+                                                                )}
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-white/20" />
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-1 gap-6">
-                                                {posts.slice(0, 3).map((p) => (
-                                                    <CoupleFeedPost key={p.id} {...p} currentUserId={user?.id} coupleId={couple?.id} authorId={p.authorId} />
-                                                ))}
+
+                                            <div className="flex items-center justify-between px-5 pb-5">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br text-lg shadow-sm", group.catInfo.color)}>
+                                                            {group.catInfo.icon}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <h3 className="truncate text-lg font-black tracking-tight text-slate-800">
+                                                                {group.catName}
+                                                            </h3>
+                                                            <p className="text-xs font-semibold text-slate-500">
+                                                                {group.posts.length} {group.posts.length === 1 ? "memory" : "memories"}
+                                                                {group.photoCount > 0 ? ` • ${group.photoCount} photos` : ""}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                                                    <ChevronRight size={18} />
+                                                </div>
                                             </div>
-                                        </motion.div>
-                                    );
-                                })}
+                                        </motion.button>
+                                    ))}
+                                </div>
                             </div>
                         ) : (
                             <div className="space-y-6">
+                                {selectedCategory && (
+                                    <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white/80 px-4 py-3 shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                                                <FolderOpen size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                                                    Collection
+                                                </p>
+                                                <h3 className="text-lg font-black tracking-tight text-slate-800">
+                                                    {selectedCategory}
+                                                </h3>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            className="rounded-full font-semibold text-slate-600"
+                                            onClick={() => setSelectedCategory(null)}
+                                        >
+                                            Back to folders
+                                        </Button>
+                                    </div>
+                                )}
                                 <AnimatePresence mode="popLayout">
                                     {postsToDisplay.map((p, index) => (
                                         <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
@@ -305,17 +495,21 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
             )}
 
             <motion.button
+                initial={shouldReduceMotion ? false : { opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5, type: "spring" }}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => router.push('/create-post')}
-                className="fixed bottom-24 right-6 w-16 h-16 bg-gradient-love rounded-full shadow-2xl flex items-center justify-center z-40 text-white border-2 border-white/50"
+                className={cn(
+                    "fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border-2 border-white text-white shadow-2xl",
+                    isSingle
+                        ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+                        : "bg-gradient-button"
+                )}
             >
-                <MessageCircleHeart size={28} />
+                {isSingle ? <Pencil className="h-7 w-7" /> : <MessageCircleHeart size={28} />}
             </motion.button>
-        </div>
+        </motion.div>
     );
-}
-
-function Heart({ className, size = 12 }: { className?: string, size?: number }) {
-    return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>;
 }

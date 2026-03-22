@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import { ShoppingBag, Coffee, Home, Heart, DollarSign, Calendar, TrendingUp, Upload, CheckCircle2, XCircle, TrendingDown, Wallet } from "lucide-react";
-import { useCreateTransaction } from "@/hooks/use-transactions";
+import { useCreateTransaction, useTransactions, useBudgetSummary } from "@/hooks/use-transactions";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCouple } from "@/hooks/use-couple";
 
 interface AddTransactionModalProps {
     open: boolean;
@@ -39,6 +40,8 @@ const PAYERS = [
 ];
 
 export function AddTransactionModal({ open, onOpenChange, coupleId }: AddTransactionModalProps) {
+    const { profile } = useCouple();
+    const isSingle = profile?.user_type === 'SINGLE';
     const queryClient = useQueryClient();
     const createTransaction = useCreateTransaction();
 
@@ -98,7 +101,7 @@ export function AddTransactionModal({ open, onOpenChange, coupleId }: AddTransac
         setNote("");
         setTransactionType("EXPENSE");
         setCategory("Shopping");
-        setPayer("SHARED");
+        setPayer(isSingle ? "SHARED" : "SHARED"); // Default is fine
         onOpenChange(false);
 
         // Save to server in background
@@ -139,8 +142,8 @@ export function AddTransactionModal({ open, onOpenChange, coupleId }: AddTransac
             <DialogContent className="sm:max-w-[420px] border-none shadow-2xl bg-white/95 backdrop-blur-xl rounded-3xl p-6">
                 <DialogHeader>
                     <DialogTitle className="text-center text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
-                        <Wallet className="text-romantic-heart" size={20} />
-                        Add Transaction
+                        <Wallet className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={20} />
+                        {isSingle ? "Add Entry" : "Add Transaction"}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -221,25 +224,27 @@ export function AddTransactionModal({ open, onOpenChange, coupleId }: AddTransac
                         </div>
                     </div>
 
-                    {/* Payer Selection */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Who Paid?</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {PAYERS.map((p) => (
-                                <motion.button
-                                    key={p.value}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => setPayer(p.value as any)}
-                                    className={`p-3 rounded-2xl font-bold text-sm transition-all ${payer === p.value
-                                        ? `${p.color} ring-2 ring-offset-2 ring-slate-300`
-                                        : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                                        }`}
-                                >
-                                    {p.label}
-                                </motion.button>
-                            ))}
+                    {/* Payer Selection - Only for couples */}
+                    {!isSingle && (
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Who Paid?</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {PAYERS.map((p) => (
+                                    <motion.button
+                                        key={p.value}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => setPayer(p.value as any)}
+                                        className={`p-3 rounded-2xl font-bold text-sm transition-all ${payer === p.value
+                                            ? `${p.color} ring-2 ring-offset-2 ring-slate-300`
+                                            : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                            }`}
+                                    >
+                                        {p.label}
+                                    </motion.button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Receipt Upload : disabled for now */}
                     {/* <div>
@@ -343,7 +348,7 @@ export function AddTransactionModal({ open, onOpenChange, coupleId }: AddTransac
                         <Button
                             onClick={handleSubmit}
                             disabled={createTransaction.isPending}
-                            className="flex-1 rounded-2xl bg-gradient-button"
+                            className={`flex-1 rounded-2xl ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600 border-none' : 'bg-gradient-button'}`}
                         >
                             {createTransaction.isPending ? "Adding..." : "Add Transaction"}
                         </Button>

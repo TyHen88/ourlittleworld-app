@@ -11,55 +11,69 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { coupleId, monthlyTotal, hisBudget, hersBudget, sharedBudget } = body;
+        const { id, coupleId, monthlyTotal, hisBudget, hersBudget, sharedBudget } = body;
+        const targetId = id || coupleId;
 
-        if (!coupleId) {
-            return NextResponse.json({ error: "coupleId is required" }, { status: 400 });
+        if (!targetId) {
+            return NextResponse.json({ error: "target ID is required" }, { status: 400 });
         }
 
-        // Verify user belongs to this couple
+        // Verify user belongs to this couple or is this user
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true },
         });
 
-        if (!dbUser || dbUser.couple_id !== coupleId) {
+        if (!dbUser || (dbUser.couple_id !== targetId && user.id !== targetId)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        // Get current couple data
-        const couple = await prisma.couple.findUnique({
-            where: { id: coupleId },
-        });
+        const isCouple = dbUser.couple_id === targetId;
+        
+        if (isCouple) {
+            // Get current couple data
+            const couple = await prisma.couple.findUnique({
+                where: { id: targetId },
+            });
 
-        if (!couple) {
-            return NextResponse.json({ error: "Couple not found" }, { status: 404 });
+            if (!couple) {
+                return NextResponse.json({ error: "Couple not found" }, { status: 404 });
+            }
         }
 
         // Get current month in YYYY-MM format
         const currentMonth = new Date().toISOString().slice(0, 7);
 
         // Create or update budget for current month
-        const budget = await prisma?.budget?.upsert({
-            where: {
+        const budget = await prisma.budget.upsert({
+            // @ts-ignore
+            where: isCouple ? {
                 couple_id_month: {
-                    couple_id: coupleId,
+                    couple_id: targetId,
+                    month: currentMonth,
+                },
+            } : {
+                // @ts-ignore
+                user_id_month: {
+                    user_id: targetId,
                     month: currentMonth,
                 },
             },
             update: {
-                monthly_total: monthlyTotal || 2000,
-                his_budget: hisBudget || 600,
-                hers_budget: hersBudget || 500,
-                shared_budget: sharedBudget || 900,
+                monthly_total: parseFloat(monthlyTotal),
+                his_budget: parseFloat(hisBudget),
+                hers_budget: parseFloat(hersBudget),
+                shared_budget: parseFloat(sharedBudget),
             },
             create: {
-                couple_id: coupleId,
+                couple_id: isCouple ? targetId : null,
+                // @ts-ignore
+                user_id: isCouple ? null : targetId,
                 month: currentMonth,
-                monthly_total: monthlyTotal || 2000,
-                his_budget: hisBudget || 600,
-                hers_budget: hersBudget || 500,
-                shared_budget: sharedBudget || 900,
+                monthly_total: parseFloat(monthlyTotal),
+                his_budget: parseFloat(hisBudget),
+                hers_budget: parseFloat(hersBudget),
+                shared_budget: parseFloat(sharedBudget),
             },
         });
 
@@ -67,10 +81,10 @@ export async function PUT(request: NextRequest) {
             {
                 success: true,
                 data: {
-                    monthly_total: budget.monthly_total,
-                    his_budget: budget.his_budget,
-                    hers_budget: budget.hers_budget,
-                    shared_budget: budget.shared_budget,
+                    monthly_total: budget.monthly_total ? Number(budget.monthly_total.toString()) : 0,
+                    his_budget: budget.his_budget ? Number(budget.his_budget.toString()) : 0,
+                    hers_budget: budget.hers_budget ? Number(budget.hers_budget.toString()) : 0,
+                    shared_budget: budget.shared_budget ? Number(budget.shared_budget.toString()) : 0,
                 },
                 message: "Budget updated successfully"
             },

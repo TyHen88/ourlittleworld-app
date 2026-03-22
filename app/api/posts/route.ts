@@ -5,6 +5,9 @@ import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getCachedUser();
@@ -13,15 +16,15 @@ export async function GET(request: NextRequest) {
     }
 
     const url = new URL(request.url);
-    const coupleId = url.searchParams.get("coupleId") ?? "";
+    const id = url.searchParams.get("id") ?? url.searchParams.get("coupleId") ?? "";
 
     const page = Number(url.searchParams.get("page") ?? 0);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 10);
 
     const query = url.searchParams.get("q") ?? "";
 
-    if (!coupleId) {
-      return NextResponse.json({ error: "Missing coupleId" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Missing coupleId or id" }, { status: 400 });
     }
 
     if (!Number.isFinite(page) || page < 0) {
@@ -38,13 +41,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    if (!profile.couple_id || profile.couple_id !== coupleId) {
+    const isSingle = (profile as any).user_type === 'SINGLE';
+    const isOwner = user.id === id;
+
+    if (!isSingle && (!profile.couple_id || profile.couple_id !== id)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    if (isSingle && !isOwner) {
+       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const posts = await prisma.post.findMany({
-      where: { 
-        couple_id: coupleId,
+      where: {
+        ...(isSingle
+          ? { author_id: user.id, couple_id: null }
+          : { couple_id: id }
+        ) as any,
         is_deleted: false,
         ...(query ? {
           content: {
@@ -61,6 +74,7 @@ export async function GET(request: NextRequest) {
         couple_id: true,
         author_id: true,
         content: true,
+        category: true,
         image_url: true,
         metadata: true,
         created_at: true,
@@ -82,7 +96,7 @@ export async function GET(request: NextRequest) {
 
     response.headers.set(
       "Cache-Control",
-      "private, max-age=5, stale-while-revalidate=10"
+      "private, no-cache, no-store, max-age=0, must-revalidate"
     );
 
     return response;

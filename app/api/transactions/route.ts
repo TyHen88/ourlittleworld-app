@@ -12,35 +12,55 @@ export async function GET(request: NextRequest) {
 
         // Get query parameters
         const { searchParams } = new URL(request.url);
-        const coupleId = searchParams.get("coupleId");
+        const id = searchParams.get("id") || searchParams.get("coupleId");
         const month = searchParams.get("month"); // Format: "2026-02"
+        const period = searchParams.get("period") || "month";
+        const date = searchParams.get("date");
         const category = searchParams.get("category");
         const payer = searchParams.get("payer");
 
-        if (!coupleId) {
-            return NextResponse.json({ error: "coupleId is required" }, { status: 400 });
+        if (!id) {
+            return NextResponse.json({ error: "id or coupleId is required" }, { status: 400 });
         }
 
-        // Verify user belongs to this couple
+        // Verify user belongs to this couple or is the user themselves
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true },
         });
 
-        if (!dbUser || dbUser.couple_id !== coupleId) {
+        if (!dbUser || (dbUser.couple_id !== id && user.id !== id)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         // Build query filters
-        const where: any = {
-            couple_id: coupleId,
-        };
+        const where: any = {};
+        if (dbUser.couple_id === id) {
+            where.couple_id = id;
+        } else {
+            where.user_id = id;
+        }
 
-        // Filter by month if provided
-        if (month) {
-            const [year, monthNum] = month.split("-");
-            const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
-            const endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59);
+        const baseDate = date ? new Date(date) : new Date();
+
+        if (month || period || date) {
+            let startDate: Date;
+            let endDate: Date;
+
+            if (month) {
+                const [year, monthNum] = month.split("-");
+                startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+                endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999);
+            } else if (period === "day") {
+                startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, 0, 0, 0);
+                endDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 23, 59, 59, 999);
+            } else if (period === "year") {
+                startDate = new Date(baseDate.getFullYear(), 0, 1, 0, 0, 0, 0);
+                endDate = new Date(baseDate.getFullYear(), 11, 31, 23, 59, 59, 999);
+            } else {
+                startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1, 0, 0, 0, 0);
+                endDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0, 23, 59, 59, 999);
+            }
 
             where.transaction_date = {
                 gte: startDate,
@@ -75,8 +95,13 @@ export async function GET(request: NextRequest) {
             },
         });
 
+        const sanitizedTransactions = transactions.map((t: any) => ({
+            ...t,
+            amount: t.amount ? Number(t.amount.toString()) : 0,
+        }));
+
         return NextResponse.json(
-            { data: transactions },
+            { data: sanitizedTransactions },
             {
                 status: 200,
                 headers: {
@@ -102,10 +127,11 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { coupleId, amount, category, note, payer, type, transactionDate } = body;
+        const { coupleId, userId, id, amount, category, note, payer, type, transactionDate } = body;
+        const targetId = id || coupleId || userId;
 
         // Validate required fields
-        if (!coupleId || !amount || !category || !payer) {
+        if (!targetId || !amount || !category) {
             return NextResponse.json(
                 { error: "Missing required fields" },
                 { status: 400 }
@@ -120,24 +146,27 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Verify user belongs to this couple
+        // Verify user belongs to this couple or is the user themselves
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true },
         });
 
-        if (!dbUser || dbUser.couple_id !== coupleId) {
+        if (!dbUser || (dbUser.couple_id !== targetId && user.id !== targetId)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
+
+        const isCouple = dbUser.couple_id === targetId;
 
         // Create transaction
         const transaction = await prisma.transaction.create({
             data: {
-                couple_id: coupleId,
+                couple_id: isCouple ? targetId : null,
+                user_id: !isCouple ? targetId : null,
                 amount: parseFloat(amount),
                 category,
                 note: note || null,
-                payer: payer.toUpperCase(),
+                payer: (payer || "SHARED").toUpperCase(),
                 type: type || "EXPENSE",
                 created_by: user.id,
                 transaction_date: transactionDate ? new Date(transactionDate) : new Date(),
@@ -153,8 +182,13 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        const sanitizedTransaction = {
+            ...transaction,
+            amount: transaction.amount ? Number(transaction.amount.toString()) : 0,
+        };
+
         return NextResponse.json(
-            { success: true, data: transaction },
+            { success: true, data: sanitizedTransaction },
             { status: 201 }
         );
     } catch (error: any) {

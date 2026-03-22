@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCouple } from "@/hooks/use-couple";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSession } from "next-auth/react";
+import { POST_KEYS, prependPostToCaches, removePostFromCaches } from "@/hooks/use-posts";
 
 type PreviewImage = {
     id: string;
@@ -19,7 +19,6 @@ type PreviewImage = {
 export default function CreatePostPage() {
     const queryClient = useQueryClient();
     const router = useRouter();
-    const { data: session } = useSession();
     const { user, profile, couple, isLoading } = useCouple();
     const [content, setContent] = useState("");
     const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
@@ -229,6 +228,7 @@ export default function CreatePostPage() {
         if (submitting) return;
         setError(null);
         setSubmitting(true);
+        setUploadProgress(0);
 
         try {
             const trimmed = content.trim();
@@ -285,26 +285,10 @@ export default function CreatePostPage() {
                 },
             };
 
-            if (couple?.id) {
-                queryClient.setQueryData(['posts', couple.id], (old: any) => {
-                    if (!old) return old;
-                    return {
-                        ...old,
-                        pages: old.pages.map((page: any, idx: number) => {
-                            if (idx === 0) {
-                                return {
-                                    ...page,
-                                    data: [optimisticPost, ...page.data],
-                                };
-                            }
-                            return page;
-                        }),
-                    };
-                });
+            const targetId = couple?.id || user?.id;
+            if (targetId) {
+                prependPostToCaches(queryClient, targetId, optimisticPost);
             }
-
-            // Redirect immediately
-            router.push('/feed');
 
             const result = await createPost({
                 content: trimmed,
@@ -313,53 +297,64 @@ export default function CreatePostPage() {
             });
 
             if (!result?.success) {
-                // Rollback on error if possible (though we already redirected)
-                if (couple?.id) {
-                    queryClient.invalidateQueries({ queryKey: ['posts', couple.id] });
+                if (targetId) {
+                    removePostFromCaches(queryClient, targetId, optimisticPost.id);
                 }
                 throw new Error(result?.error || 'Failed to create post');
             }
 
-            // Replace temp post with real post
-            if (couple?.id && result.data) {
-                queryClient.setQueryData(['posts', couple.id], (old: any) => {
-                    if (!old) return old;
-                    return {
-                        ...old,
-                        pages: old.pages.map((page: any, idx: number) => {
-                            if (idx === 0) {
-                                return {
-                                    ...page,
-                                    data: page.data.map((p: any) =>
-                                        p.id === optimisticPost.id ? { ...result.data, author: optimisticPost.author } : p
-                                    ),
-                                };
-                            }
-                            return page;
-                        }),
-                    };
-                });
-                queryClient.invalidateQueries({ queryKey: ['recent-posts', couple.id] });
+            if (targetId && result.data) {
+                const hydratedPost = {
+                    ...result.data,
+                    author: result.data.author || optimisticPost.author,
+                };
+
+                removePostFromCaches(queryClient, targetId, optimisticPost.id);
+                prependPostToCaches(queryClient, targetId, hydratedPost);
+                sessionStorage.setItem(`pending-created-post:${targetId}`, JSON.stringify(hydratedPost));
+                queryClient.invalidateQueries({ queryKey: POST_KEYS.recent(targetId) });
+                queryClient.invalidateQueries({ queryKey: POST_KEYS.all });
             }
+
+            // Redirect after successful completion
+            router.push('/feed');
         } catch (e: any) {
             setError(e?.message || 'Something went wrong');
             setSubmitting(false);
         }
     };
 
-    const partner = couple?.members?.find((m: any) => m.id !== user?.id);
-
     if (isLoading) {
+        const isSingle = profile?.user_type === 'SINGLE';
         return (
-            <div className="min-h-screen bg-gradient-love flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-romantic-heart" />
+            <div className={cn("min-h-screen flex items-center justify-center", isSingle ? "bg-emerald-50" : "bg-gradient-love")}>
+                <Loader2 className={cn("w-8 h-8 animate-spin", isSingle ? "text-emerald-500" : "text-romantic-heart")} />
             </div>
         );
     }
 
+    const isSingle = profile?.user_type === 'SINGLE';
+
     return (
-        <div className="min-h-screen bg-gradient-love">
-            <div className="sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-romantic-blush/30">
+        <div className={cn("min-h-screen", isSingle ? "bg-gradient-to-br from-emerald-50/50 to-indigo-50/50" : "bg-gradient-love")}>
+            <AnimatePresence>
+                {submitting && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center"
+                    >
+                        <Loader2 className={cn("w-12 h-12 animate-spin mb-4", isSingle ? "text-emerald-500" : "text-romantic-heart")} />
+                        <h2 className="text-xl font-black text-slate-800">Creating Memory...</h2>
+                        {previewImages.length > 0 && uploadProgress > 0 && (
+                            <p className="text-sm font-bold text-slate-500 mt-2">Uploading images: {uploadProgress}%</p>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <div className={cn("sticky top-0 z-20 backdrop-blur-xl border-b", isSingle ? "bg-emerald-50/70 border-emerald-100" : "bg-white/70 border-romantic-blush/30")}>
                 <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
                     <button
                         onClick={() => router.back()}
@@ -369,7 +364,9 @@ export default function CreatePostPage() {
                     >
                         <X size={22} className="text-slate-700" />
                     </button>
-                    <h1 className="text-base font-black text-slate-800 tracking-tight">Create Memory</h1>
+                    <h1 className="text-base font-black text-slate-800 tracking-tight">
+                        {isSingle ? "New Journal Entry" : "Create Memory"}
+                    </h1>
                     <button
                         type="button"
                         onClick={handleSubmit}
@@ -378,7 +375,7 @@ export default function CreatePostPage() {
                             "flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors",
                             submitting || (!content.trim() && previewImages.length === 0) || content.length > MAX_CHARS
                                 ? "text-slate-300"
-                                : "text-romantic-heart hover:bg-romantic-blush/40"
+                                : isSingle ? "text-emerald-600 hover:bg-emerald-100" : "text-romantic-heart hover:bg-romantic-blush/40"
                         )}
                     >
                         <span>{submitting ? "Posting" : "Post"}</span>
@@ -392,8 +389,8 @@ export default function CreatePostPage() {
                     <div className="flex items-start gap-3">
                         <Avatar className="w-11 h-11">
                             <AvatarImage src={profile?.avatar_url || undefined} />
-                            <AvatarFallback className="bg-gradient-button text-white font-bold">
-                                {profile?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+                            <AvatarFallback className={cn("text-white font-bold", isSingle ? "bg-emerald-500" : "bg-gradient-button")}>
+                                {profile?.full_name?.charAt(0) || profile?.email?.charAt(0).toUpperCase()}
                             </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
@@ -484,10 +481,10 @@ export default function CreatePostPage() {
                     />
 
                     {isDragging && (
-                        <div className="absolute inset-0 bg-romantic-heart/10 rounded-2xl flex items-center justify-center pointer-events-none">
+                        <div className={cn("absolute inset-0 rounded-2xl flex items-center justify-center pointer-events-none", isSingle ? "bg-emerald-500/10" : "bg-romantic-heart/10")}>
                             <div className="text-center">
-                                <ImageIcon className="mx-auto text-romantic-heart mb-2" size={56} />
-                                <p className="text-romantic-heart font-bold">Drop images here</p>
+                                <ImageIcon className={cn("mx-auto mb-2", isSingle ? "text-emerald-500" : "text-romantic-heart")} size={56} />
+                                <p className={cn("font-bold", isSingle ? "text-emerald-500" : "text-romantic-heart")}>Drop images here</p>
                             </div>
                         </div>
                     )}

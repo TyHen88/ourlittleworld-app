@@ -11,34 +11,37 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
-        const coupleId = searchParams.get("coupleId");
+        const id = searchParams.get("id") || searchParams.get("coupleId");
         const month = searchParams.get("month"); // Format: "2026-02"
+        const period = searchParams.get("period") || "month";
+        const date = searchParams.get("date");
 
-        if (!coupleId) {
-            return NextResponse.json({ error: "coupleId is required" }, { status: 400 });
+        if (!id) {
+            return NextResponse.json({ error: "id or coupleId is required" }, { status: 400 });
         }
 
-        // Verify user belongs to this couple
+        // Verify user belongs to this couple or is this user
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true },
         });
 
-        if (!dbUser || dbUser.couple_id !== coupleId) {
+        if (!dbUser || (dbUser.couple_id !== id && user.id !== id)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        // Determine which month to query
-        const queryMonth = month || new Date().toISOString().slice(0, 7);
+        const baseDate = date ? new Date(date) : new Date();
+        const queryMonth = month || `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, "0")}`;
 
         // Get budget for the specified month
-        const budget = await prisma.budget.findUnique({
+        const budget = await prisma.budget.findFirst({
             where: {
-                couple_id_month: {
-                    couple_id: coupleId,
-                    month: queryMonth,
-                },
-            },
+                month: queryMonth,
+                OR: [
+                    { couple_id: id },
+                    { user_id: id } as never
+                ]
+            } as never,
         });
 
         // Convert budget to budget_goals format for frontend compatibility
@@ -56,22 +59,30 @@ export async function GET(request: NextRequest) {
         if (month) {
             const [year, monthNum] = month.split("-");
             startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
-            endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59);
+            endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999);
+        } else if (period === "day") {
+            startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, 0, 0, 0);
+            endDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 23, 59, 59, 999);
+        } else if (period === "year") {
+            startDate = new Date(baseDate.getFullYear(), 0, 1, 0, 0, 0, 0);
+            endDate = new Date(baseDate.getFullYear(), 11, 31, 23, 59, 59, 999);
         } else {
-            const now = new Date();
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+            endDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0, 23, 59, 59, 999);
         }
 
         // Fetch transactions for the month
         const transactions = await prisma.transaction.findMany({
             where: {
-                couple_id: coupleId,
+                OR: [
+                    { couple_id: id },
+                    { user_id: id } as never
+                ],
                 transaction_date: {
                     gte: startDate,
                     lte: endDate,
                 },
-            },
+            } as never,
         });
 
         // Calculate income and expenses by payer
@@ -153,7 +164,12 @@ export async function GET(request: NextRequest) {
         });
 
         const summary = {
-            month: month || `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`,
+            month: queryMonth,
+            period,
+            range: {
+                from: startDate.toISOString(),
+                to: endDate.toISOString(),
+            },
             income,
             expenses,
             balance,

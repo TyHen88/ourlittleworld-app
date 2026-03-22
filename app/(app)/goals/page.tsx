@@ -55,8 +55,8 @@ const PRIORITY_CONFIG = {
 
 export default function GoalsPage() {
     const router = useRouter();
-    const { user, couple, isLoading: coupleLoading } = useCouple();
-    const { data: goals, isLoading: goalsLoading } = useSavingsGoals(couple?.id);
+    const { user, profile, couple, isLoading: coupleLoading } = useCouple();
+    const { data: goals, isLoading: goalsLoading } = useSavingsGoals(couple?.id || user?.id);
     const updateGoal = useUpdateSavingsGoal();
 
     const [addModalOpen, setAddModalOpen] = useState(false);
@@ -116,29 +116,33 @@ export default function GoalsPage() {
 
     // Handle quick progress update
     const handleQuickUpdate = async (goalId: string, amount: number) => {
-        if (!couple?.id) return;
+        const id = couple?.id || user?.id;
+        if (!id) return;
         
         await updateGoal.mutateAsync({
             id: goalId,
-            coupleId: couple.id,
+            coupleId: id,
             currentAmount: amount,
         });
     };
 
     // Handle mark as complete
     const handleMarkComplete = async (goalId: string) => {
-        if (!couple?.id) return;
+        const id = couple?.id || user?.id;
+        if (!id) return;
         
         await updateGoal.mutateAsync({
             id: goalId,
-            coupleId: couple.id,
+            coupleId: id,
             isCompleted: true,
         });
     };
 
     if (coupleLoading) return <FullPageLoader />;
 
-    if (!user || !couple) {
+    const isSingle = profile?.user_type === 'SINGLE';
+
+    if (!user || (!isSingle && !couple)) {
         return null;
     }
 
@@ -153,12 +157,12 @@ export default function GoalsPage() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
-                            <Target className="text-romantic-heart" size={32} />
-                            Savings Goals
+                            <Target className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
+                            {isSingle ? "Personal Goals" : "Savings Goals"}
                         </h1>
                         <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
-                            Track your dreams together
-                            <Sparkles className="text-romantic-heart" size={14} />
+                            {isSingle ? "Track your personal dreams" : "Track your dreams together"}
+                            <Sparkles className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={14} />
                         </p>
                     </div>
                     <a
@@ -242,7 +246,7 @@ export default function GoalsPage() {
                             <Target className="text-white" size={32} />
                         </div>
                         <h3 className="text-lg font-bold text-slate-800 mb-2">
-                            {filter === "completed" ? "No Completed Goals Yet" : "Start Your First Goal!"}
+                            {filter === "completed" ? "No Completed Goals Yet" : (isSingle ? "Start Your First Goal!" : "Start Your First Goal Together!")}
                         </h3>
                         <p className="text-sm text-slate-500 max-w-sm mx-auto mb-6">
                             {filter === "completed" 
@@ -253,10 +257,10 @@ export default function GoalsPage() {
                         {filter !== "completed" && (
                             <Button
                                 onClick={() => setAddModalOpen(true)}
-                                className="rounded-full bg-gradient-button shadow-lg"
+                                className={cn("rounded-full shadow-lg", isSingle ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-gradient-button")}
                             >
                                 <Plus size={20} className="mr-2" />
-                                Create Your First Goal
+                                {isSingle ? "Create Your First Goal" : "Create Your First Goal Together"}
                             </Button>
                         )}
                     </Card>
@@ -343,7 +347,7 @@ export default function GoalsPage() {
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-xl font-black text-romantic-heart">
+                                                        <p className={cn("text-xl font-black", isSingle ? "text-emerald-600" : "text-romantic-heart")}>
                                                             {progress.toFixed(0)}%
                                                         </p>
                                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
@@ -359,7 +363,7 @@ export default function GoalsPage() {
                                                         transition={{ duration: 1, ease: "easeOut" }}
                                                         className={cn(
                                                             "h-full rounded-full",
-                                                            goal.is_completed ? "bg-green-500" : "bg-gradient-button"
+                                                            goal.is_completed ? "bg-green-500" : (isSingle ? "bg-emerald-500" : "bg-gradient-button")
                                                         )}
                                                     />
                                                 </div>
@@ -410,25 +414,30 @@ export default function GoalsPage() {
                     onClick={() => setAddModalOpen(true)}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="fixed bottom-28 right-6 w-14 h-14 bg-gradient-button text-white rounded-full shadow-2xl flex items-center justify-center border-2 border-white z-50"
+                    className={cn(
+                        "fixed bottom-28 right-6 w-14 h-14 text-white rounded-full shadow-2xl flex items-center justify-center border-2 border-white z-50",
+                        isSingle ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gradient-button"
+                    )}
                 >
                     <Plus size={24} />
                 </motion.button>
             )}
 
             {/* Modals */}
-            {couple?.id && (
+            {(couple?.id || user?.id) && (
                 <>
                     <AddGoalModal
                         open={addModalOpen}
                         onOpenChange={setAddModalOpen}
-                        coupleId={couple.id}
+                        id={couple?.id || user?.id}
+                        coupleId={couple?.id}
                     />
                     <EditGoalModal
                         open={editModalOpen}
                         onOpenChange={setEditModalOpen}
                         goal={selectedGoal}
-                        coupleId={couple.id}
+                        id={couple?.id || user?.id}
+                        coupleId={couple?.id}
                     />
                 </>
             )}

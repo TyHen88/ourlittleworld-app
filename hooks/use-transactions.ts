@@ -24,17 +24,21 @@ interface TransactionFilters {
     month?: string;
     category?: string;
     payer?: string;
+    period?: "day" | "month" | "year";
+    date?: string;
 }
 
-export function useTransactions(coupleId: string | undefined, filters?: TransactionFilters) {
+export function useTransactions(id: string | undefined, filters?: TransactionFilters) {
     return useQuery({
-        queryKey: ['transactions', coupleId, filters],
+        queryKey: ['transactions', id, filters],
         queryFn: async () => {
-            if (!coupleId) return [];
+            if (!id) return [];
 
             const url = new URL("/api/transactions", window.location.origin);
-            url.searchParams.set("coupleId", coupleId);
+            url.searchParams.set("id", id);
 
+            if (filters?.period) url.searchParams.set("period", filters.period);
+            if (filters?.date) url.searchParams.set("date", filters.date);
             if (filters?.month) url.searchParams.set("month", filters.month);
             if (filters?.category) url.searchParams.set("category", filters.category);
             if (filters?.payer) url.searchParams.set("payer", filters.payer);
@@ -49,7 +53,7 @@ export function useTransactions(coupleId: string | undefined, filters?: Transact
             return json.data as Transaction[];
         },
         staleTime: 30 * 1000,
-        enabled: !!coupleId,
+        enabled: !!id,
     });
 }
 
@@ -58,7 +62,8 @@ export function useCreateTransaction() {
 
     return useMutation({
         mutationFn: async (data: {
-            coupleId: string;
+            coupleId?: string;
+            userId?: string;
             amount: number;
             category: string;
             note?: string;
@@ -82,8 +87,9 @@ export function useCreateTransaction() {
         },
         onSuccess: (data, variables) => {
             // Invalidate queries to trigger refetch
-            queryClient.invalidateQueries({ queryKey: ['transactions', variables.coupleId] });
-            queryClient.invalidateQueries({ queryKey: ['budget-summary', variables.coupleId] });
+            const id = variables.coupleId || variables.userId;
+            queryClient.invalidateQueries({ queryKey: ['transactions', id] });
+            queryClient.invalidateQueries({ queryKey: ['budget-summary', id] });
         },
     });
 }
@@ -102,6 +108,7 @@ export function useUpdateTransaction() {
             transactionDate?: string;
         }) => {
             const { id, coupleId, ...updateData } = data;
+            void coupleId;
 
             const res = await fetch(`/api/transactions/${id}`, {
                 method: "PUT",
@@ -148,15 +155,20 @@ export function useDeleteTransaction() {
     });
 }
 
-export function useBudgetSummary(coupleId: string | undefined, month?: string) {
+export function useBudgetSummary(
+    id: string | undefined,
+    filters?: { month?: string; period?: "day" | "month" | "year"; date?: string }
+) {
     return useQuery({
-        queryKey: ['budget-summary', coupleId, month],
+        queryKey: ['budget-summary', id, filters],
         queryFn: async () => {
-            if (!coupleId) return null;
+            if (!id) return null;
 
             const url = new URL("/api/budget/summary", window.location.origin);
-            url.searchParams.set("coupleId", coupleId);
-            if (month) url.searchParams.set("month", month);
+            url.searchParams.set("id", id);
+            if (filters?.month) url.searchParams.set("month", filters.month);
+            if (filters?.period) url.searchParams.set("period", filters.period);
+            if (filters?.date) url.searchParams.set("date", filters.date);
 
             const res = await fetch(url.toString());
             const json = await res.json();
@@ -168,6 +180,6 @@ export function useBudgetSummary(coupleId: string | undefined, month?: string) {
             return json.data;
         },
         staleTime: 30 * 1000,
-        enabled: !!coupleId,
+        enabled: !!id,
     });
 }

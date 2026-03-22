@@ -4,6 +4,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { motion } from "framer-motion";
+import { POST_KEYS } from "@/hooks/use-posts";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
 
@@ -15,22 +16,27 @@ interface RecentMemoryProps {
 export function RecentMemory({ coupleId, currentUserId }: RecentMemoryProps) {
     // Fetch latest 3 posts
     const { data: posts, isLoading } = useQuery({
-        queryKey: ['recent-posts', coupleId],
+        queryKey: POST_KEYS.recent(coupleId),
         queryFn: async () => {
             const url = new URL("/api/posts", window.location.origin);
-            url.searchParams.set("coupleId", coupleId);
+            url.searchParams.set("id", coupleId);
             url.searchParams.set("page", "0");
             url.searchParams.set("pageSize", "3");
 
-            const res = await fetch(url.toString(), { method: "GET" });
+            const res = await fetch(url.toString(), {
+                method: "GET",
+                cache: "no-store",
+            });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
                 throw new Error(json?.error || "Failed to fetch posts");
             }
             return json.data || [];
         },
-        staleTime: 30 * 1000, // 30s cache
+        staleTime: 5 * 1000,
         enabled: !!coupleId,
+        refetchInterval: 8 * 1000,
+        refetchIntervalInBackground: false,
     });
 
     const formatTimestamp = (value: any) => {

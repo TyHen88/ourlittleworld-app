@@ -19,15 +19,15 @@ export default async function DashboardPage() {
   const profileWithCouple = await getCachedProfileWithCouple(session.user.id);
 
   const { calculateDaysTogetherSafe } = await import("@/lib/utils/date-utilities");
-  const daysTogether = profileWithCouple?.couple 
-    ? calculateDaysTogetherSafe(profileWithCouple.couple.start_date)
+  const daysTogether = (profileWithCouple as any)?.couple 
+    ? calculateDaysTogetherSafe((profileWithCouple as any).couple.start_date)
     : 0;
 
   return (
     <DashboardClient
       user={session.user}
       profile={profileWithCouple}
-      couple={profileWithCouple?.couple || null}
+      couple={(profileWithCouple as any)?.couple || null}
       daysTogether={daysTogether}
     />
   );

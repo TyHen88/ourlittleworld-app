@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface SavingsGoal {
     id: string;
-    couple_id: string;
+    couple_id: string | null;
+    user_id: string | null;
     title: string;
     description: string | null;
     target_amount: number;
@@ -20,14 +21,12 @@ interface SavingsGoal {
     updated_at: string;
 }
 
-export function useSavingsGoals(coupleId: string | undefined) {
+export function useSavingsGoals(id: string | undefined) {
     return useQuery({
-        queryKey: ['savings-goals', coupleId],
+        queryKey: ['savings-goals', id],
         queryFn: async () => {
-            if (!coupleId) return [];
-
             const url = new URL("/api/savings-goals", window.location.origin);
-            url.searchParams.set("coupleId", coupleId);
+            if (id) url.searchParams.set("id", id);
 
             const res = await fetch(url.toString());
             const json = await res.json();
@@ -39,7 +38,8 @@ export function useSavingsGoals(coupleId: string | undefined) {
             return json.data as SavingsGoal[];
         },
         staleTime: 30 * 1000,
-        enabled: !!coupleId,
+        // Always enabled for singles, or enabled if coupleId exists
+        enabled: true,
     });
 }
 
@@ -48,7 +48,8 @@ export function useCreateSavingsGoal() {
 
     return useMutation({
         mutationFn: async (data: {
-            coupleId: string;
+            id?: string;
+            coupleId?: string;
             title: string;
             description?: string;
             targetAmount: number;
@@ -73,7 +74,7 @@ export function useCreateSavingsGoal() {
             return json.data as SavingsGoal;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.coupleId] });
+            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
         },
     });
 }
@@ -84,7 +85,8 @@ export function useUpdateSavingsGoal() {
     return useMutation({
         mutationFn: async (data: {
             id: string;
-            coupleId: string;
+            coupleId?: string;
+            userId?: string;
             title?: string;
             description?: string;
             targetAmount?: number;
@@ -112,7 +114,7 @@ export function useUpdateSavingsGoal() {
             return json.data as SavingsGoal;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.coupleId] });
+            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
         },
     });
 }
@@ -121,7 +123,7 @@ export function useDeleteSavingsGoal() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (data: { id: string; coupleId: string }) => {
+        mutationFn: async (data: { id: string; coupleId?: string; userId?: string }) => {
             const res = await fetch(`/api/savings-goals/${data.id}`, {
                 method: "DELETE",
             });
@@ -135,7 +137,7 @@ export function useDeleteSavingsGoal() {
             return json;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.coupleId] });
+            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
         },
     });
 }

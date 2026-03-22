@@ -61,6 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email: credentials.email as string }
         })
 
+        // @ts-ignore
         if (!user || !user.password || user.is_deleted) return null
 
         const isValid = await bcrypt.compare(
@@ -75,6 +76,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.full_name,
           image: user.avatar_url,
+          // @ts-ignore
+          user_type: user.user_type,
+          // @ts-ignore
+          onboarding_completed: user.onboarding_completed,
         }
       }
     })
@@ -88,6 +93,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.name = user.full_name || user.name
         // @ts-ignore
         token.picture = user.avatar_url || user.image
+        // @ts-ignore
+        token.user_type = user.user_type
+        // @ts-ignore
+        token.onboarding_completed = user.onboarding_completed
       }
       if (trigger === "update" && session) {
         return { ...token, ...session.user }
@@ -97,6 +106,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (token.id) {
         session.user.id = token.id as string
+        // @ts-ignore
+        session.user.user_type = token.user_type
+        // @ts-ignore
+        session.user.onboarding_completed = token.onboarding_completed
       }
       return session
     }

@@ -11,13 +11,15 @@ import {
     Calendar, DollarSign, Flag, Edit, Trash2, AlertCircle
 } from "lucide-react";
 import { useUpdateSavingsGoal, useDeleteSavingsGoal } from "@/hooks/use-savings-goals";
+import { useCouple } from "@/hooks/use-couple";
 import { cn } from "@/lib/utils";
 
 interface EditGoalModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     goal: any;
-    coupleId: string;
+    id?: string;
+    coupleId?: string;
 }
 
 const GOAL_ICONS = [
@@ -38,7 +40,9 @@ const PRIORITIES = [
     { value: "low", label: "Low", color: "bg-blue-100 text-blue-600", icon: "💙" },
 ];
 
-export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalModalProps) {
+export function EditGoalModal({ open, onOpenChange, goal, id, coupleId }: EditGoalModalProps) {
+    const { profile } = useCouple();
+    const isSingle = profile?.user_type === 'SINGLE';
     const updateGoal = useUpdateSavingsGoal();
     const deleteGoal = useDeleteSavingsGoal();
 
@@ -85,7 +89,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
         try {
             await updateGoal.mutateAsync({
                 id: goal.id,
-                coupleId,
+                coupleId: id || coupleId,
                 title: title.trim(),
                 description: description.trim() || undefined,
                 targetAmount: parseFloat(targetAmount),
@@ -108,7 +112,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
         try {
             await deleteGoal.mutateAsync({
                 id: goal.id,
-                coupleId,
+                coupleId: id || coupleId,
             });
 
             setShowDeleteConfirm(false);
@@ -131,8 +135,8 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto rounded-3xl">
                 <DialogHeader>
                     <DialogTitle className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                        <Edit className="text-romantic-heart" size={24} />
-                        Edit Goal
+                        <Edit className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={24} />
+                        {isSingle ? "Edit Personal Goal" : "Edit Savings Goal"}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -176,8 +180,8 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
                             <Input
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
-                                placeholder="e.g., Dream Vacation, New Home, Wedding"
-                                className="rounded-2xl border-slate-200 focus:border-romantic-heart"
+                                placeholder={isSingle ? "e.g., Learn a new skill, Fitness goal, Reading list" : "e.g., Dream Vacation, New Home, Wedding"}
+                                className={cn("rounded-2xl border-slate-200", isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart")}
                                 maxLength={100}
                             />
                         </div>
@@ -189,7 +193,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Add details about your goal..."
-                                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-romantic-heart focus:outline-none resize-none"
+                                className={cn("w-full px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none resize-none", isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart")}
                                 rows={3}
                                 maxLength={500}
                             />
@@ -236,7 +240,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
                                     value={targetAmount}
                                     onChange={(e) => setTargetAmount(e.target.value)}
                                     placeholder="0.00"
-                                    className="pl-11 rounded-2xl border-slate-200 focus:border-romantic-heart"
+                                    className={cn("pl-11 rounded-2xl border-slate-200", isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart")}
                                     step="0.01"
                                     min="0"
                                 />
@@ -253,7 +257,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
                                     value={currentAmount}
                                     onChange={(e) => setCurrentAmount(e.target.value)}
                                     placeholder="0.00"
-                                    className="pl-11 rounded-2xl border-slate-200 focus:border-romantic-heart"
+                                    className={cn("pl-11 rounded-2xl border-slate-200", isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart")}
                                     step="0.01"
                                     min="0"
                                 />
@@ -269,7 +273,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
                                     type="date"
                                     value={deadline}
                                     onChange={(e) => setDeadline(e.target.value)}
-                                    className="pl-11 rounded-2xl border-slate-200 focus:border-romantic-heart"
+                                    className={cn("pl-11 rounded-2xl border-slate-200", isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart")}
                                     min={new Date().toISOString().split("T")[0]}
                                 />
                             </div>
@@ -321,7 +325,7 @@ export function EditGoalModal({ open, onOpenChange, goal, coupleId }: EditGoalMo
                                 </Button>
                                 <Button
                                     onClick={handleSubmit}
-                                    className="flex-1 rounded-full bg-gradient-button shadow-lg"
+                                    className={cn("flex-1 rounded-full shadow-lg", isSingle ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-gradient-button")}
                                     disabled={updateGoal.isPending}
                                 >
                                     {updateGoal.isPending ? "Saving..." : "Save Changes"}

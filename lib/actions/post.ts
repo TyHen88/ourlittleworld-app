@@ -7,22 +7,59 @@ import { revalidatePath } from "next/cache";
 import { getCachedUserOrThrow, getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
 
+async function getPostAccessContext() {
+    const user = await getCachedUserOrThrow();
+    if (!user.id) throw new Error("User ID is missing");
+
+    const profile = await getCachedProfile(user.id);
+    const isSingle = (profile as any)?.user_type === "SINGLE";
+
+    if (!profile) {
+        throw new Error("Profile not found");
+    }
+
+    if (!isSingle && !profile.couple_id) {
+        throw new Error("No couple found");
+    }
+
+    return { user, profile, isSingle };
+}
+
+async function getAuthorizedPost(postId: string, actor: { user: any; profile: any; isSingle: boolean }) {
+    const post: any = await prisma.post.findUnique({
+        where: { id: postId },
+        select: {
+            id: true,
+            metadata: true,
+            couple_id: true,
+            author_id: true,
+            is_deleted: true,
+        },
+    });
+
+    if (!post || post.is_deleted) {
+        throw new Error("Post not found");
+    }
+
+    if (!actor.isSingle && post.couple_id !== actor.profile?.couple_id) {
+        throw new Error("Post not found");
+    }
+
+    if (actor.isSingle && post.author_id !== actor.user.id) {
+        throw new Error("Post not found");
+    }
+
+    return post;
+}
+
 export async function createPost(input: {
     content: string;
     imageUrls?: string[];
     metadata?: any;
 }) {
     try {
-        const user = await getCachedUserOrThrow();
-        if (!user.id) throw new Error("User ID is missing");
-
+        const { user, profile, isSingle } = await getPostAccessContext();
         const content = (input.content ?? "").trim();
-
-        const profile = await getCachedProfile(user.id);
-
-        if (!profile?.couple_id) {
-            return { success: false, error: "No couple found" };
-        }
 
         const imageUrls = Array.isArray(input.imageUrls) ? input.imageUrls.filter(Boolean) : [];
         if (!content && imageUrls.length === 0) {
@@ -45,15 +82,26 @@ export async function createPost(input: {
 
         const data = await prisma.post.create({
             data: {
-                couple_id: profile.couple_id,
+                couple_id: isSingle ? null : (profile?.couple_id ?? null),
                 author_id: user.id,
                 content,
                 image_url: imageUrls[0] ?? null,
                 category: input.metadata?.category || null,
                 ...(nextMetadata ? { metadata: nextMetadata } : {}),
-            }
+            } as any,
+            include: {
+                author: {
+                    select: {
+                        id: true,
+                        full_name: true,
+                        avatar_url: true,
+                    },
+                },
+            },
         });
 
+        revalidatePath("/feed");
+        revalidatePath("/dashboard");
         return { success: true, data };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -88,10 +136,8 @@ export async function uploadPostImage(formData: FormData) {
 
 export async function deletePost(postId: string) {
     try {
-        const user = await getCachedUserOrThrow();
-        if (!user.id) throw new Error("User ID is missing");
+        const { user } = await getPostAccessContext();
 
-        // Verify ownership
         const post = await prisma.post.findUnique({
             where: { id: postId },
             select: { author_id: true }
@@ -105,7 +151,7 @@ export async function deletePost(postId: string) {
             data: { is_deleted: true }
         });
 
-        return { success: true };
+        return { success: true, postId };
     } catch (error: any) {
         console.error("Delete post error:", error);
         return { success: false, error: error.message };
@@ -114,19 +160,9 @@ export async function deletePost(postId: string) {
 
 export async function toggleLikePost(postId: string) {
     try {
-        const user = await getCachedUserOrThrow();
-        if (!user.id) throw new Error("User ID is missing");
-
-        const profile = await getCachedProfile(user.id);
-        if (!profile?.couple_id) return { success: false, error: "No couple found" };
-
-        const post: any = await prisma.post.findUnique({
-            where: { id: postId },
-            select: { metadata: true, couple_id: true, is_deleted: true }
-        });
-
-        if (!post || post.is_deleted) return { success: false, error: "Post not found" };
-        if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
+        const actor = await getPostAccessContext();
+        const { user } = actor;
+        const post = await getAuthorizedPost(postId, actor);
 
         const metadata = (post.metadata as any) || {};
         const likes = Array.isArray(metadata.likes) ? metadata.likes : [];
@@ -157,29 +193,24 @@ export async function toggleLikePost(postId: string) {
 
 export async function addComment(postId: string, content: string) {
     try {
-        const user = await getCachedUserOrThrow();
-        if (!user.id) throw new Error("User ID is missing");
+        const actor = await getPostAccessContext();
+        const { user, profile } = actor;
+        const post = await getAuthorizedPost(postId, actor);
+        const trimmedContent = content.trim();
 
-        const profile = await getCachedProfile(user.id);
-        if (!profile?.couple_id) return { success: false, error: "No couple found" };
-
-        const post: any = await prisma.post.findUnique({
-            where: { id: postId },
-            select: { metadata: true, couple_id: true, is_deleted: true }
-        });
-
-        if (!post || post.is_deleted) return { success: false, error: "Post not found" };
-        if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
+        if (!trimmedContent) {
+            return { success: false, error: "Comment is required" };
+        }
 
         const metadata = (post.metadata as any) || {};
-        const comments = Array.isArray(metadata.comments) ? metadata.comments : [];
+        const comments = Array.isArray(metadata.comments) ? [...metadata.comments] : [];
 
         const newComment = {
             id: crypto.randomUUID(),
             author_id: user.id,
             author_name: profile?.full_name || "Someone",
             author_avatar: profile?.avatar_url || null,
-            content,
+            content: trimmedContent,
             created_at: new Date().toISOString(),
             replies: []
         };
@@ -207,19 +238,14 @@ export async function addComment(postId: string, content: string) {
 
 export async function addReply(postId: string, commentId: string, content: string) {
     try {
-        const user = await getCachedUserOrThrow();
-        if (!user.id) throw new Error("User ID is missing");
+        const actor = await getPostAccessContext();
+        const { user, profile } = actor;
+        const post = await getAuthorizedPost(postId, actor);
+        const trimmedContent = content.trim();
 
-        const profile = await getCachedProfile(user.id);
-        if (!profile?.couple_id) return { success: false, error: "No couple found" };
-
-        const post: any = await prisma.post.findUnique({
-            where: { id: postId },
-            select: { metadata: true, couple_id: true, is_deleted: true }
-        });
-
-        if (!post || post.is_deleted) return { success: false, error: "Post not found" };
-        if (post.couple_id !== profile.couple_id) return { success: false, error: "Post not found" };
+        if (!trimmedContent) {
+            return { success: false, error: "Reply is required" };
+        }
 
         const metadata = (post.metadata as any) || {};
         const comments = Array.isArray(metadata.comments) ? [...metadata.comments] : [];
@@ -232,7 +258,7 @@ export async function addReply(postId: string, commentId: string, content: strin
             author_id: user.id,
             author_name: profile?.full_name || "Someone",
             author_avatar: profile?.avatar_url || null,
-            content,
+            content: trimmedContent,
             created_at: new Date().toISOString()
         };
 

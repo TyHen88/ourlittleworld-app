@@ -11,26 +11,41 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
-        const coupleId = searchParams.get("coupleId");
+        const id = searchParams.get("id") || searchParams.get("coupleId");
 
-        if (!coupleId) {
-            return NextResponse.json({ error: "coupleId is required" }, { status: 400 });
+        if (!id) {
+            return NextResponse.json({ error: "id or coupleId is required" }, { status: 400 });
         }
 
-        // Verify user belongs to this couple
+        // Verify user belongs to this couple or is solo
+        // @ts-ignore
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { couple_id: true },
+            // @ts-ignore
+            select: { couple_id: true, user_type: true },
         });
 
-        if (!dbUser || dbUser.couple_id !== coupleId) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!dbUser) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        // Fetch all savings goals for the couple
+        const isSingle = (dbUser as any).user_type === 'SINGLE';
+
+        // Check ownership
+        if (!isSingle && (dbUser as any).couple_id !== id) {
+             const userOwnsId = user.id === id;
+             if (!userOwnsId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
+        // Fetch all savings goals for the couple or user
         const goals = await prisma.savingsGoal.findMany({
+            // @ts-ignore
             where: {
-                couple_id: coupleId,
+                OR: [
+                    // @ts-ignore
+                    { user_id: id },
+                    { couple_id: id }
+                ]
             },
             orderBy: [
                 { is_completed: 'asc' },
@@ -39,8 +54,14 @@ export async function GET(request: NextRequest) {
             ],
         });
 
+        const sanitizedGoals = goals.map((g: any) => ({
+            ...g,
+            target_amount: g.target_amount ? Number(g.target_amount.toString()) : 0,
+            current_amount: g.current_amount ? Number(g.current_amount.toString()) : 0,
+        }));
+
         return NextResponse.json(
-            { data: goals },
+            { data: sanitizedGoals },
             {
                 status: 200,
                 headers: {
@@ -78,28 +99,34 @@ export async function POST(request: NextRequest) {
             priority,
         } = body;
 
-        // Validate required fields
-        if (!coupleId || !title || !targetAmount) {
-            return NextResponse.json(
-                { error: "Missing required fields" },
-                { status: 400 }
-            );
-        }
-
-        // Verify user belongs to this couple
+        // Verify user belongs to this couple or is solo
+        // @ts-ignore
         const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { couple_id: true },
+            // @ts-ignore
+            select: { couple_id: true, user_type: true },
         });
 
-        if (!dbUser || dbUser.couple_id !== coupleId) {
+        if (!dbUser) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        const isSingle = (dbUser as any).user_type === 'SINGLE';
+
+        if (!isSingle && !coupleId) {
+            return NextResponse.json({ error: "coupleId is required for couples" }, { status: 400 });
+        }
+
+        if (!isSingle && (dbUser as any).couple_id !== coupleId) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         // Create savings goal
         const goal = await prisma.savingsGoal.create({
             data: {
-                couple_id: coupleId,
+                // @ts-ignore
+                user_id: isSingle ? user.id : null,
+                couple_id: isSingle ? null : coupleId,
                 title,
                 description: description || null,
                 target_amount: parseFloat(targetAmount),
@@ -111,8 +138,14 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        const sanitizedGoal = {
+            ...goal,
+            target_amount: goal.target_amount ? Number(goal.target_amount.toString()) : 0,
+            current_amount: goal.current_amount ? Number(goal.current_amount.toString()) : 0,
+        };
+
         return NextResponse.json(
-            { success: true, data: goal },
+            { success: true, data: sanitizedGoal },
             { status: 201 }
         );
     } catch (error: any) {

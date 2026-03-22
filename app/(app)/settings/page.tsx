@@ -163,17 +163,24 @@ export default function SettingsPage() {
         return <FullPageLoader />;
     }
 
+    const isSingle = profile?.user_type === 'SINGLE';
+
     const sections = [
-        { id: "profile", label: "Profile", icon: User, color: "text-blue-600", bg: "bg-blue-50" },
-        { id: "couple", label: "Couple", icon: Heart, color: "text-pink-600", bg: "bg-pink-50" },
+        { id: "profile", label: "Profile", icon: User, color: isSingle ? "text-emerald-600" : "text-blue-600", bg: isSingle ? "bg-emerald-50" : "bg-blue-50" },
+        ...(!isSingle ? [{ id: "couple", label: "Couple", icon: Heart, color: "text-pink-600", bg: "bg-pink-50" }] : []),
         { id: "preferences", label: "Preferences", icon: Palette, color: "text-purple-600", bg: "bg-purple-50" },
         { id: "notifications", label: "Notifications", icon: Bell, color: "text-amber-600", bg: "bg-amber-50" },
-        { id: "privacy", label: "Privacy", icon: Shield, color: "text-green-600", bg: "bg-green-50" },
+        { id: "privacy", label: "Privacy", icon: Shield, color: isSingle ? "text-emerald-600" : "text-green-600", bg: isSingle ? "bg-emerald-50" : "bg-green-50" },
         { id: "help", label: "Help", icon: HelpCircle, color: "text-slate-600", bg: "bg-slate-50" },
     ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
+        <div className={cn(
+            "min-h-screen p-6 pb-32",
+            isSingle 
+                ? "bg-gradient-to-br from-emerald-50 via-white to-indigo-50/20" 
+                : "bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20"
+        )}>
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Header */}
                 <motion.header
@@ -190,7 +197,7 @@ export default function SettingsPage() {
                         </a>
                         <div>
                             <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
-                                <SettingsIcon className="text-romantic-heart" size={28} />
+                                <SettingsIcon className={isSingle ? "text-emerald-600" : "text-romantic-heart"} size={28} />
                                 Settings
                             </h1>
                             <p className="text-sm text-slate-500 mt-0.5">Manage your account and preferences</p>
@@ -248,7 +255,7 @@ export default function SettingsPage() {
                         {activeSection === "profile" && (
                             <Card className="p-6 border-none shadow-lg bg-white rounded-3xl">
                                 <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                                    <User className="text-blue-600" size={24} />
+                                    <User className={isSingle ? "text-emerald-600" : "text-blue-600"} size={24} />
                                     Profile Information
                                 </h2>
 
@@ -256,9 +263,9 @@ export default function SettingsPage() {
                                     {/* Avatar Section */}
                                     <div className="flex items-center gap-6">
                                         <div className="relative">
-                                            <Avatar className="w-24 h-24 border-4 border-blue-100 shadow-lg">
+                                            <Avatar className={cn("w-24 h-24 border-4 shadow-lg", isSingle ? "border-emerald-100" : "border-blue-100")}>
                                                 <AvatarImage src={formData.avatar_url} />
-                                                <AvatarFallback className="bg-gradient-button text-white text-2xl font-bold">
+                                                <AvatarFallback className={cn("text-white text-2xl font-bold", isSingle ? "bg-emerald-500" : "bg-gradient-button")}>
                                                     {formData.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
                                                 </AvatarFallback>
                                             </Avatar>
@@ -267,7 +274,7 @@ export default function SettingsPage() {
                                                     type="button"
                                                     onClick={() => avatarInputRef.current?.click()}
                                                     disabled={uploadingAvatar}
-                                                    className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full shadow-lg hover:scale-110 transition-transform"
+                                                    className={cn("absolute bottom-0 right-0 p-2 text-white rounded-full shadow-lg hover:scale-110 transition-transform", isSingle ? "bg-emerald-600" : "bg-blue-600")}
                                                 >
                                                     <Camera size={16} />
                                                 </button>
@@ -313,8 +320,8 @@ export default function SettingsPage() {
                                             <textarea
                                                 value={formData.bio}
                                                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                                                placeholder="Tell your partner about yourself..."
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:outline-none resize-none"
+                                                placeholder={isSingle ? "Write a little about yourself..." : "Tell your partner about yourself..."}
+                                                className={cn("w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none resize-none", isSingle ? "focus:border-emerald-500" : "focus:border-blue-500")}
                                                 rows={3}
                                                 maxLength={200}
                                             />
@@ -329,7 +336,7 @@ export default function SettingsPage() {
                                                 <Button
                                                     onClick={handleSave}
                                                     disabled={uploadingAvatar}
-                                                    className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                                                    className={cn("flex-1 rounded-xl text-white", isSingle ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700")}
                                                 >
                                                     <Save size={18} className="mr-2" />
                                                     Save Changes
@@ -354,7 +361,7 @@ export default function SettingsPage() {
                                             <Button
                                                 onClick={() => setEditing(true)}
                                                 variant="outline"
-                                                className="w-full rounded-xl border-blue-200 hover:bg-blue-50"
+                                                className={cn("w-full rounded-xl border-blue-200 hover:bg-blue-50", isSingle && "border-emerald-200 hover:bg-emerald-50")}
                                             >
                                                 <Edit2 size={18} className="mr-2" />
                                                 Edit Profile
@@ -364,9 +371,11 @@ export default function SettingsPage() {
 
                                     {/* Stats */}
                                     <div className="grid grid-cols-3 gap-3 pt-4 border-t">
-                                        <div className="text-center p-3 bg-blue-50 rounded-xl">
-                                            <p className="text-2xl font-black text-blue-600">{daysTogether}</p>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase">Days Together</p>
+                                        <div className={cn("text-center p-3 rounded-xl", isSingle ? "bg-emerald-50" : "bg-blue-50")}>
+                                            <p className={cn("text-2xl font-black", isSingle ? "text-emerald-600" : "text-blue-600")}>
+                                                {isSingle ? "Solo" : daysTogether}
+                                            </p>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase">{isSingle ? "Explorer" : "Days Together"}</p>
                                         </div>
                                         <div className="text-center p-3 bg-pink-50 rounded-xl">
                                             <p className="text-2xl font-black text-pink-600">0</p>
@@ -579,7 +588,7 @@ export default function SettingsPage() {
                                     {[
                                         { label: "Change Password", icon: Lock, action: () => {} },
                                         { label: "Download Your Data", icon: Download, action: () => {} },
-                                        { label: "Delete Account", icon: Trash2, action: () => setShowDeleteConfirm(true), danger: true },
+                                        { label: isSingle ? "Delete Personal Data" : "Delete Account", icon: Trash2, action: () => setShowDeleteConfirm(true), danger: true },
                                     ].map((item) => {
                                         const Icon = item.icon;
                                         return (
@@ -658,10 +667,10 @@ export default function SettingsPage() {
                             <div className="mx-auto w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
                                 <AlertTriangle className="text-red-600" size={32} />
                             </div>
-                            <div className="space-y-2">
-                                <h3 className="text-2xl font-black text-slate-800">Delete Account?</h3>
+                             <div className="space-y-2">
+                                <h3 className="2xl font-black text-slate-800">{isSingle ? "Delete Data?" : "Delete Account?"}</h3>
                                 <p className="text-sm text-slate-500">
-                                    This action is permanent and cannot be undone. You will lose all your data and memories.
+                                    This action is permanent and cannot be undone. You will lose all your {isSingle ? "personal " : ""}data and memories.
                                 </p>
                             </div>
                             <div className="flex flex-col gap-3">

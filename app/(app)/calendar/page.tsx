@@ -24,6 +24,7 @@ import {
     ShoppingBag,
     Coffee,
     Home,
+    Download,
 } from "lucide-react";
 import {
     BarChart,
@@ -103,7 +104,8 @@ export default function CalendarPage() {
     }, [user, coupleLoading, router]);
 
     const monthStr = format(currentMonth, "yyyy-MM");
-    const { data: transactions, isLoading: txLoading } = useTransactions(couple?.id, { month: monthStr });
+    const id = couple?.id || user?.id;
+    const { data: transactions, isLoading: txLoading } = useTransactions(id, { month: monthStr });
 
     // Group transactions by date
     const txByDate = useMemo(() => {
@@ -193,6 +195,43 @@ export default function CalendarPage() {
         return { expense, income };
     }, [transactions]);
 
+    const handleDownload = () => {
+        if (!transactions || transactions.length === 0) return;
+
+        const header = [
+            ["Report", isSingle ? "My Balance Calendar" : "Shared Balance Calendar"],
+            ["Period", format(currentMonth, "MMMM yyyy")],
+            ["Income", String(monthTotals.income)],
+            ["Spent", String(monthTotals.expense)],
+            ["Net", String(monthTotals.income - monthTotals.expense)],
+            [],
+            ["Date", "Type", "Category", "Note", "Owner", "Amount"],
+        ];
+
+        const rows = transactions.map((tx: Transaction) => [
+            format(new Date(tx.transaction_date), "yyyy-MM-dd"),
+            tx.type || "EXPENSE",
+            tx.category || "",
+            tx.note || "",
+            tx.payer === "SHARED" ? "Shared" : tx.payer === "HIS" ? "His" : "Hers",
+            String(tx.amount ?? 0),
+        ]);
+
+        const csv = [...header, ...rows]
+            .map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+            .join("\n");
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `calendar-report-${format(currentMonth, "yyyy-MM")}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     // Selected date transactions
     const selectedDateTx = selectedDate
         ? txByDate[format(selectedDate, "yyyy-MM-dd")] || []
@@ -224,7 +263,9 @@ export default function CalendarPage() {
 
     if (coupleLoading) return <FullPageLoader />;
 
-    if (!user || !couple) {
+    const isSingle = !couple && user;
+
+    if (!user || (!couple && !isSingle)) {
         return null;
     }
 
@@ -247,12 +288,22 @@ export default function CalendarPage() {
                             <Sparkles className="text-romantic-heart" size={14} />
                         </p>
                     </div>
-                    <a
-                        href="/dashboard"
-                        className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
-                    >
-                        <ArrowLeft className="text-slate-500" size={20} />
-                    </a>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleDownload}
+                            disabled={!transactions || transactions.length === 0}
+                            className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            aria-label="Download calendar report"
+                        >
+                            <Download className="text-slate-500" size={18} />
+                        </button>
+                        <a
+                            href="/dashboard"
+                            className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
+                        >
+                            <ArrowLeft className="text-slate-500" size={20} />
+                        </a>
+                    </div>
                 </div>
             </motion.header>
 
