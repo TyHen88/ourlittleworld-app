@@ -35,6 +35,7 @@ import {
     Send,
     Settings as SettingsIcon,
     Shield,
+    Share2,
     Sparkles,
     Sun,
     Trash2,
@@ -43,6 +44,7 @@ import {
     X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import React, { useEffect, useState } from "react";
 
 type SettingsSection = "profile" | "couple" | "preferences" | "notifications" | "privacy" | "help";
@@ -165,6 +167,29 @@ export default function SettingsPage() {
             navigator.clipboard.writeText(couple.invite_code);
             setInviteCodeCopied(true);
             setTimeout(() => setInviteCodeCopied(false), 2000);
+        }
+    };
+
+    const shareInviteCode = async () => {
+        if (!couple?.invite_code) return;
+        const shareData = {
+            title: 'Our Little World',
+            text: `Join my world! Use my invite code: ${couple.invite_code}`,
+            url: `${window.location.origin}/onboarding?code=${couple.invite_code}`,
+        };
+        
+        try {
+            if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+            } else {
+                copyInviteCode();
+            }
+        } catch (err) {
+            console.error('Error sharing:', err);
+            // Don't alerts on cancel
+            if ((err as Error).name !== 'AbortError') {
+                copyInviteCode();
+            }
         }
     };
 
@@ -445,24 +470,51 @@ export default function SettingsPage() {
 
                                         {/* Invite Code */}
                                         {couple.members && couple.members.length < 2 && (
-                                            <div className="p-4 bg-pink-50 rounded-2xl border border-pink-200">
-                                                <Label className="text-xs font-bold text-slate-600 uppercase mb-2 block">Invite Your Partner</Label>
-                                                <div className="relative">
-                                                    <div className="p-4 bg-gradient-to-r from-pink-100 to-rose-100 rounded-xl text-center">
-                                                        <p className="text-2xl font-black text-slate-800 tracking-widest">
-                                                            {couple.invite_code}
-                                                        </p>
+                                            <div className="p-6 bg-gradient-to-br from-pink-50/50 to-rose-50/50 rounded-3xl border border-pink-100 shadow-sm relative overflow-hidden">
+                                                <div className="absolute -right-8 -top-8 w-32 h-32 bg-pink-200/20 rounded-full blur-2xl" />
+                                                
+                                                <div className="relative z-10 space-y-4 text-center">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] font-black text-pink-500 uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+                                                            <Sparkles size={12} />
+                                                            Invite Your Partner
+                                                        </Label>
+                                                        <div className="bg-white/80 backdrop-blur-sm rounded-2xl py-4 mt-2 border border-white/50 shadow-inner">
+                                                            <p className="text-2xl font-black text-slate-800 tracking-[0.2em] font-mono leading-none">
+                                                                {couple.invite_code || "------"}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <button
-                                                        onClick={copyInviteCode}
-                                                        className="absolute top-2 right-2 p-2 bg-white rounded-full hover:bg-slate-50 transition-colors shadow-sm"
-                                                    >
-                                                        {inviteCodeCopied ? (
-                                                            <Check size={16} className="text-green-600" />
-                                                        ) : (
-                                                            <Copy size={16} className="text-slate-600" />
-                                                        )}
-                                                    </button>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button
+                                                            onClick={copyInviteCode}
+                                                            className="flex items-center justify-center gap-2 h-11 bg-white border border-pink-100 rounded-xl text-slate-600 font-bold text-xs shadow-sm hover:shadow-md active:scale-95 transition-all group"
+                                                        >
+                                                            {inviteCodeCopied ? (
+                                                                <>
+                                                                    <Check size={14} className="text-green-500" />
+                                                                    <span className="text-green-600">Copied!</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Copy size={14} className="group-hover:text-pink-500 transition-colors" />
+                                                                    <span>Copy</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={shareInviteCode}
+                                                            className="flex items-center justify-center gap-2 h-11 bg-pink-600 border border-pink-500 rounded-xl text-white font-bold text-xs shadow-lg shadow-pink-200 hover:bg-pink-700 active:scale-95 transition-all group"
+                                                        >
+                                                            <Share2 size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                                                            <span>Share</span>
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    <p className="text-[10px] text-slate-400 font-medium">
+                                                        Share this code with your partner to connect.
+                                                    </p>
                                                 </div>
                                             </div>
                                         )}
@@ -650,20 +702,18 @@ export default function SettingsPage() {
 
                                 <div className="space-y-3">
                                     {[
-                                        { label: "FAQ", icon: HelpCircle },
-                                        { label: "Contact Support", icon: Mail },
-                                        { label: "About Developer", icon: UserCheck2 },
-                                        { label: "Report a Bug", icon: Info },
+                                        { label: "FAQ", icon: HelpCircle, href: "/help/faq" },
+                                        { label: "Contact Support", icon: Mail, href: "/help/contact" },
+                                        { label: "About Developer", icon: UserCheck2, href: "/help/about" },
+                                        { label: "Report a Bug", icon: Info, href: "/help/contact" },
                                         { label: "App Version", icon: Info, value: "v1.0.0" },
                                     ].map((item) => {
 
                                         if (item.label === "Report a Bug") return null;
                                         const Icon = item.icon;
-                                        return (
-                                            <div
-                                                key={item.label}
-                                                className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl"
-                                            >
+                                        
+                                        const Content = (
+                                            <div className="flex items-center justify-between w-full">
                                                 <div className="flex items-center gap-3">
                                                     <Icon size={20} className="text-slate-600" />
                                                     <span className="font-bold text-slate-800">{item.label}</span>
@@ -673,6 +723,27 @@ export default function SettingsPage() {
                                                 ) : (
                                                     <ChevronRight size={20} className="text-slate-400" />
                                                 )}
+                                            </div>
+                                        );
+
+                                        if (item.href) {
+                                            return (
+                                                <Link 
+                                                    key={item.label}
+                                                    href={item.href}
+                                                    className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+                                                >
+                                                    {Content}
+                                                </Link>
+                                            );
+                                        }
+
+                                        return (
+                                            <div
+                                                key={item.label}
+                                                className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl"
+                                            >
+                                                {Content}
                                             </div>
                                         );
                                     })}

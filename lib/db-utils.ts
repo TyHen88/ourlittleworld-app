@@ -36,6 +36,7 @@ export const getCachedProfileWithCouple = cache(async (userId: string) => {
           start_date: true,
           partner_1_nickname: true,
           partner_2_nickname: true,
+          invite_code: true,
           members: {
             select: {
               id: true,

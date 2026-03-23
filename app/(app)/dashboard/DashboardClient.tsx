@@ -276,7 +276,7 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                         href="/budget"
                         whileHover={{ scale: 1.02, y: -2 }}
                         whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-100 hover:border-green-200 transition-all group"
+                        className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 hover:border-green-200 transition-all group"
                     >
                         <div className="flex items-start justify-between">
                             <div className="p-2 bg-green-100 rounded-xl group-hover:bg-green-200 transition-colors">

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,11 +58,7 @@ export default function GoalsPage() {
     const router = useRouter();
     const { user, profile, couple, isLoading: coupleLoading } = useCouple();
 
-    const [addModalOpen, setAddModalOpen] = useState(false);
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [selectedGoal, setSelectedGoal] = useState<any>(null);
     const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
-    const [viewMode, setViewMode] = useState<"couple" | "personal">("couple");
 
     useEffect(() => {
         if (!coupleLoading && !user) {
@@ -70,8 +67,8 @@ export default function GoalsPage() {
     }, [user, coupleLoading, router]);
 
     const isSingle = profile?.user_type === 'SINGLE';
-    const effectiveIsSingle = isSingle || viewMode === 'personal';
-    const currentId = (viewMode === 'couple' && !isSingle) ? couple?.id : user?.id;
+    const effectiveIsSingle = isSingle;
+    const currentId = isSingle ? user?.id : couple?.id;
 
     const { data: goals, isLoading: goalsLoading } = useSavingsGoals(currentId);
     const updateGoal = useUpdateSavingsGoal();
@@ -159,8 +156,8 @@ export default function GoalsPage() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
-                            <Target className={effectiveIsSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
-                            {isSingle ? "Personal Goals" : (viewMode === 'couple' ? "Savings Goals" : "My Goals")}
+                            <Target className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
+                            {isSingle ? "Personal Goals" : "Savings Goals"}
                         </h1>
                         <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
                             {effectiveIsSingle ? "Track your personal dreams" : "Track your dreams together"}
@@ -175,38 +172,6 @@ export default function GoalsPage() {
                     </a>
                 </div>
 
-                {!isSingle && (
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl border border-white/50 shadow-sm"
-                    >
-                        <button
-                            onClick={() => setViewMode("couple")}
-                            className={cn(
-                                "flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300",
-                                viewMode === "couple" 
-                                    ? "bg-white text-romantic-heart shadow-md" 
-                                    : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            <Heart size={14} className="inline mr-1.5" />
-                            Couple
-                        </button>
-                        <button
-                            onClick={() => setViewMode("personal")}
-                            className={cn(
-                                "flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300",
-                                viewMode === "personal" 
-                                    ? "bg-white text-emerald-600 shadow-md" 
-                                    : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            <Target size={14} className="inline mr-1.5" />
-                            Personal
-                        </button>
-                    </motion.div>
-                )}
             </motion.header>
 
             {/* Statistics Cards */}
@@ -290,13 +255,16 @@ export default function GoalsPage() {
                             }
                         </p>
                         {filter !== "completed" && (
-                            <Button
-                                onClick={() => setAddModalOpen(true)}
-                                className={cn("rounded-full shadow-lg", isSingle ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-gradient-button")}
+                            <Link
+                                href="/goals/create"
+                                className={cn(
+                                    "inline-flex items-center justify-center h-10 px-4 rounded-full shadow-lg text-sm font-medium transition-colors",
+                                    isSingle ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-gradient-button text-white"
+                                )}
                             >
                                 <Plus size={20} className="mr-2" />
                                 {isSingle ? "Create Your First Goal" : "Create Your First Goal Together"}
-                            </Button>
+                            </Link>
                         )}
                     </Card>
                 ) : (
@@ -407,22 +375,20 @@ export default function GoalsPage() {
                                             {/* Actions */}
                                             {!goal.is_completed && (
                                                 <div className="flex gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            setSelectedGoal(goal);
-                                                            setEditModalOpen(true);
-                                                        }}
-                                                        className="flex-1 rounded-full border-slate-200 hover:bg-slate-50"
+                                                    <Link
+                                                        href={`/goals/${goal.id}/edit`}
+                                                        className="flex-1 inline-flex items-center justify-center h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium transition-all"
                                                     >
                                                         <Edit size={14} className="mr-1" />
                                                         Edit
-                                                    </Button>
+                                                    </Link>
                                                     {progress >= 100 && (
                                                         <Button
                                                             size="sm"
-                                                            onClick={() => handleMarkComplete(goal.id)}
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                handleMarkComplete(goal.id);
+                                                            }}
                                                             className="flex-1 rounded-full bg-green-500 hover:bg-green-600 text-white"
                                                         >
                                                             <Trophy size={14} className="mr-1" />
@@ -440,42 +406,18 @@ export default function GoalsPage() {
                 )}
             </motion.div>
 
-            {/* Floating Add Button */}
             {filteredGoals.length > 0 && filter !== "completed" && (
-                <motion.button
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.5, type: "spring" }}
-                    onClick={() => setAddModalOpen(true)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                <Link
+                    href="/goals/create"
                     className={cn(
-                        "fixed bottom-28 right-6 w-14 h-14 text-white rounded-full shadow-2xl flex items-center justify-center border-2 border-white z-50",
+                        "fixed bottom-28 right-6 w-14 h-14 text-white rounded-full shadow-2xl flex items-center justify-center border-2 border-white z-50 transition-transform active:scale-95",
                         isSingle ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gradient-button"
                     )}
                 >
                     <Plus size={24} />
-                </motion.button>
+                </Link>
             )}
 
-            {/* Modals */}
-            {(couple?.id || user?.id) && (
-                <>
-                    <AddGoalModal
-                        open={addModalOpen}
-                        onOpenChange={setAddModalOpen}
-                        userId={user?.id}
-                        coupleId={viewMode === 'couple' ? couple?.id : undefined}
-                    />
-                    <EditGoalModal
-                        open={editModalOpen}
-                        onOpenChange={setEditModalOpen}
-                        goal={selectedGoal}
-                        userId={user?.id}
-                        coupleId={viewMode === 'couple' ? couple?.id : undefined}
-                    />
-                </>
-            )}
         </div>
     );
 }
