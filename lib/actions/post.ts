@@ -6,6 +6,7 @@ import path from "path";
 import { revalidatePath } from "next/cache";
 import { getCachedUserOrThrow, getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
+import { Prisma } from "@prisma/client";
 
 async function getPostAccessContext() {
     const user = await getCachedUserOrThrow();
@@ -25,18 +26,20 @@ async function getPostAccessContext() {
     return { user, profile, isSingle };
 }
 
-async function getAuthorizedPost(postId: string, actor: { user: any; profile: any; isSingle: boolean }) {
-    const post: any = await prisma.post.findUnique({
+async function getAuthorizedPost(postId: string, actor: { user: { id: string }; profile: { couple_id?: string | null }; isSingle: boolean }) {
+    const post = await prisma.post.findUnique({
         where: { id: postId },
         select: {
             id: true,
             metadata: true,
             couple_id: true,
             author_id: true,
+            // @ts-expect-error - is_deleted property
             is_deleted: true,
         },
     });
 
+    // @ts-expect-error - is_deleted property 
     if (!post || post.is_deleted) {
         throw new Error("Post not found");
     }
@@ -103,8 +106,9 @@ export async function createPost(input: {
         revalidatePath("/feed");
         revalidatePath("/dashboard");
         return { success: true, data };
-    } catch (error: any) {
-        return { success: false, error: error.message };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, error: message };
     }
 }
 
@@ -128,9 +132,10 @@ export async function uploadPostImage(formData: FormData) {
         await fs.writeFile(absolutePath, buffer);
 
         return { success: true, url: relativePath };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Local post image upload error:", error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, error: message };
     }
 }
 
@@ -152,9 +157,10 @@ export async function deletePost(postId: string) {
         });
 
         return { success: true, postId };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Delete post error:", error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, error: message };
     }
 }
 
@@ -186,8 +192,9 @@ export async function toggleLikePost(postId: string) {
         });
 
         return { success: true, metadata: updated?.metadata ?? nextMetadata };
-    } catch (error: any) {
-        return { success: false, error: error.message };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, error: message };
     }
 }
 
@@ -231,8 +238,9 @@ export async function addComment(postId: string, content: string) {
         });
 
         return { success: true, comment: newComment, metadata: updated?.metadata ?? nextMetadata };
-    } catch (error: any) {
-        return { success: false, error: error.message };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, error: message };
     }
 }
 
@@ -281,7 +289,8 @@ export async function addReply(postId: string, commentId: string, content: strin
         });
 
         return { success: true, reply: newReply, metadata: updated?.metadata ?? nextMetadata };
-    } catch (error: any) {
-        return { success: false, error: error.message };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        return { success: false, error: message };
     }
 }

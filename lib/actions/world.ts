@@ -3,10 +3,10 @@
 console.log(">>> World actions file loaded");
 
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import fs from "fs/promises";
 import path from "path";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 import { getCachedUser } from "@/lib/auth-cache";
 
 // Romantic world name suggestions 
@@ -124,12 +124,12 @@ export async function createWorld(data: CreateWorldData) {
                     inviteCode,
                     worldName: data.worldName
                 };
-            } catch (error: any) {
+            } catch (error: unknown) {
                 console.error(">>> createWorld transaction error:", error);
                 const isInviteCodeCollision =
                     error instanceof Prisma.PrismaClientKnownRequestError &&
                     error.code === "P2002" &&
-                    (error.meta as any)?.target?.includes("invite_code");
+                    (error.meta as Prisma.JsonObject)?.target === "invite_code";
 
                 if (isInviteCodeCollision) {
                     console.log(">>> createWorld: code collision, retrying...");
@@ -140,9 +140,10 @@ export async function createWorld(data: CreateWorldData) {
         }
 
         return { success: false, error: "Failed to generate a unique invite code. Please try again." };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Create world error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -198,7 +199,7 @@ export async function joinWorld(data: JoinWorldData) {
         }
 
         // Update couple and user profile in a transaction
-        await prisma.$transaction(async (tx: any) => {
+        await prisma.$transaction(async (tx) => {
             // 1. Update couple with second partner's nickname
             await tx.couple.update({
                 where: { id: couple.id },
@@ -225,9 +226,10 @@ export async function joinWorld(data: JoinWorldData) {
             data: couple,
             worldName: couple.couple_name
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Join world error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -256,9 +258,10 @@ export async function uploadCouplePhoto(formData: FormData) {
         await fs.writeFile(absolutePath, buffer);
 
         return { success: true, url: relativePath };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Local couple photo upload error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -272,10 +275,9 @@ export async function getUserCouple(userId: string) {
         });
 
         return { success: true, data: user?.couple || null };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Get user couple error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
-
-//update couple, request : photo, nickname, start_date

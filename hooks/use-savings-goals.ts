@@ -48,7 +48,7 @@ export function useCreateSavingsGoal() {
 
     return useMutation({
         mutationFn: async (data: {
-            id?: string;
+            userId?: string;
             coupleId?: string;
             title: string;
             description?: string;
@@ -74,7 +74,7 @@ export function useCreateSavingsGoal() {
             return json.data as SavingsGoal;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
+            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.userId || variables.coupleId] });
         },
     });
 }

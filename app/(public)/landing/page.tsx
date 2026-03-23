@@ -4,10 +4,12 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Download, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 export default function LandingPage() {
     const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [isInstallable, setIsInstallable] = useState(false);
+    const router = useRouter();
 
     useEffect(() => {
         const handler = (e: Event) => {
@@ -40,10 +42,17 @@ export default function LandingPage() {
 
 
     return (
-        <div className="h-screen bg-gradient-to-br from-romantic-blush/30 via-white to-romantic-lavender/30 overflow-hidden flex flex-col">
-            {/* Decorative Background Elements */}
-            <div className="absolute top-20 left-10 w-72 h-72 bg-romantic-heart/10 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute bottom-20 right-10 w-96 h-96 bg-romantic-lavender/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
+        <div className="h-screen bg-[#FDFBF7] overflow-hidden flex flex-col relative">
+            {/* Ultra-Modern Mesh Gradient Background */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
+                <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-romantic-blush rounded-full blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] bg-romantic-lavender rounded-full blur-[140px] animate-pulse" style={{ animationDuration: '12s', animationDelay: '1s' }} />
+                <div className="absolute top-[30%] right-[10%] w-[40%] h-[40%] bg-romantic-petal/20 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }} />
+                <div className="absolute bottom-[20%] left-[20%] w-[30%] h-[30%] bg-romantic-mint/10 rounded-full blur-[80px] animate-pulse" style={{ animationDuration: '15s' }} />
+            </div>
+
+            {/* Subtle Texture/Grain */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
 
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
                 {/* Hero Section */}
@@ -58,15 +67,15 @@ export default function LandingPage() {
                         <span className="text-sm font-bold text-romantic-heart">Your Relationship, Beautifully Organized</span>
                     </div>
 
-                    <h2 className="text-4xl md:text-6xl font-black text-slate-800 mb-4 leading-tight">
-                        Love Made
+                    <h2 className="text-4xl md:text-6xl font-black text-slate-800 mb-4 leading-tight text-balance">
+                        Your Love Story,
                         <span className="block bg-gradient-to-r from-romantic-heart to-romantic-lavender bg-clip-text text-transparent">
-                            Simple & Sweet
+                            Beautifully Organized
                         </span>
                     </h2>
 
                     <p className="text-lg text-slate-600 max-w-xl mx-auto mb-8">
-                        Track your journey together, manage shared finances, and cherish every moment.
+                        The private digital home where you share daily moods, track shared finances, plan future adventures, and celebrate your journey together.
                     </p>
                 </motion.div>
             </div>
@@ -89,7 +98,7 @@ export default function LandingPage() {
                     </Button> */}
 
                     <Button
-                        onClick={() => window.location.href = "/register"}
+                        onClick={() => router.push("/register")}
                         variant="outline"
                         className="rounded-full border-2 border-romantic-heart text-romantic-heart hover:bg-romantic-blush/20 text-sm px-6 py-3 flex-1"
                     >
@@ -99,7 +108,7 @@ export default function LandingPage() {
 
                 <Button
                     variant="ghost"
-                    onClick={() => window.location.href = "/login"}
+                    onClick={() => router.push("/login")}
                     className="text-slate-600 hover:text-romantic-heart text-sm"
                 >
                     Already have an account? Log in

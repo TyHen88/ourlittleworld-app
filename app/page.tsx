@@ -1,9 +1,8 @@
 "use client";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
-import { Heart } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function RootPage() {
   const router = useRouter();
@@ -34,7 +33,6 @@ export default function RootPage() {
         }}
         className="text-center space-y-4"
       >
-        <Heart className="text-romantic-heart mx-auto fill-romantic-heart shadow-xl" size={80} />
         <h1 className="text-3xl font-black text-slate-800 tracking-tighter">OurLittleWorld</h1>
         <div className="flex items-center justify-center gap-1">
           <motion.div

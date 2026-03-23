@@ -18,7 +18,7 @@ interface EditGoalModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     goal: any;
-    id?: string;
+    userId?: string;
     coupleId?: string;
 }
 
@@ -40,7 +40,7 @@ const PRIORITIES = [
     { value: "low", label: "Low", color: "bg-blue-100 text-blue-600", icon: "💙" },
 ];
 
-export function EditGoalModal({ open, onOpenChange, goal, id, coupleId }: EditGoalModalProps) {
+export function EditGoalModal({ open, onOpenChange, goal, userId, coupleId }: EditGoalModalProps) {
     const { profile } = useCouple();
     const isSingle = profile?.user_type === 'SINGLE';
     const updateGoal = useUpdateSavingsGoal();
@@ -89,7 +89,8 @@ export function EditGoalModal({ open, onOpenChange, goal, id, coupleId }: EditGo
         try {
             await updateGoal.mutateAsync({
                 id: goal.id,
-                coupleId: id || coupleId,
+                userId,
+                coupleId,
                 title: title.trim(),
                 description: description.trim() || undefined,
                 targetAmount: parseFloat(targetAmount),
@@ -112,7 +113,8 @@ export function EditGoalModal({ open, onOpenChange, goal, id, coupleId }: EditGo
         try {
             await deleteGoal.mutateAsync({
                 id: goal.id,
-                coupleId: id || coupleId,
+                userId,
+                coupleId,
             });
 
             setShowDeleteConfirm(false);
@@ -135,8 +137,8 @@ export function EditGoalModal({ open, onOpenChange, goal, id, coupleId }: EditGo
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto rounded-3xl">
                 <DialogHeader>
                     <DialogTitle className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                        <Edit className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={24} />
-                        {isSingle ? "Edit Personal Goal" : "Edit Savings Goal"}
+                        <Edit className={!coupleId ? "text-emerald-500" : "text-romantic-heart"} size={24} />
+                        {!coupleId ? "Edit Personal Goal" : "Edit Savings Goal"}
                     </DialogTitle>
                 </DialogHeader>
 

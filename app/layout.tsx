@@ -7,13 +7,13 @@ import { Providers } from "@/components/Providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "OurLittleWorld",
+  title: "Our Little World",
   description: "A private digital home for two.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "OurLittleWorld",
+    title: "Our Little World",
   },
 };
 

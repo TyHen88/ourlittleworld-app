@@ -56,19 +56,25 @@ const PRIORITY_CONFIG = {
 export default function GoalsPage() {
     const router = useRouter();
     const { user, profile, couple, isLoading: coupleLoading } = useCouple();
-    const { data: goals, isLoading: goalsLoading } = useSavingsGoals(couple?.id || user?.id);
-    const updateGoal = useUpdateSavingsGoal();
 
     const [addModalOpen, setAddModalOpen] = useState(false);
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [selectedGoal, setSelectedGoal] = useState<any>(null);
     const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+    const [viewMode, setViewMode] = useState<"couple" | "personal">("couple");
 
     useEffect(() => {
         if (!coupleLoading && !user) {
             router.push("/login");
         }
     }, [user, coupleLoading, router]);
+
+    const isSingle = profile?.user_type === 'SINGLE';
+    const effectiveIsSingle = isSingle || viewMode === 'personal';
+    const currentId = (viewMode === 'couple' && !isSingle) ? couple?.id : user?.id;
+
+    const { data: goals, isLoading: goalsLoading } = useSavingsGoals(currentId);
+    const updateGoal = useUpdateSavingsGoal();
 
     // Filter goals
     const filteredGoals = useMemo(() => {
@@ -116,31 +122,27 @@ export default function GoalsPage() {
 
     // Handle quick progress update
     const handleQuickUpdate = async (goalId: string, amount: number) => {
-        const id = couple?.id || user?.id;
-        if (!id) return;
+        if (!currentId) return;
         
         await updateGoal.mutateAsync({
             id: goalId,
-            coupleId: id,
+            coupleId: currentId,
             currentAmount: amount,
         });
     };
 
     // Handle mark as complete
     const handleMarkComplete = async (goalId: string) => {
-        const id = couple?.id || user?.id;
-        if (!id) return;
+        if (!currentId) return;
         
         await updateGoal.mutateAsync({
             id: goalId,
-            coupleId: id,
+            coupleId: currentId,
             isCompleted: true,
         });
     };
 
     if (coupleLoading) return <FullPageLoader />;
-
-    const isSingle = profile?.user_type === 'SINGLE';
 
     if (!user || (!isSingle && !couple)) {
         return null;
@@ -157,12 +159,12 @@ export default function GoalsPage() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
-                            <Target className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
-                            {isSingle ? "Personal Goals" : "Savings Goals"}
+                            <Target className={effectiveIsSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
+                            {isSingle ? "Personal Goals" : (viewMode === 'couple' ? "Savings Goals" : "My Goals")}
                         </h1>
                         <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
-                            {isSingle ? "Track your personal dreams" : "Track your dreams together"}
-                            <Sparkles className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={14} />
+                            {effectiveIsSingle ? "Track your personal dreams" : "Track your dreams together"}
+                            <Sparkles className={effectiveIsSingle ? "text-emerald-500" : "text-romantic-heart"} size={14} />
                         </p>
                     </div>
                     <a
@@ -172,6 +174,39 @@ export default function GoalsPage() {
                         <ArrowLeft className="text-slate-500" size={20} />
                     </a>
                 </div>
+
+                {!isSingle && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl border border-white/50 shadow-sm"
+                    >
+                        <button
+                            onClick={() => setViewMode("couple")}
+                            className={cn(
+                                "flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300",
+                                viewMode === "couple" 
+                                    ? "bg-white text-romantic-heart shadow-md" 
+                                    : "text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            <Heart size={14} className="inline mr-1.5" />
+                            Couple
+                        </button>
+                        <button
+                            onClick={() => setViewMode("personal")}
+                            className={cn(
+                                "flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300",
+                                viewMode === "personal" 
+                                    ? "bg-white text-emerald-600 shadow-md" 
+                                    : "text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            <Target size={14} className="inline mr-1.5" />
+                            Personal
+                        </button>
+                    </motion.div>
+                )}
             </motion.header>
 
             {/* Statistics Cards */}
@@ -429,15 +464,15 @@ export default function GoalsPage() {
                     <AddGoalModal
                         open={addModalOpen}
                         onOpenChange={setAddModalOpen}
-                        id={couple?.id || user?.id}
-                        coupleId={couple?.id}
+                        userId={user?.id}
+                        coupleId={viewMode === 'couple' ? couple?.id : undefined}
                     />
                     <EditGoalModal
                         open={editModalOpen}
                         onOpenChange={setEditModalOpen}
                         goal={selectedGoal}
-                        id={couple?.id || user?.id}
-                        coupleId={couple?.id}
+                        userId={user?.id}
+                        coupleId={viewMode === 'couple' ? couple?.id : undefined}
                     />
                 </>
             )}

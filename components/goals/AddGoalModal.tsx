@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 interface AddGoalModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    id?: string;
+    userId?: string;
     coupleId?: string;
 }
 
@@ -39,7 +39,7 @@ const PRIORITIES = [
     { value: "low", label: "Low", color: "bg-blue-100 text-blue-600", icon: "💙" },
 ];
 
-export function AddGoalModal({ open, onOpenChange, id, coupleId }: AddGoalModalProps) {
+export function AddGoalModal({ open, onOpenChange, userId, coupleId }: AddGoalModalProps) {
     const { profile } = useCouple();
     const isSingle = profile?.user_type === 'SINGLE';
     const createGoal = useCreateSavingsGoal();
@@ -69,7 +69,7 @@ export function AddGoalModal({ open, onOpenChange, id, coupleId }: AddGoalModalP
 
         try {
             await createGoal.mutateAsync({
-                id,
+                userId,
                 coupleId,
                 title: title.trim(),
                 description: description.trim() || undefined,
@@ -114,8 +114,8 @@ export function AddGoalModal({ open, onOpenChange, id, coupleId }: AddGoalModalP
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto rounded-3xl">
                 <DialogHeader>
                     <DialogTitle className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                        <Sparkles className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={24} />
-                        {isSingle ? "Create Personal Goal" : "Create Savings Goal"}
+                        <Target className={!coupleId ? "text-emerald-500" : "text-romantic-heart"} size={24} />
+                        {!coupleId ? "Create Personal Goal" : "Create Savings Goal"}
                     </DialogTitle>
                 </DialogHeader>
 

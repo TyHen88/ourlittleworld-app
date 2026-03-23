@@ -1,27 +1,49 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { Card } from "@/components/ui/card";
+import { FullPageLoader } from "@/components/FullPageLoader";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-    User, Heart, Bell, Shield, Palette, Globe, HelpCircle, LogOut,
-    Camera, Edit2, Save, X, Copy, Check, ChevronRight, Moon, Sun,
-    Mail, Lock, Smartphone, Download, Trash2, Settings as SettingsIcon,
-    ArrowLeft, Sparkles, Calendar, DollarSign, Image as ImageIcon,
-    Volume2, VolumeX, Eye, EyeOff, Info
-} from "lucide-react";
-import { signOut, updateCurrentUserProfile, deleteAccount } from "@/lib/actions/auth";
-import { uploadAvatar } from "@/lib/actions/storage";
-import { FullPageLoader } from "@/components/FullPageLoader";
 import { useCouple } from "@/hooks/use-couple";
-import { useQueryClient } from "@tanstack/react-query";
+import { deleteAccount, signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
+import { uploadAvatar } from "@/lib/actions/storage";
 import { cn } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChangePasswordModal } from "@/components/settings/ChangePasswordModal";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Bell,
+    Camera,
+    Check, ChevronRight,
+    Copy,
+    Download,
+    Edit2,
+    Heart,
+    HelpCircle,
+    Image as ImageIcon,
+    Info,
+    Lock,
+    LogOut,
+    Mail,
+    Moon,
+    Palette,
+    Save,
+    Send,
+    Settings as SettingsIcon,
+    Shield,
+    Sparkles,
+    Sun,
+    Trash2,
+    User,
+    UserCheck2,
+    X
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 
 type SettingsSection = "profile" | "couple" | "preferences" | "notifications" | "privacy" | "help";
 
@@ -42,6 +64,7 @@ export default function SettingsPage() {
     const [inviteCodeCopied, setInviteCodeCopied] = useState(false);
     const [selectedTheme, setSelectedTheme] = useState("blush");
     const [darkMode, setDarkMode] = useState(false);
+    const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const [notifications, setNotifications] = useState({
         push: true,
         email: true,
@@ -223,6 +246,7 @@ export default function SettingsPage() {
                     {sections.map((section) => {
                         const Icon = section.icon;
                         const isActive = activeSection === section.id;
+                        if (section.id === "preferences") return null;
                         return (
                             <button
                                 key={section.id}
@@ -541,13 +565,14 @@ export default function SettingsPage() {
 
                                 <div className="space-y-4">
                                     {[
-                                        { key: "push", label: "Push Notifications", desc: "Get notified on your device", icon: Smartphone },
+                                        { key: "Telegram", label: "Telegram Notifications", desc: "Get notified on your Telegram", icon: Send },
                                         { key: "email", label: "Email Notifications", desc: "Receive updates via email", icon: Mail },
                                         { key: "posts", label: "New Posts", desc: "When your partner posts", icon: ImageIcon },
                                         { key: "comments", label: "Comments", desc: "When someone comments", icon: Heart },
                                         { key: "likes", label: "Likes & Reactions", desc: "When someone reacts", icon: Heart },
                                     ].map((item) => {
                                         const Icon = item.icon;
+                                        if (item.key === "posts" || item.key === "comments" || item.key === "likes") return null;
                                         return (
                                             <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
                                                 <div className="flex items-center gap-3">
@@ -586,10 +611,11 @@ export default function SettingsPage() {
 
                                 <div className="space-y-3">
                                     {[
-                                        { label: "Change Password", icon: Lock, action: () => {} },
+                                        { label: "Change Password", icon: Lock, action: () => setIsChangePasswordOpen(true) },
                                         { label: "Download Your Data", icon: Download, action: () => {} },
                                         { label: isSingle ? "Delete Personal Data" : "Delete Account", icon: Trash2, action: () => setShowDeleteConfirm(true), danger: true },
                                     ].map((item) => {
+                                        if (item.label === "Download Your Data") return null;
                                         const Icon = item.icon;
                                         return (
                                             <button
@@ -626,9 +652,12 @@ export default function SettingsPage() {
                                     {[
                                         { label: "FAQ", icon: HelpCircle },
                                         { label: "Contact Support", icon: Mail },
+                                        { label: "About Developer", icon: UserCheck2 },
                                         { label: "Report a Bug", icon: Info },
                                         { label: "App Version", icon: Info, value: "v1.0.0" },
                                     ].map((item) => {
+
+                                        if (item.label === "Report a Bug") return null;
                                         const Icon = item.icon;
                                         return (
                                             <div
@@ -653,6 +682,13 @@ export default function SettingsPage() {
                     </motion.div>
                 </AnimatePresence>
             </div>
+
+            {/* Change Password Modal */}
+            <ChangePasswordModal 
+                isOpen={isChangePasswordOpen} 
+                onClose={() => setIsChangePasswordOpen(false)} 
+                userEmail={user?.email || ""} 
+            />
 
             {/* Delete Confirmation Modal */}
             <AnimatePresence>

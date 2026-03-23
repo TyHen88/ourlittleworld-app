@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
 
         const body = await request.json();
         const {
+            userId, // For personal goals
             coupleId,
             title,
             description,
@@ -125,8 +126,8 @@ export async function POST(request: NextRequest) {
         const goal = await prisma.savingsGoal.create({
             data: {
                 // @ts-ignore
-                user_id: isSingle ? user.id : null,
-                couple_id: isSingle ? null : coupleId,
+                user_id: body.userId || (isSingle ? user.id : null),
+                couple_id: isSingle ? null : (body.userId ? null : coupleId),
                 title,
                 description: description || null,
                 target_amount: parseFloat(targetAmount),

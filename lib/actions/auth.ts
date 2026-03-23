@@ -10,7 +10,7 @@ import crypto from "crypto";
 
 export async function signUp(email: string, fullName: string) {
     const existingUser = await prisma.user.findFirst({
-        // @ts-ignore
+        // @ts-expect-error - prisma user properties
         where: { email, is_deleted: false }
     });
 
@@ -27,9 +27,10 @@ export async function signUp(email: string, fullName: string) {
             }
         });
         return await requestLoginCode(email);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[SIGNUP_ERROR]', error);
-        throw new Error(error.message || 'Failed to create account');
+        const message = error instanceof Error ? error.message : 'Failed to create account';
+        throw new Error(message);
     }
 }
 
@@ -40,13 +41,13 @@ export async function requestLoginCode(email: string) {
             redirect: false,
         });
         return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[LOGIN_CODE_ERROR]', error);
         throw new Error("Failed to send code. Please check your email.");
     }
 }
 
-export async function loginWithPassword(data: any) {
+export async function loginWithPassword(data: { email?: string; password?: string }) {
     try {
         await nextAuthSignIn("credentials", {
             email: data.email,
@@ -54,7 +55,7 @@ export async function loginWithPassword(data: any) {
             redirect: false,
         });
         return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
         if (error instanceof AuthError) {
             console.error('[LOGIN_PASSWORD_ERROR]', error.type);
             switch (error.type) {
@@ -171,12 +172,11 @@ export async function getCurrentUser() {
 
         if (!dbUser) throw new Error('User not found');
         return dbUser;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[GET_CURRENT_USER_ERROR]', error);
         throw new Error('Failed to fetch profile');
     }
 }
-
 export async function updateCurrentUserProfile(data: { full_name?: string; avatar_url?: string }) {
     const user = await getCachedUser();
     if (!user || !user.id) throw new Error('Not authenticated');
@@ -191,10 +191,15 @@ export async function updateCurrentUserProfile(data: { full_name?: string; avata
                 image: typeof data.avatar_url === 'string' ? data.avatar_url : undefined,
             }
         });
+        
+        revalidatePath("/(app)/dashboard", "page");
+        revalidatePath("/(app)/settings", "page");
+
         return updated;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[UPDATE_PROFILE_ERROR]', error);
-        throw new Error(error.message || 'Failed to update profile');
+        const message = error instanceof Error ? error.message : 'Failed to update profile';
+        throw new Error(message);
     }
 }
 
@@ -215,7 +220,6 @@ export async function deleteAccount() {
         await prisma.user.update({
             where: { id: user.id },
             data: {
-                // @ts-ignore
                 is_deleted: true,
                 email: deletedEmail,
                 couple_id: null,
@@ -223,8 +227,8 @@ export async function deleteAccount() {
         });
         await nextAuthSignOut();
         return true;
-    } catch (error: any) {
-        if (error.message?.includes("NEXT_REDIRECT")) throw error;
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message.includes("NEXT_REDIRECT")) throw error;
         console.error('[DELETE_ACCOUNT_ERROR]', error);
         throw new Error('Failed to delete account');
     }
@@ -238,16 +242,131 @@ export async function completeOnboarding(userType: 'SINGLE' | 'COUPLE') {
         await prisma.user.update({
             where: { id: user.id },
             data: {
-                // @ts-ignore
-                user_type: userType,
-                // @ts-ignore
+                user_type: userType as string,
                 onboarding_completed: true,
             }
         });
         revalidatePath('/');
         return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[COMPLETE_ONBOARDING_ERROR]', error);
-        throw new Error(error.message || 'Failed to complete onboarding');
+        const message = error instanceof Error ? error.message : 'Failed to complete onboarding';
+        throw new Error(message);
+    }
+}
+
+/**
+ * Sends an OTP code to the current user's email for password change verification
+ */
+export async function requestCodeForPasswordChange() {
+    const user = await getCachedUser();
+    if (!user || !user.email) throw new Error('Not authenticated');
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+
+    // We use a custom hash for the token to store in the DB
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(`${otp}${process.env.AUTH_SECRET}`)
+        .digest("hex");
+
+    try {
+        // Store the token
+        // @ts-expect-error - prisma verification token
+        await prisma.verificationToken.create({
+            data: {
+                identifier: user.email,
+                token: hashedToken,
+                expires
+            }
+        });
+
+        // Send the email (mocking transporter for now as it's typically in the root auth.ts)
+        // For production, we'd import and use a transporter here or call an API but for this setup 
+        // we'll log it and assume the existence of a sender is configured. 
+        // Since we're in a server action, we'll re-use the SMTP configuration logic from root auth.ts
+        const nodemailer = await import("nodemailer");
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: Number(process.env.SMTP_PORT),
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASSWORD,
+            },
+        });
+
+        await transporter.sendMail({
+            to: user.email,
+            from: process.env.SMTP_FROM,
+            subject: `Verification Code: ${otp}`,
+            html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 12px;">
+                    <h2 style="color: #FF6B9D; text-align: center;">Change Your Password</h2>
+                    <p>Hello,</p>
+                    <p>You requested to change your password for your OurLittleWorld account. Please use the verification code below:</p>
+                    <div style="background: #FDF2F5; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #FF6B9D;">${otp}</span>
+                    </div>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>If you didn't request this change, you can safely ignore this email.</p>
+                </div>
+            `
+        });
+
+        return { success: true };
+    } catch (error: unknown) {
+        console.error('[PASSWORD_CHANGE_REQUEST_ERROR]', error);
+        throw new Error("Failed to send verification code. Please try again later.");
+    }
+}
+
+/**
+ * Final step: verify OTP and set new password
+ */
+export async function updatePasswordWithOtp(otp: string, newPassword: string) {
+    const user = await getCachedUser();
+    if (!user || !user.email) throw new Error('Not authenticated');
+
+    const hashedToken = crypto
+        .createHash("sha256")
+        .update(`${otp}${process.env.AUTH_SECRET}`)
+        .digest("hex");
+
+    // 1. Verify token
+    // @ts-expect-error - prisma verification token
+    const vt = await prisma.verificationToken.findFirst({
+        where: { 
+            identifier: user.email, 
+            token: hashedToken, 
+            expires: { gt: new Date() } 
+        }
+    });
+
+    if (!vt) {
+        throw new Error("Invalid or expired verification code.");
+    }
+
+    try {
+        // 2. Hash and update password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await prisma.user.update({
+            where: { email: user.email },
+            data: { 
+                password: hashedPassword,
+                emailVerified: new Date()
+            }
+        });
+
+        // 3. Clean up the token
+        // @ts-expect-error - prisma verification token
+        await prisma.verificationToken.delete({
+            where: { identifier_token: { identifier: user.email, token: hashedToken } }
+        });
+
+        return { success: true };
+    } catch (error: unknown) {
+        console.error('[PASSWORD_UPDATE_ERROR]', error);
+        throw new Error("Failed to update password. Please try again.");
     }
 }

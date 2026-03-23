@@ -12,6 +12,7 @@ import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { updateTodayMoodMessage, getHeroMessage } from "@/lib/actions/moods";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
 
 interface DashboardClientProps {
     user: any;
@@ -79,9 +80,9 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                         {isSingle ? (
                             <Stars className="text-emerald-500 fill-emerald-500" size={24} />
                         ) : (
-                            <Heart className="text-romantic-heart fill-romantic-heart animate-heart-beat" size={24} />
+                            <img src="/logo.png" alt="" className="w-8 h-8 object-contain mix-blend-multiply" />
                         )}
-                        {isSingle ? "Personal Sanctuary" : "OurLittleWorld"}
+                        {isSingle ? "Personal Sanctuary" : "Our Little World"}
                     </h1>
                     <p className={`text-sm font-bold uppercase tracking-widest pl-1 ${isSingle ? 'text-emerald-600/60' : 'text-slate-400'}`}>
                         Welcome, {profile?.full_name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Explorer'}! {isSingle ? '🌿' : '✨'}
@@ -145,8 +146,14 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                 >
                     <Card className="relative overflow-hidden p-6 border-none bg-gradient-to-br from-emerald-50 via-teal-50 to-white shadow-xl rounded-3xl">
                         <div className="relative z-10 flex items-center gap-5">
-                            <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center shadow-inner group">
-                                <Stars className="text-emerald-600 group-hover:rotate-12 transition-transform" size={40} />
+                            <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center shadow-inner group overflow-hidden border-4 border-white">
+                                <Avatar className="w-full h-full rounded-none">
+                                    <AvatarFallback className="bg-emerald-100 text-emerald-700 text-2xl font-black">
+                                        {profile?.avatar_url ? (
+                                            <img src={profile.avatar_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                        ) : (profile?.full_name?.[0] || user?.name?.[0] || 'U')}
+                                    </AvatarFallback>
+                                </Avatar>
                             </div>
                             <div className="space-y-1 text-left">
                                 <h3 className="text-xl font-bold text-slate-800">Your Personal Journey</h3>
@@ -159,7 +166,7 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                             </div>
                         </div>
                         <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                            <Stars size={80} className="text-emerald-600" />
+                            <Sparkles size={80} className="text-emerald-600" />
                         </div>
                     </Card>
                 </motion.div>
@@ -481,22 +488,8 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
             </motion.section>
 
             {/* Floating Button for Mood Check-in */}
-            {(couple || isSingle) && (
-                <motion.button
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.5, type: "spring" }}
-                    onClick={() => setMoodModalOpen(true)}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className={cn(
-                        "fixed bottom-24 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-50 border-2 border-white",
-                        isSingle ? "bg-gradient-to-br from-emerald-500 to-teal-600" : "bg-gradient-button"
-                    )}
-                >
-                    {isSingle ? <Sparkles className="text-white fill-white" size={24} /> : <Heart className="text-white fill-white" size={24} />}
-                </motion.button>
-            )}
+            {/* Main Floating Button for Mood Check-in is now handled by AIFloatingAdvisor */}
+            <AIFloatingAdvisor isSingle={isSingle} />
 
             <DailyMoodModal
                 open={moodModalOpen}

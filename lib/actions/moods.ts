@@ -35,13 +35,13 @@ export async function submitDailyMood(data: {
 
         const metadata = data.metadata?.message ? { message: data.metadata.message } : undefined;
 
-        const updateData: any = {
+        const updateData: Prisma.DailyMoodUpdateInput = {
             mood_emoji: data.moodEmoji,
             note: data.note || null,
             ...(metadata ? { metadata } : {}),
         };
 
-        const createData: any = {
+        const createData: Prisma.DailyMoodUncheckedCreateInput = {
             user_id: userId,
             couple_id: dbUser.couple_id,
             mood_date: today,
@@ -63,9 +63,10 @@ export async function submitDailyMood(data: {
         });
 
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Submit mood error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -82,8 +83,9 @@ export async function getTodayMoods(coupleId: string) {
         });
 
         return { success: true, data };
-    } catch (error: any) {
-        return { success: false, error: error.message };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -120,9 +122,9 @@ export async function updateTodayMoodMessage(message: string) {
                 where: { id: todayMood.id },
                 data: {
                     metadata: {
-                        ...(todayMood.metadata as any || {}),
+                        ...(todayMood.metadata as Prisma.JsonObject || {}),
                         message: message
-                    }
+                    } as Prisma.JsonObject
                 }
             });
         } else {
@@ -132,16 +134,17 @@ export async function updateTodayMoodMessage(message: string) {
                     couple_id: dbUser.couple_id,
                     mood_date: today,
                     mood_emoji: "😊",
-                    metadata: { message: message }
+                    metadata: { message: message } as Prisma.JsonObject
                 }
             });
         }
 
         revalidatePath('/dashboard');
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Update message error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -163,11 +166,12 @@ export async function getHeroMessage(coupleId: string) {
             }
         });
 
-        const message = (mood?.metadata as any)?.message;
+        const message = (mood?.metadata as Prisma.JsonObject)?.message as string | undefined;
         return { success: true, message: message || null };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Get hero message error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }
 
@@ -190,8 +194,9 @@ export async function getUserMoodBadgeData(userId: string) {
         });
 
         return { success: true, data: mood };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Get mood badge error:', error);
-        return { success: false, error: error.message };
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
     }
 }

@@ -21,63 +21,57 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(bytes);
         const base64Image = buffer.toString("base64");
 
-        // Use Google Gemini Vision API to extract receipt data
-        const geminiApiKey = process.env.GEMINI_API_KEY || "AIzaSyDPBp8dNUlVciTCf0-ht7mPuARMOTWK8zo";
-        const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [
-                                {
-                                    text: "Extract the following information from this receipt image: Date (in YYYY-MM-DD format), Merchant/Store Name, Total Amount (number only, no currency symbol), and Currency. Return ONLY a valid JSON object with keys: date, name, amount, currency. If any field is not found, use null. Do not include any markdown formatting or code blocks, just the raw JSON.",
+        const openaiApiKey = process.env.OPENAI_API_KEY;
+        if (!openaiApiKey) {
+            return NextResponse.json({ error: "OpenAI API key not configured" }, { status: 500 });
+        }
+
+        // OpenAI Vision API
+        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${openaiApiKey}`,
+            },
+            body: JSON.stringify({
+                model: "gpt-4o-mini", // Cost-effective vision model
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            {
+                                type: "text",
+                                text: "Extract the following information from this receipt image: Date (in YYYY-MM-DD format), Merchant/Store Name, Total Amount (number only, no currency symbol), and Currency. Return ONLY a valid JSON object with keys: date, name, amount, currency. If any field is not found, use null. Do not include any markdown formatting or code blocks, just the raw JSON.",
+                            },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:${file.type};base64,${base64Image}`,
                                 },
-                                {
-                                    inline_data: {
-                                        mime_type: file.type,
-                                        data: base64Image,
-                                    },
-                                },
-                            ],
-                        },
-                    ],
-                    generationConfig: {
-                        temperature: 0.1,
-                        maxOutputTokens: 300,
+                            },
+                        ],
                     },
-                }),
-            }
-        );
+                ],
+                max_tokens: 300,
+                response_format: { type: "json_object" },
+            }),
+        });
 
-        if (!geminiResponse.ok) {
-            const error = await geminiResponse.json();
-            console.error("Gemini API error:", error);
-            return NextResponse.json(
-                { error: "Failed to process image" },
-                { status: 500 }
-            );
+        if (!openaiResponse.ok) {
+            const error = await openaiResponse.json();
+            console.error("OpenAI API error:", error);
+            return NextResponse.json({ error: "Failed to process image with AI" }, { status: 500 });
         }
 
-        const geminiData = await geminiResponse.json();
-        const content = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+        const openaiData = await openaiResponse.json();
+        const messageContent = openaiData.choices?.[0]?.message?.content;
 
-        if (!content) {
-            return NextResponse.json(
-                { error: "No data extracted from receipt" },
-                { status: 400 }
-            );
+        if (!messageContent) {
+            return NextResponse.json({ error: "No data extracted from receipt" }, { status: 400 });
         }
 
-        // Clean up response (remove markdown code blocks if present)
-        const cleanContent = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
-        // Parse the JSON response
-        const extractedData = JSON.parse(cleanContent);
+        // Parse JSON response
+        const extractedData = JSON.parse(messageContent);
 
         return NextResponse.json({
             success: true,
