@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile, getCachedProfileWithCouple } from "@/lib/db-utils";
 import {
   COUPLE_CHAT_CATEGORY,
   COUPLE_CHAT_EVENT,
+  getCoupleChatStickerById,
+  resolveCoupleChatMessageType,
   serializeCoupleChatMessage,
   type CoupleChatMessageRecord,
   getCoupleChatChannelName,
@@ -20,6 +23,8 @@ const MESSAGE_SELECT = {
   couple_id: true,
   author_id: true,
   content: true,
+  image_url: true,
+  metadata: true,
   created_at: true,
   updated_at: true,
   author: {
@@ -64,6 +69,7 @@ export async function GET(request: NextRequest) {
             is_deleted: false,
           },
           select: {
+            id: true,
             created_at: true,
           },
         })
@@ -76,13 +82,23 @@ export async function GET(request: NextRequest) {
         is_deleted: false,
         ...(cursorMessage
           ? {
-              created_at: {
-                lt: cursorMessage.created_at,
-              },
+              OR: [
+                {
+                  created_at: {
+                    lt: cursorMessage.created_at,
+                  },
+                },
+                {
+                  created_at: cursorMessage.created_at,
+                  id: {
+                    lt: cursorMessage.id,
+                  },
+                },
+              ],
             }
           : {}),
       },
-      orderBy: { created_at: "desc" },
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
       take: limit,
       select: MESSAGE_SELECT,
     });
@@ -121,22 +137,49 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const content = String(body?.content || "").trim();
-    if (!content) {
-      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    const imageUrls = Array.isArray(body?.imageUrls)
+      ? body.imageUrls
+          .filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
+          .slice(0, 4)
+      : [];
+    const sticker = getCoupleChatStickerById(
+      typeof body?.stickerId === "string" ? body.stickerId : null
+    );
+
+    if (!content && imageUrls.length === 0 && !sticker) {
+      return NextResponse.json(
+        { error: "Message, image, or sticker is required" },
+        { status: 400 }
+      );
     }
+
+    const metadata = {
+      type: resolveCoupleChatMessageType({ content, images: imageUrls, sticker }),
+      images: imageUrls,
+      sticker: sticker
+        ? {
+            id: sticker.id,
+            emoji: sticker.emoji,
+            label: sticker.label,
+            theme: sticker.theme,
+          }
+        : null,
+    } satisfies Prisma.InputJsonObject;
 
     const message = await prisma.post.create({
       data: {
         couple_id: profile.couple_id,
         author_id: user.id,
         content,
+        image_url: imageUrls[0] ?? null,
+        metadata,
         category: COUPLE_CHAT_CATEGORY,
       },
       select: MESSAGE_SELECT,
     });
 
     const serializedMessage = serializeCoupleChatMessage(
-      message as CoupleChatMessageRecord
+      message as unknown as CoupleChatMessageRecord
     );
 
     const ably = getAblyRestClient();

@@ -1,11 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { CoupleChatMessage } from "@/lib/chat";
 
-async function fetchCoupleChat(coupleId: string) {
+interface CoupleChatResponse {
+  data: CoupleChatMessage[];
+  nextCursor: string | null;
+}
+
+async function fetchCoupleChat(coupleId: string, cursor: string | null) {
   const url = new URL("/api/chat/messages", window.location.origin);
   url.searchParams.set("coupleId", coupleId);
+  if (cursor) {
+    url.searchParams.set("cursor", cursor);
+  }
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -17,14 +25,20 @@ async function fetchCoupleChat(coupleId: string) {
     throw new Error(json?.error || "Failed to load chat");
   }
 
-  return Array.isArray(json?.data) ? (json.data as CoupleChatMessage[]) : [];
+  return {
+    data: Array.isArray(json?.data) ? (json.data as CoupleChatMessage[]) : [],
+    nextCursor: typeof json?.nextCursor === "string" ? json.nextCursor : null,
+  } satisfies CoupleChatResponse;
 }
 
 export function useCoupleChat(coupleId: string | undefined) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["couple-chat", coupleId],
-    queryFn: () => fetchCoupleChat(coupleId as string),
+    queryFn: ({ pageParam }) =>
+      fetchCoupleChat(coupleId as string, typeof pageParam === "string" ? pageParam : null),
     enabled: !!coupleId,
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,

@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
         hostname: "www.nzherald.co.nz",
         pathname: "/resizer/**",
       },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/**",
+      },
     ],
   },
 };
