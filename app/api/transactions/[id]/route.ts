@@ -37,7 +37,7 @@ export async function PUT(
         }
 
         // Verify user is member of the couple
-        const isMember = existingTransaction.couple.members.some(m => m.id === user.id);
+        const isMember = existingTransaction.couple?.members.some((m) => m.id === user.id) ?? false;
         if (!isMember) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
@@ -108,7 +108,7 @@ export async function DELETE(
         }
 
         // Verify user is member of the couple
-        const isMember = existingTransaction.couple.members.some(m => m.id === user.id);
+        const isMember = existingTransaction.couple?.members.some((m) => m.id === user.id) ?? false;
         if (!isMember) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -213,16 +213,16 @@ export default function EnhancedOnboardingPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const containerVariants = {
+    const containerVariants: Variants = {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
         exit: { opacity: 0, scale: 0.95, transition: { duration: 0.3 } }
     };
 
-    const coupleStepVariants = {
+    const coupleStepVariants: Variants = {
         hidden: { opacity: 0, x: 32, scale: 0.98 },
-        visible: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" } },
-        exit: { opacity: 0, x: -32, scale: 0.98, transition: { duration: 0.25, ease: "easeInOut" } },
+        visible: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
+        exit: { opacity: 0, x: -32, scale: 0.98, transition: { duration: 0.25, ease: [0.4, 0, 0.2, 1] } },
     };
 
     if (status === "loading" || !userId) {

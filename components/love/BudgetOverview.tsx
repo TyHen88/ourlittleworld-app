@@ -159,7 +159,7 @@ export function BudgetOverview({ id, period = "month", date }: BudgetOverviewPro
                                                     ))}
                                                 </Pie>
                                                 <Tooltip
-                                                    formatter={(value: number) => [`$${Number(value).toFixed(0)}`, "Spent"]}
+                                                    formatter={(value?: number) => [`$${Number(value ?? 0).toFixed(0)}`, "Spent"]}
                                                     contentStyle={{
                                                         borderRadius: 14,
                                                         border: "none",

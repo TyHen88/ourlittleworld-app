@@ -11,6 +11,7 @@ import { Prisma } from "@prisma/client";
 async function getPostAccessContext() {
     const user = await getCachedUserOrThrow();
     if (!user.id) throw new Error("User ID is missing");
+    const actorUser = { ...user, id: user.id };
 
     const profile = await getCachedProfile(user.id);
     const isSingle = (profile as any)?.user_type === "SINGLE";
@@ -23,7 +24,7 @@ async function getPostAccessContext() {
         throw new Error("No couple found");
     }
 
-    return { user, profile, isSingle };
+    return { user: actorUser, profile, isSingle };
 }
 
 async function getAuthorizedPost(postId: string, actor: { user: { id: string }; profile: { couple_id?: string | null }; isSingle: boolean }) {
@@ -34,12 +35,10 @@ async function getAuthorizedPost(postId: string, actor: { user: { id: string }; 
             metadata: true,
             couple_id: true,
             author_id: true,
-            // @ts-expect-error - is_deleted property
             is_deleted: true,
         },
     });
 
-    // @ts-expect-error - is_deleted property 
     if (!post || post.is_deleted) {
         throw new Error("Post not found");
     }

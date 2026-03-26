@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { revalidatePath } from "next/cache";
@@ -15,7 +16,6 @@ export async function getTrips() {
 
     if (!user) throw new Error('User not found');
 
-    // @ts-expect-error - prisma trip properties
     const trips = await prisma.trip.findMany({
         where: {
             OR: [
@@ -60,7 +60,6 @@ export async function createTrip(data: {
 
     if (!user) throw new Error('User not found');
 
-    // @ts-expect-error - prisma trip properties
     const trip = await prisma.trip.create({
         data: {
             title: data.title,
@@ -69,9 +68,7 @@ export async function createTrip(data: {
             end_date: data.endDate,
             budget: data.budget,
             notes: data.notes,
-            // @ts-expect-error - prisma trip properties
             user_id: data.isSolo ? user.id : (user.user_type === 'SINGLE' ? user.id : null),
-            // @ts-expect-error - prisma trip properties
             couple_id: (!data.isSolo && user.user_type === 'COUPLE') ? user.couple_id : null,
             status: 'PLANNED'
         }
@@ -92,7 +89,6 @@ export async function deleteTrip(id: string) {
     const sessionUser = await getCachedUser();
     if (!sessionUser || !sessionUser.id) throw new Error('Not authenticated');
 
-    // @ts-expect-error - prisma trip properties
     await prisma.trip.delete({
         where: { id }
     });

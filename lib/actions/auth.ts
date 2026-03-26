@@ -10,7 +10,6 @@ import crypto from "crypto";
 
 export async function signUp(email: string, fullName: string) {
     const existingUser = await prisma.user.findFirst({
-        // @ts-expect-error - prisma user properties
         where: { email, is_deleted: false }
     });
 
@@ -273,7 +272,6 @@ export async function requestCodeForPasswordChange() {
 
     try {
         // Store the token
-        // @ts-expect-error - prisma verification token
         await prisma.verificationToken.create({
             data: {
                 identifier: user.email,
@@ -334,7 +332,6 @@ export async function updatePasswordWithOtp(otp: string, newPassword: string) {
         .digest("hex");
 
     // 1. Verify token
-    // @ts-expect-error - prisma verification token
     const vt = await prisma.verificationToken.findFirst({
         where: { 
             identifier: user.email, 
@@ -359,7 +356,6 @@ export async function updatePasswordWithOtp(otp: string, newPassword: string) {
         });
 
         // 3. Clean up the token
-        // @ts-expect-error - prisma verification token
         await prisma.verificationToken.delete({
             where: { identifier_token: { identifier: user.email, token: hashedToken } }
         });

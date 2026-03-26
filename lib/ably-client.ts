@@ -39,7 +39,7 @@ export function getAblyRealtimeClient(clientId: string) {
           return;
         }
 
-        callback(null, payload as Ably.Types.TokenDetails);
+        callback(null, payload as Ably.TokenDetails);
       } catch (error) {
         callback(
           error instanceof Error ? error.message : "Failed to get Ably token",

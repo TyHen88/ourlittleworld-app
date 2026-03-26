@@ -28,7 +28,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      user={session.user}
+      user={{ id: session.user.id, name: session.user.name }}
       profile={profileWithCouple}
       couple={couple}
       daysTogether={daysTogether}
