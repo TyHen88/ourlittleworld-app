@@ -18,6 +18,65 @@ enum TransactionType {
   EXPENSE
 }
 
+enum GoalType {
+  SAVINGS
+  LEARNING
+  WEDDING
+  FUTURE_SELF
+  SOCIAL_CONTRACT
+  LONG_TERM_CHANGE
+}
+
+enum GoalCadence {
+  YEAR
+  MONTH
+  DAY
+}
+
+enum GoalMilestoneStatus {
+  PENDING
+  COMPLETED
+  SKIPPED
+}
+
+enum ReminderSourceType {
+  GOAL_MILESTONE
+  GOAL
+  BUDGET_ALERT
+  DAILY_DIGEST
+}
+
+enum ReminderTriggerType {
+  GOAL_UPCOMING
+  GOAL_DUE
+  GOAL_OVERDUE
+  DAILY_DIGEST
+  BUDGET_WARNING
+  BUDGET_OVER
+  CATEGORY_SPIKE
+  NO_EXPENSE_LOG
+}
+
+enum ReminderStatus {
+  PENDING
+  PARTIAL
+  DELIVERED
+  FAILED
+  DISMISSED
+}
+
+enum ReminderChannel {
+  EMAIL
+  TELEGRAM
+}
+
+enum ReminderDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 // NextAuth Requirements
 model User {
   id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -52,6 +111,8 @@ model User {
   trips                Trip[]
   savingsGoals         SavingsGoal[]
   budgets              Budget[]
+  notificationPreference NotificationPreference?
+  reminders            Reminder[]
 
   @@index([is_deleted])
 
@@ -229,20 +290,121 @@ model SavingsGoal {
   icon            String?  @default("Target")
   color           String?  @default("purple")
   deadline        DateTime? @db.Date
+  reminder_at     DateTime? @db.Timestamptz(6)
   priority        String?  @default("medium") // low, medium, high
+  type            GoalType @default(SAVINGS)
   is_completed    Boolean  @default(false)
   completed_at    DateTime? @db.Timestamptz(6)
   metadata        Json?    // For storing additional data like milestones, notes, etc.
+  profile         Json?
 
   // Timestamps
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @updatedAt @db.Timestamptz(6)
 
   // Relations
-  couple Couple? @relation(fields: [couple_id], references: [id], onDelete: Cascade)
-  user   User?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  couple     Couple?         @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+  user       User?           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  milestones GoalMilestone[]
 
   @@map("savings_goals")
+}
+
+model GoalMilestone {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goal_id         String              @db.Uuid
+  title           String
+  description     String?
+  cadence         GoalCadence
+  due_at          DateTime?           @db.Timestamptz(6)
+  status          GoalMilestoneStatus @default(PENDING)
+  order_index     Int                 @default(0)
+  is_required     Boolean             @default(true)
+  completed_at    DateTime?           @db.Timestamptz(6)
+  reminder_offset_minutes Int?        @default(1440)
+  metadata        Json?
+  created_at      DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime            @updatedAt @db.Timestamptz(6)
+
+  goal            SavingsGoal         @relation(fields: [goal_id], references: [id], onDelete: Cascade)
+  reminders       Reminder[]
+
+  @@index([goal_id, due_at])
+  @@map("goal_milestones")
+}
+
+model NotificationPreference {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id               String   @unique @db.Uuid
+  email_enabled         Boolean  @default(true)
+  telegram_enabled      Boolean  @default(false)
+  budget_alerts_enabled Boolean  @default(true)
+  daily_digest_enabled  Boolean  @default(true)
+  tracking_nudges_enabled Boolean @default(false)
+  quiet_hours_enabled   Boolean  @default(false)
+  quiet_hours_start     Int?
+  quiet_hours_end       Int?
+  timezone              String   @default("UTC")
+  digest_hour           Int      @default(20)
+  email_address         String?
+  telegram_chat_id      String?
+  telegram_verified     Boolean  @default(false)
+  telegram_bound_at     DateTime? @db.Timestamptz(6)
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model Reminder {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_user_id    String             @db.Uuid
+  milestone_id     String?            @db.Uuid
+  source_type      ReminderSourceType
+  trigger_type     ReminderTriggerType
+  source_ref       String?
+  dedupe_key       String?            @unique
+  title            String
+  body             String             @db.Text
+  analysis_summary String?
+  facts            Json?
+  status           ReminderStatus     @default(PENDING)
+  due_at           DateTime           @db.Timestamptz(6)
+  delivered_at     DateTime?          @db.Timestamptz(6)
+  acknowledged_at  DateTime?          @db.Timestamptz(6)
+  dismissed_at     DateTime?          @db.Timestamptz(6)
+  metadata         Json?
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime           @updatedAt @db.Timestamptz(6)
+
+  owner      User           @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  milestone  GoalMilestone? @relation(fields: [milestone_id], references: [id], onDelete: SetNull)
+  deliveries ReminderDelivery[]
+
+  @@index([owner_user_id, due_at])
+  @@index([status, due_at])
+  @@map("reminders")
+}
+
+model ReminderDelivery {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reminder_id      String                 @db.Uuid
+  channel          ReminderChannel
+  status           ReminderDeliveryStatus @default(PENDING)
+  attempt_count    Int                    @default(1)
+  error_message    String?
+  provider_response Json?
+  sent_at          DateTime?              @db.Timestamptz(6)
+  failed_at        DateTime?              @db.Timestamptz(6)
+  created_at       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime               @updatedAt @db.Timestamptz(6)
+
+  reminder Reminder @relation(fields: [reminder_id], references: [id], onDelete: Cascade)
+
+  @@index([reminder_id, channel])
+  @@map("reminder_deliveries")
 }
 
 model Trip {

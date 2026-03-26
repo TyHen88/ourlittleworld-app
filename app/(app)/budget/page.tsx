@@ -46,7 +46,7 @@ export default function BudgetPage() {
         const { status } = summary;
         const totalBalance = summary?.balance?.total ?? 0;
         const netFlow = (summary?.income?.total ?? 0) - (summary?.expenses?.total ?? 0);
-        const periodLabel = period === "day" ? "today" : period === "year" ? "this year" : "this month";
+        const periodLabel = (period as string) === "day" ? "today" : (period as string) === "year" ? "this year" : "this month";
 
         if (status === "healthy") {
             return {

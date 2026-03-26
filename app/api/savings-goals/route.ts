@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCachedUser } from "@/lib/auth-cache";
 import prisma from "@/lib/prisma";
+import { buildGoalProfile, generateGoalMilestones, isGoalType } from "@/lib/goals";
 
 export async function GET(request: NextRequest) {
     try {
@@ -52,6 +53,14 @@ export async function GET(request: NextRequest) {
                 { deadline: 'asc' },
                 { created_at: 'desc' },
             ],
+            include: {
+                milestones: {
+                    orderBy: [
+                        { due_at: "asc" },
+                        { order_index: "asc" },
+                    ],
+                },
+            },
         });
 
         const sanitizedGoals = goals.map((g: any) => ({
@@ -94,11 +103,19 @@ export async function POST(request: NextRequest) {
             description,
             targetAmount,
             currentAmount,
+            profile,
             icon,
             color,
             deadline,
+            reminderAt,
             priority,
+            type,
         } = body;
+
+        const normalizedType = isGoalType(type) ? type : "SAVINGS";
+        if (type && !isGoalType(type)) {
+            return NextResponse.json({ error: "Invalid goal type" }, { status: 400 });
+        }
 
         // Verify user belongs to this couple or is solo
         // @ts-ignore
@@ -123,6 +140,13 @@ export async function POST(request: NextRequest) {
         }
 
         // Create savings goal
+        const milestoneDrafts = generateGoalMilestones({
+            title,
+            type: normalizedType,
+            deadline,
+            reminderAt,
+        });
+
         const goal = await prisma.savingsGoal.create({
             data: {
                 // @ts-ignore
@@ -135,7 +159,24 @@ export async function POST(request: NextRequest) {
                 icon: icon || "Target",
                 color: color || "purple",
                 deadline: deadline ? new Date(deadline) : null,
+                reminder_at: reminderAt ? new Date(reminderAt) : null,
                 priority: priority || "medium",
+                type: normalizedType,
+                profile: buildGoalProfile(normalizedType, profile),
+                milestones: milestoneDrafts.length > 0 ? {
+                    create: milestoneDrafts.map((milestone) => ({
+                        ...milestone,
+                        due_at: milestone.due_at ? new Date(milestone.due_at) : null,
+                    })),
+                } : undefined,
+            },
+            include: {
+                milestones: {
+                    orderBy: [
+                        { due_at: "asc" },
+                        { order_index: "asc" },
+                    ],
+                },
             },
         });
 

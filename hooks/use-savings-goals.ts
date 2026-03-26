@@ -13,10 +13,22 @@ interface SavingsGoal {
     icon: string;
     color: string;
     deadline: string | null;
+    reminder_at: string | null;
     priority: string;
+    type: string;
     is_completed: boolean;
     completed_at: string | null;
     metadata: any;
+    profile: Record<string, string> | null;
+    milestones: Array<{
+        id: string;
+        title: string;
+        description: string | null;
+        cadence: "YEAR" | "MONTH" | "DAY";
+        due_at: string | null;
+        status: "PENDING" | "COMPLETED" | "SKIPPED";
+        order_index: number;
+    }>;
     created_at: string;
     updated_at: string;
 }
@@ -57,7 +69,10 @@ export function useCreateSavingsGoal() {
             icon?: string;
             color?: string;
             deadline?: string;
+            reminderAt?: string;
             priority?: string;
+            type?: string;
+            profile?: Record<string, string>;
         }) => {
             const res = await fetch("/api/savings-goals", {
                 method: "POST",
@@ -73,8 +88,8 @@ export function useCreateSavingsGoal() {
 
             return json.data as SavingsGoal;
         },
-        onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.userId || variables.coupleId] });
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['savings-goals'] });
         },
     });
 }
@@ -94,8 +109,11 @@ export function useUpdateSavingsGoal() {
             icon?: string;
             color?: string;
             deadline?: string;
+            reminderAt?: string;
             priority?: string;
+            type?: string;
             isCompleted?: boolean;
+            profile?: Record<string, string>;
         }) => {
             const { id, coupleId, ...updateData } = data;
 
@@ -113,8 +131,8 @@ export function useUpdateSavingsGoal() {
 
             return json.data as SavingsGoal;
         },
-        onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['savings-goals'] });
         },
     });
 }
@@ -136,8 +154,8 @@ export function useDeleteSavingsGoal() {
 
             return json;
         },
-        onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['savings-goals'] });
         },
     });
 }

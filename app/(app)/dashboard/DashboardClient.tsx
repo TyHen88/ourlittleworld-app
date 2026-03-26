@@ -13,6 +13,7 @@ import { updateTodayMoodMessage, getHeroMessage } from "@/lib/actions/moods";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
+import { SmartRemindersCard } from "@/components/reminders/SmartRemindersCard";
 
 interface DashboardClientProps {
     user: any;
@@ -408,6 +409,15 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                 )
             )}
 
+            <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+                className="space-y-4"
+            >
+                <SmartRemindersCard />
+            </motion.section>
+
             {/* Coming Soon Features */}
             <motion.section
                 initial={{ opacity: 0, y: 20 }}
@@ -422,16 +432,15 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                 </div>
                 <Card className="p-5 border-none bg-gradient-to-br from-slate-50 to-white shadow-sm rounded-3xl">
                     <div className="space-y-4">
-                        <div className="flex items-start gap-3 group">
+                        <div className="flex items-start gap-3 group opacity-60">
                             <div className="p-2 bg-amber-50 rounded-xl group-hover:bg-amber-100 transition-colors">
                                 <Bell className="text-amber-600" size={18} />
                             </div>
                             <div className="flex-1">
                                 <h4 className="font-bold text-slate-800 text-sm">Smart Reminders</h4>
-                                <p className="text-xs text-slate-500 mt-1">Budget alerts & daily expense tracking</p>
+                                <p className="text-xs text-slate-500 mt-1">Now live in settings and dashboard cards</p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <Clock className="text-slate-400" size={12} />
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 2</span>
+                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
                                 </div>
                             </div>
                         </div>

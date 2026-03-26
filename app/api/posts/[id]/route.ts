@@ -13,7 +13,7 @@ export async function GET(
     const { id } = await context.params;
 
     const user = await getCachedUser();
-    if (!user) {
+    if (!user || !user.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 

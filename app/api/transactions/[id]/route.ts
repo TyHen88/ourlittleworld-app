@@ -36,8 +36,8 @@ export async function PUT(
             return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
         }
 
-        // Verify user is member of the couple
-        const isMember = existingTransaction.couple.members.some(m => m.id === user.id);
+        // Verify user is member of the couple or the owner
+        const isMember = existingTransaction.couple?.members.some(m => m.id === user.id) || existingTransaction.user_id === user.id;
         if (!isMember) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
@@ -107,8 +107,8 @@ export async function DELETE(
             return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
         }
 
-        // Verify user is member of the couple
-        const isMember = existingTransaction.couple.members.some(m => m.id === user.id);
+        // Verify user is member of the couple or the owner
+        const isMember = existingTransaction.couple?.members.some(m => m.id === user.id) || existingTransaction.user_id === user.id;
         if (!isMember) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }

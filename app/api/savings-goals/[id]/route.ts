@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCachedUser } from "@/lib/auth-cache";
 import prisma from "@/lib/prisma";
+import { buildGoalProfile, generateGoalMilestones, isGoalType } from "@/lib/goals";
 
 export async function PUT(
     request: NextRequest,
@@ -19,14 +21,20 @@ export async function PUT(
             description,
             targetAmount,
             currentAmount,
+            profile,
             icon,
             color,
             deadline,
+            reminderAt,
             priority,
+            type,
             isCompleted,
         } = body;
 
         const { id } = await params;
+        if (type && !isGoalType(type)) {
+            return NextResponse.json({ error: "Invalid goal type" }, { status: 400 });
+        }
 
         // Fetch existing goal to verify ownership
         const existingGoal = await prisma.savingsGoal.findUnique({
@@ -39,6 +47,7 @@ export async function PUT(
                         },
                     },
                 },
+                milestones: true,
             },
         });
 
@@ -59,6 +68,20 @@ export async function PUT(
         }
 
         // Update goal
+        const normalizedType = isGoalType(type) ? type : existingGoal.type;
+        const nextTitle = title ?? existingGoal.title;
+        const nextDeadline = deadline !== undefined ? deadline : existingGoal.deadline?.toISOString();
+        const nextReminderAt = reminderAt !== undefined ? reminderAt : existingGoal.reminder_at?.toISOString();
+        const nextProfile = profile !== undefined
+            ? buildGoalProfile(normalizedType, profile)
+            : (existingGoal.profile as Record<string, string> | null);
+        const milestoneDrafts = generateGoalMilestones({
+            title: nextTitle,
+            type: normalizedType,
+            deadline: nextDeadline,
+            reminderAt: nextReminderAt,
+        });
+
         const goal = await prisma.savingsGoal.update({
             where: { id },
             data: {
@@ -69,11 +92,33 @@ export async function PUT(
                 ...(icon !== undefined && { icon }),
                 ...(color !== undefined && { color }),
                 ...(deadline !== undefined && { deadline: deadline ? new Date(deadline) : null }),
+                ...(reminderAt !== undefined && { reminder_at: reminderAt ? new Date(reminderAt) : null }),
                 ...(priority !== undefined && { priority }),
+                ...(type !== undefined && { type: normalizedType }),
+                ...(profile !== undefined && {
+                    profile: nextProfile && Object.keys(nextProfile).length > 0
+                        ? (nextProfile as Prisma.InputJsonValue)
+                        : Prisma.JsonNull,
+                }),
                 ...(isCompleted !== undefined && {
                     is_completed: isCompleted,
                     completed_at: isCompleted ? new Date() : null,
                 }),
+                milestones: {
+                    deleteMany: {},
+                    create: milestoneDrafts.map((milestone) => ({
+                        ...milestone,
+                        due_at: milestone.due_at ? new Date(milestone.due_at) : null,
+                    })),
+                },
+            },
+            include: {
+                milestones: {
+                    orderBy: [
+                        { due_at: "asc" },
+                        { order_index: "asc" },
+                    ],
+                },
             },
         });
 

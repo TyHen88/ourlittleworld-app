@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCouple } from "@/hooks/use-couple";
+import { useNotificationPreferences, useUpdateNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { deleteAccount, signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
 import { uploadAvatar } from "@/lib/actions/storage";
 import { cn } from "@/lib/utils";
@@ -67,12 +68,21 @@ export default function SettingsPage() {
     const [selectedTheme, setSelectedTheme] = useState("blush");
     const [darkMode, setDarkMode] = useState(false);
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-    const [notifications, setNotifications] = useState({
-        push: true,
-        email: true,
-        posts: true,
-        comments: true,
-        likes: true,
+    const { data: notificationPreferences } = useNotificationPreferences();
+    const updateNotificationPreferences = useUpdateNotificationPreferences();
+    const [notificationForm, setNotificationForm] = useState({
+        emailEnabled: true,
+        telegramEnabled: false,
+        budgetAlertsEnabled: true,
+        dailyDigestEnabled: true,
+        trackingNudgesEnabled: false,
+        quietHoursEnabled: false,
+        quietHoursStart: 22,
+        quietHoursEnd: 7,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        digestHour: 20,
+        emailAddress: "",
+        telegramChatId: "",
     });
 
     const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -101,6 +111,24 @@ export default function SettingsPage() {
             });
         }
     }, [profile]);
+
+    useEffect(() => {
+        if (!notificationPreferences) return;
+        setNotificationForm({
+            emailEnabled: notificationPreferences.email_enabled,
+            telegramEnabled: notificationPreferences.telegram_enabled,
+            budgetAlertsEnabled: notificationPreferences.budget_alerts_enabled,
+            dailyDigestEnabled: notificationPreferences.daily_digest_enabled,
+            trackingNudgesEnabled: notificationPreferences.tracking_nudges_enabled,
+            quietHoursEnabled: notificationPreferences.quiet_hours_enabled,
+            quietHoursStart: notificationPreferences.quiet_hours_start ?? 22,
+            quietHoursEnd: notificationPreferences.quiet_hours_end ?? 7,
+            timezone: notificationPreferences.timezone || "UTC",
+            digestHour: notificationPreferences.digest_hour ?? 20,
+            emailAddress: notificationPreferences.email_address || user?.email || "",
+            telegramChatId: notificationPreferences.telegram_chat_id || "",
+        });
+    }, [notificationPreferences, user?.email]);
 
     const handleSave = async () => {
         if (!user) return;
@@ -210,6 +238,14 @@ export default function SettingsPage() {
     if (isLoading) {
         return <FullPageLoader />;
     }
+
+    const handleNotificationSave = async () => {
+        await updateNotificationPreferences.mutateAsync({
+            ...notificationForm,
+            emailAddress: notificationForm.emailAddress || null,
+            telegramChatId: notificationForm.telegramChatId || null,
+        });
+    };
 
     const isSingle = profile?.user_type === 'SINGLE';
 
@@ -617,14 +653,39 @@ export default function SettingsPage() {
 
                                 <div className="space-y-4">
                                     {[
-                                        { key: "Telegram", label: "Telegram Notifications", desc: "Get notified on your Telegram", icon: Send },
-                                        { key: "email", label: "Email Notifications", desc: "Receive updates via email", icon: Mail },
-                                        { key: "posts", label: "New Posts", desc: "When your partner posts", icon: ImageIcon },
-                                        { key: "comments", label: "Comments", desc: "When someone comments", icon: Heart },
-                                        { key: "likes", label: "Likes & Reactions", desc: "When someone reacts", icon: Heart },
+                                        {
+                                            key: "emailEnabled",
+                                            label: "Email reminders",
+                                            desc: "Goals, budget alerts, and daily digest emails",
+                                            icon: Mail,
+                                        },
+                                        {
+                                            key: "telegramEnabled",
+                                            label: "Telegram bot reminders",
+                                            desc: "Compact mobile reminders through your Telegram chat",
+                                            icon: Send,
+                                        },
+                                        {
+                                            key: "budgetAlertsEnabled",
+                                            label: "Budget alerts",
+                                            desc: "Warning, over-budget, and category spike alerts",
+                                            icon: Bell,
+                                        },
+                                        {
+                                            key: "dailyDigestEnabled",
+                                            label: "Daily expense digest",
+                                            desc: "A once-a-day spending summary at your preferred hour",
+                                            icon: Sparkles,
+                                        },
+                                        {
+                                            key: "trackingNudgesEnabled",
+                                            label: "Tracking nudges",
+                                            desc: "Prompt me when no expense was logged by evening",
+                                            icon: Check,
+                                        },
                                     ].map((item) => {
                                         const Icon = item.icon;
-                                        if (item.key === "posts" || item.key === "comments" || item.key === "likes") return null;
+                                        const enabled = notificationForm[item.key as keyof typeof notificationForm] as boolean;
                                         return (
                                             <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
                                                 <div className="flex items-center gap-3">
@@ -635,20 +696,111 @@ export default function SettingsPage() {
                                                     </div>
                                                 </div>
                                                 <button
-                                                    onClick={() => setNotifications({ ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] })}
+                                                    onClick={() => setNotificationForm((prev) => ({ ...prev, [item.key]: !enabled }))}
                                                     className={cn(
                                                         "w-14 h-8 rounded-full transition-colors relative",
-                                                        notifications[item.key as keyof typeof notifications] ? "bg-amber-600" : "bg-slate-300"
+                                                        enabled ? "bg-amber-600" : "bg-slate-300"
                                                     )}
                                                 >
                                                     <div className={cn(
                                                         "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
-                                                        notifications[item.key as keyof typeof notifications] ? "right-1" : "left-1"
+                                                        enabled ? "right-1" : "left-1"
                                                     )} />
                                                 </button>
                                             </div>
                                         );
                                     })}
+
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Email address</Label>
+                                            <Input
+                                                value={notificationForm.emailAddress}
+                                                onChange={(e) => setNotificationForm((prev) => ({ ...prev, emailAddress: e.target.value }))}
+                                                placeholder="name@example.com"
+                                                className="rounded-2xl"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Telegram chat ID</Label>
+                                            <Input
+                                                value={notificationForm.telegramChatId}
+                                                onChange={(e) => setNotificationForm((prev) => ({ ...prev, telegramChatId: e.target.value }))}
+                                                placeholder="123456789"
+                                                className="rounded-2xl"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Timezone</Label>
+                                            <Input
+                                                value={notificationForm.timezone}
+                                                onChange={(e) => setNotificationForm((prev) => ({ ...prev, timezone: e.target.value }))}
+                                                className="rounded-2xl"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Digest hour</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="23"
+                                                value={notificationForm.digestHour}
+                                                onChange={(e) => setNotificationForm((prev) => ({ ...prev, digestHour: Number(e.target.value) }))}
+                                                className="rounded-2xl"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Quiet hours</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max="23"
+                                                    value={notificationForm.quietHoursStart}
+                                                    onChange={(e) => setNotificationForm((prev) => ({ ...prev, quietHoursStart: Number(e.target.value) }))}
+                                                    className="rounded-2xl"
+                                                />
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    max="23"
+                                                    value={notificationForm.quietHoursEnd}
+                                                    onChange={(e) => setNotificationForm((prev) => ({ ...prev, quietHoursEnd: Number(e.target.value) }))}
+                                                    className="rounded-2xl"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                                        <div>
+                                            <p className="font-bold text-slate-800">Respect quiet hours</p>
+                                            <p className="text-xs text-slate-500">Delay non-urgent reminders during your quiet window</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setNotificationForm((prev) => ({ ...prev, quietHoursEnabled: !prev.quietHoursEnabled }))}
+                                            className={cn(
+                                                "w-14 h-8 rounded-full transition-colors relative",
+                                                notificationForm.quietHoursEnabled ? "bg-amber-600" : "bg-slate-300"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
+                                                notificationForm.quietHoursEnabled ? "right-1" : "left-1"
+                                            )} />
+                                        </button>
+                                    </div>
+
+                                    <Button
+                                        onClick={handleNotificationSave}
+                                        disabled={updateNotificationPreferences.isPending}
+                                        className="w-full rounded-2xl bg-amber-600 hover:bg-amber-700 text-white"
+                                    >
+                                        {updateNotificationPreferences.isPending ? "Saving..." : "Save Notification Preferences"}
+                                    </Button>
                                 </div>
                             </Card>
                         )}

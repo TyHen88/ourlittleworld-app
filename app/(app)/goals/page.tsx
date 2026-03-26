@@ -1,52 +1,36 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { Card } from "@/components/ui/card";
+import { FullPageLoader } from "@/components/FullPageLoader";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useCouple } from "@/hooks/use-couple";
 import { useSavingsGoals, useUpdateSavingsGoal } from "@/hooks/use-savings-goals";
-import { FullPageLoader } from "@/components/FullPageLoader";
+import { GOAL_TYPE_DETAILS } from "@/lib/goals";
 import { cn } from "@/lib/utils";
+import { differenceInDays, differenceInMonths, differenceInYears } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-    Target,
-    Plus,
-    TrendingUp,
-    Calendar,
-    Sparkles,
     ArrowLeft,
-    Trophy,
-    Rocket,
-    Home,
-    Plane,
-    Car,
-    Heart,
-    GraduationCap,
-    Baby,
-    DollarSign,
     CheckCircle2,
     Clock,
     Edit,
-    Trash2,
     Flag,
+    Plus,
+    Sparkles,
+    Target,
+    TrendingUp,
+    CheckSquare,
+    Bell,
+    DollarSign,
+    GraduationCap,
+    Heart,
+    Rocket
 } from "lucide-react";
-import { format, differenceInDays, differenceInMonths, differenceInYears } from "date-fns";
-import { AddGoalModal } from "@/components/goals/AddGoalModal";
-import { EditGoalModal } from "@/components/goals/EditGoalModal";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-const GOAL_ICONS: Record<string, any> = {
-    Target: Target,
-    Home: Home,
-    Plane: Plane,
-    Car: Car,
-    Heart: Heart,
-    GraduationCap: GraduationCap,
-    Baby: Baby,
-    Rocket: Rocket,
-    Trophy: Trophy,
-};
+
 
 const PRIORITY_CONFIG = {
     high: { label: "High Priority", color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
@@ -58,7 +42,7 @@ export default function GoalsPage() {
     const router = useRouter();
     const { user, profile, couple, isLoading: coupleLoading } = useCouple();
 
-    const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+    const [filter, setFilter] = useState<"all" | "active" | "completed" | "timeline">("all");
 
     useEffect(() => {
         if (!coupleLoading && !user) {
@@ -73,18 +57,28 @@ export default function GoalsPage() {
     const { data: goals, isLoading: goalsLoading } = useSavingsGoals(currentId);
     const updateGoal = useUpdateSavingsGoal();
 
-    // Filter goals
     const filteredGoals = useMemo(() => {
         if (!goals) return [];
-        if (filter === "all") return goals;
-        if (filter === "completed") return goals.filter(g => g.is_completed);
-        return goals.filter(g => !g.is_completed);
+        let result = goals;
+        if (filter === "completed") result = goals.filter(g => g.is_completed);
+        else if (filter === "active") result = goals.filter(g => !g.is_completed);
+        
+        if (filter === "timeline") {
+            // Sort chronologically by deadline or reminder, ignore completed items unless that's all there is
+            return [...goals].sort((a, b) => {
+                const dateA = a.milestones?.find((milestone) => milestone.status === "PENDING" && milestone.due_at)?.due_at || a.deadline || a.reminder_at || a.created_at;
+                const dateB = b.milestones?.find((milestone) => milestone.status === "PENDING" && milestone.due_at)?.due_at || b.deadline || b.reminder_at || b.created_at;
+                return new Date(dateA).getTime() - new Date(dateB).getTime();
+            });
+        }
+        
+        return result;
     }, [goals, filter]);
 
     // Calculate statistics
     const stats = useMemo(() => {
         if (!goals) return { total: 0, active: 0, completed: 0, totalSaved: 0, totalTarget: 0 };
-        
+
         const active = goals.filter(g => !g.is_completed);
         const completed = goals.filter(g => g.is_completed);
         const totalSaved = goals.reduce((sum, g) => sum + parseFloat(String(g.current_amount)), 0);
@@ -104,9 +98,9 @@ export default function GoalsPage() {
         if (!deadline) return null;
         const deadlineDate = new Date(deadline);
         const now = new Date();
-        
+
         if (deadlineDate < now) return { text: "Overdue", color: "text-red-600" };
-        
+
         const days = differenceInDays(deadlineDate, now);
         const months = differenceInMonths(deadlineDate, now);
         const years = differenceInYears(deadlineDate, now);
@@ -117,21 +111,11 @@ export default function GoalsPage() {
         return { text: `${days} days left`, color: "text-red-600" };
     };
 
-    // Handle quick progress update
-    const handleQuickUpdate = async (goalId: string, amount: number) => {
-        if (!currentId) return;
-        
-        await updateGoal.mutateAsync({
-            id: goalId,
-            coupleId: currentId,
-            currentAmount: amount,
-        });
-    };
 
     // Handle mark as complete
     const handleMarkComplete = async (goalId: string) => {
         if (!currentId) return;
-        
+
         await updateGoal.mutateAsync({
             id: goalId,
             coupleId: currentId,
@@ -164,12 +148,12 @@ export default function GoalsPage() {
                             <Sparkles className={effectiveIsSingle ? "text-emerald-500" : "text-romantic-heart"} size={14} />
                         </p>
                     </div>
-                    <a
+                    <Link
                         href="/dashboard"
                         className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
                     >
                         <ArrowLeft className="text-slate-500" size={20} />
-                    </a>
+                    </Link>
                 </div>
 
             </motion.header>
@@ -208,9 +192,10 @@ export default function GoalsPage() {
                 className="flex gap-2 p-1 bg-slate-100 rounded-2xl"
             >
                 {[
-                    { value: "all", label: "All Goals" },
+                    { value: "all", label: "All" },
                     { value: "active", label: "Active" },
-                    { value: "completed", label: "Completed" },
+                    { value: "completed", label: "Done" },
+                    { value: "timeline", label: "Timeline" },
                 ].map((tab) => (
                     <button
                         key={tab.value}
@@ -249,7 +234,7 @@ export default function GoalsPage() {
                             {filter === "completed" ? "No Completed Goals Yet" : (isSingle ? "Start Your First Goal!" : "Start Your First Goal Together!")}
                         </h3>
                         <p className="text-sm text-slate-500 max-w-sm mx-auto mb-6">
-                            {filter === "completed" 
+                            {filter === "completed"
                                 ? "Complete your active goals to see them here"
                                 : "Set a savings goal and track your progress together. Dream big!"
                             }
@@ -271,10 +256,21 @@ export default function GoalsPage() {
                     <div className="space-y-4">
                         <AnimatePresence mode="popLayout">
                             {filteredGoals.map((goal, index) => {
-                                const Icon = GOAL_ICONS[goal.icon] || Target;
-                                const progress = (parseFloat(String(goal.current_amount)) / parseFloat(String(goal.target_amount))) * 100;
+                                const progress = goal.type === "SAVINGS" && parseFloat(String(goal.target_amount)) > 0
+                                    ? (parseFloat(String(goal.current_amount)) / parseFloat(String(goal.target_amount))) * 100
+                                    : 0;
                                 const timeRemaining = getTimeRemaining(goal.deadline);
                                 const priorityConfig = PRIORITY_CONFIG[goal.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium;
+                                const nextMilestone = goal.milestones?.find((milestone) => milestone.status === "PENDING");
+                                const typeIcons = {
+                                    SAVINGS: DollarSign,
+                                    LEARNING: GraduationCap,
+                                    WEDDING: Heart,
+                                    FUTURE_SELF: Rocket,
+                                    SOCIAL_CONTRACT: Sparkles,
+                                    LONG_TERM_CHANGE: Target,
+                                };
+                                const GoalTypeIcon = typeIcons[(goal.type as keyof typeof typeIcons)] || Target;
 
                                 return (
                                     <motion.div
@@ -286,8 +282,8 @@ export default function GoalsPage() {
                                     >
                                         <Card className={cn(
                                             "p-5 border-none rounded-3xl shadow-sm relative overflow-hidden",
-                                            goal.is_completed 
-                                                ? "bg-gradient-to-br from-green-50 to-emerald-50" 
+                                            goal.is_completed
+                                                ? "bg-gradient-to-br from-green-50 to-emerald-50"
                                                 : "bg-white"
                                         )}>
                                             {/* Completed Badge */}
@@ -302,27 +298,34 @@ export default function GoalsPage() {
 
                                             {/* Header */}
                                             <div className="flex items-start gap-3 mb-4">
-                                                <div className={cn(
-                                                    "p-3 rounded-2xl",
-                                                    `bg-${goal.color}-100`
-                                                )}>
-                                                    <Icon className={`text-${goal.color}-600`} size={24} />
-                                                </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <h3 className="font-black text-slate-800 text-lg truncate">
-                                                        {goal.title}
-                                                    </h3>
+                                                    <div className="flex items-center gap-2">
+                                                        <GoalTypeIcon size={18} className={goal.type === "SAVINGS" ? "text-emerald-500" : "text-slate-400"} />
+                                                        <h3 className={cn("font-black text-lg truncate", goal.is_completed ? "text-slate-500 line-through" : "text-slate-800")}>
+                                                            {goal.title}
+                                                        </h3>
+                                                    </div>
+                                                    
                                                     {goal.description && (
                                                         <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
                                                             {goal.description}
                                                         </p>
                                                     )}
-                                                    <div className="flex items-center gap-2 mt-2">
+                                                    
+                                                    <div className="flex flex-wrap items-center gap-2 mt-2">
                                                         {timeRemaining && (
                                                             <div className="flex items-center gap-1">
                                                                 <Clock size={10} className={timeRemaining.color} />
                                                                 <span className={cn("text-[10px] font-bold", timeRemaining.color)}>
                                                                     {timeRemaining.text}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {goal.reminder_at && (
+                                                            <div className="flex items-center gap-1">
+                                                                <Bell size={10} className="text-pink-500" />
+                                                                <span className="text-[10px] font-bold text-pink-500">
+                                                                    {new Date(goal.reminder_at).toLocaleString([], { hour: '2-digit', minute:'2-digit', month: 'short', day: 'numeric' })}
                                                                 </span>
                                                             </div>
                                                         )}
@@ -334,43 +337,56 @@ export default function GoalsPage() {
                                                             <Flag size={8} className="inline mr-1" />
                                                             {priorityConfig.label}
                                                         </div>
+                                                        <div className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">
+                                                            {GOAL_TYPE_DETAILS[goal.type as keyof typeof GOAL_TYPE_DETAILS]?.label || goal.type}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Progress */}
-                                            <div className="space-y-2 mb-4">
-                                                <div className="flex justify-between items-end">
-                                                    <div>
-                                                        <p className="text-2xl font-black text-slate-800">
-                                                            ${parseFloat(String(goal.current_amount)).toFixed(0)}
-                                                        </p>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                                            of ${parseFloat(String(goal.target_amount)).toFixed(0)}
-                                                        </p>
+                                            {/* Progress / Checkbox */}
+                                            {goal.type === "SAVINGS" ? (
+                                                <div className="space-y-2 mb-4">
+                                                    <div className="flex justify-between items-end">
+                                                        <div>
+                                                            <p className="text-2xl font-black text-slate-800">
+                                                                ${parseFloat(String(goal.current_amount)).toFixed(0)}
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                                of ${parseFloat(String(goal.target_amount)).toFixed(0)}
+                                                            </p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={cn("text-xl font-black", isSingle ? "text-emerald-600" : "text-romantic-heart")}>
+                                                                {progress.toFixed(0)}%
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                                Progress
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className={cn("text-xl font-black", isSingle ? "text-emerald-600" : "text-romantic-heart")}>
-                                                            {progress.toFixed(0)}%
-                                                        </p>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                                            Progress
-                                                        </p>
-                                                    </div>
-                                                </div>
 
-                                                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                    <motion.div
-                                                        initial={{ width: 0 }}
-                                                        animate={{ width: `${Math.min(progress, 100)}%` }}
-                                                        transition={{ duration: 1, ease: "easeOut" }}
-                                                        className={cn(
-                                                            "h-full rounded-full",
-                                                            goal.is_completed ? "bg-green-500" : (isSingle ? "bg-emerald-500" : "bg-gradient-button")
-                                                        )}
-                                                    />
+                                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${Math.min(progress, 100)}%` }}
+                                                            transition={{ duration: 1, ease: "easeOut" }}
+                                                            className={cn(
+                                                                "h-full rounded-full",
+                                                                goal.is_completed ? "bg-green-500" : (isSingle ? "bg-emerald-500" : "bg-gradient-button")
+                                                            )}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="mb-4 rounded-2xl bg-slate-50 p-4">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Next milestone</p>
+                                                    <p className="text-sm font-bold text-slate-800 mt-1">{nextMilestone?.title || "Roadmap will appear after save"}</p>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        {nextMilestone?.due_at ? new Date(nextMilestone.due_at).toLocaleDateString() : "No due date yet"}
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {/* Actions */}
                                             {!goal.is_completed && (
@@ -382,22 +398,40 @@ export default function GoalsPage() {
                                                         <Edit size={14} className="mr-1" />
                                                         Edit
                                                     </Link>
-                                                    {progress >= 100 && (
+                                                    {(!goal.is_completed && goal.type === "SAVINGS" && progress >= 100) && (
                                                         <Button
                                                             size="sm"
                                                             onClick={(e) => {
                                                                 e.preventDefault();
                                                                 handleMarkComplete(goal.id);
                                                             }}
-                                                            className="flex-1 rounded-full bg-green-500 hover:bg-green-600 text-white"
+                                                            className="flex-1 rounded-full text-xs font-bold shadow-lg shadow-green-200"
                                                         >
-                                                            <Trophy size={14} className="mr-1" />
+                                                            <CheckCircle2 size={16} className="mr-1" />
+                                                            Mark Complete
+                                                        </Button>
+                                                    )}
+                                                    {(!goal.is_completed && goal.type !== "SAVINGS") && (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                handleMarkComplete(goal.id);
+                                                            }}
+                                                            className="flex-1 rounded-full text-xs font-bold shadow-lg bg-green-500 hover:bg-green-600 shadow-green-200"
+                                                        >
+                                                            <CheckCircle2 size={16} className="mr-1" />
                                                             Mark Complete
                                                         </Button>
                                                     )}
                                                 </div>
                                             )}
                                         </Card>
+                                        
+                                        {/* Timeline Connector */}
+                                        {filter === "timeline" && index < filteredGoals.length - 1 && (
+                                            <div className="w-0.5 h-8 bg-slate-200 mx-auto my-2 rounded-full" />
+                                        )}
                                     </motion.div>
                                 );
                             })}

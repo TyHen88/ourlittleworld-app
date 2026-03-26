@@ -221,8 +221,8 @@ export default function EnhancedOnboardingPage() {
 
     const coupleStepVariants = {
         hidden: { opacity: 0, x: 32, scale: 0.98 },
-        visible: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" } },
-        exit: { opacity: 0, x: -32, scale: 0.98, transition: { duration: 0.25, ease: "easeInOut" } },
+        visible: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" as const } },
+        exit: { opacity: 0, x: -32, scale: 0.98, transition: { duration: 0.25, ease: "easeInOut" as const } },
     };
 
     if (status === "loading" || !userId) {
