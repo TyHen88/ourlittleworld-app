@@ -8,6 +8,7 @@ export default auth((req) => {
   const isOnDashboard = req.nextUrl.pathname.startsWith("/(app)") || 
                          req.nextUrl.pathname.startsWith("/dashboard") ||
                          req.nextUrl.pathname.startsWith("/budget") ||
+                         req.nextUrl.pathname.startsWith("/chat") ||
                          req.nextUrl.pathname.startsWith("/calendar") ||
                          req.nextUrl.pathname.startsWith("/goals") ||
                          req.nextUrl.pathname.startsWith("/profile") ||

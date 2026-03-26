@@ -1,75 +1,60 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { Heart, Stars, MapPin, Sparkles, Pencil, Check, X, Wallet, TrendingUp, Calendar, Bell, Upload, Target, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
+import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, Bell, Upload, MessageCircleHeart, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
-import { updateTodayMoodMessage, getHeroMessage } from "@/lib/actions/moods";
-import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
 import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
 
-interface DashboardClientProps {
-    user: any;
-    profile: any;
-    couple: any;
-    daysTogether: number;
+interface DashboardUser {
+    id: string;
+    name?: string | null;
 }
 
-export function DashboardClient({ user, profile, couple, daysTogether }: DashboardClientProps) {
-    const queryClient = useQueryClient();
+interface DashboardProfile {
+    user_type: string;
+    full_name: string | null;
+    avatar_url: string | null;
+}
+
+interface DashboardMember {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+}
+
+interface DashboardCouple {
+    id: string;
+    couple_name: string | null;
+    partner_1_nickname: string | null;
+    partner_2_nickname: string | null;
+    start_date: string | Date | null;
+    members: DashboardMember[];
+}
+
+interface DashboardClientProps {
+    user: DashboardUser;
+    profile: DashboardProfile | null;
+    couple: DashboardCouple | null;
+    daysTogether: number;
+    daysActive: number;
+}
+
+export function DashboardClient({ user, profile, couple, daysTogether, daysActive }: DashboardClientProps) {
     const [moodModalOpen, setMoodModalOpen] = useState(false);
-    const [heroMessageLocal, setHeroMessageLocal] = useState("");
-    const [editingHeroMessage, setEditingHeroMessage] = useState(false);
-    const [heroMessageDraft, setHeroMessageDraft] = useState("");
-    const [savingHeroMessage, setSavingHeroMessage] = useState(false);
-    const [loadingHeroMessage, setLoadingHeroMessage] = useState(true);
     const [displayMode, setDisplayMode] = useState<"days" | "months">("days");
-    const isSingle = profile?.user_type === 'SINGLE';
-    const displayColor = isSingle ? "emerald" : "romantic";
-    const accentColor = isSingle ? "indigo" : "heart";
+    const isSingle = profile?.user_type === "SINGLE";
 
     // Derived values for the partner
-    const otherPartner = couple?.members?.find((m: any) => m.id !== user?.id);
+    const otherPartner = couple?.members?.find((member) => member.id !== user.id);
 
     // Calculate months together
     const monthsTogether = Math.floor(daysTogether / 30);
-
-    const displayedHeroMessage = heroMessageLocal || "Love you more than yesterday";
-
-    // Fetch hero message on mount
-    useEffect(() => {
-        if (!couple?.id) return;
-
-        const fetchHeroMessage = async () => {
-            const result = await getHeroMessage(couple.id);
-            if (result.success && typeof result.message === 'string') {
-                setHeroMessageLocal(result.message);
-            }
-            setLoadingHeroMessage(false);
-        };
-
-        fetchHeroMessage();
-    }, [couple?.id]);
-
-    useEffect(() => {
-        const handler = (e: any) => {
-            if (editingHeroMessage) return;
-            const nextMessage = e?.detail?.message;
-            if (typeof nextMessage === 'string') {
-                setHeroMessageLocal(nextMessage);
-            }
-        };
-        document.addEventListener('daily-mood-updated', handler as any);
-        return () => {
-            document.removeEventListener('daily-mood-updated', handler as any);
-        };
-    }, [editingHeroMessage]);
 
     return (
         <div className="p-6 space-y-8 max-w-2xl mx-auto">
@@ -84,8 +69,8 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                         )}
                         {isSingle ? "Personal Sanctuary" : "Our Little World"}
                     </h1>
-                    <p className={`text-sm font-bold uppercase tracking-widest pl-1 ${isSingle ? 'text-emerald-600/60' : 'text-slate-400'}`}>
-                        Welcome, {profile?.full_name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Explorer'}! {isSingle ? '🌿' : '✨'}
+                    <p className={`text-sm font-bold uppercase tracking-widest pl-1 ${isSingle ? "text-emerald-600/60" : "text-slate-400"}`}>
+                        Welcome, {profile?.full_name?.split(" ")[0] || user.name?.split(" ")[0] || "Explorer"}!
                     </p>
                 </div>
 
@@ -160,7 +145,7 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
                                 <p className="text-slate-500 font-medium">Capture moments and grow daily.</p>
                                 <div className="pt-2 flex gap-2">
                                     <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                                        Day {Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24))} explorer
+                                        Day {daysActive} explorer
                                     </span>
                                 </div>
                             </div>
@@ -470,18 +455,22 @@ export function DashboardClient({ user, profile, couple, daysTogether }: Dashboa
 
                         <div className="h-px bg-slate-100" />
 
-                        <a href="/goals" className="flex items-start gap-3 group">
-                            <div className="p-2 bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors">
-                                <Target className="text-purple-600" size={18} />
+                        <a href="/chat" className="flex items-start gap-3 group">
+                            <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
+                                <MessageCircleHeart className="text-indigo-600" size={18} />
                             </div>
                             <div className="flex-1">
-                                <h4 className="font-bold text-slate-800 text-sm">Savings Goals</h4>
-                                <p className="text-xs text-slate-500 mt-1">Track goals & multi-year planning</p>
+                                <h4 className="font-bold text-slate-800 text-sm">{isSingle ? "Couple Chat" : "Private Messenger"}</h4>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    {isSingle ? "Connect with a partner to unlock this tab" : "Send private messages only your partner can read"}
+                                </p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
+                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">
+                                        {isSingle ? "Couple Only" : "Live"}
+                                    </span>
                                 </div>
                             </div>
-                            <ArrowRight className="text-slate-300 group-hover:text-purple-400 transition-colors mt-1" size={16} />
+                            <ArrowRight className="text-slate-300 group-hover:text-indigo-400 transition-colors mt-1" size={16} />
                         </a>
                     </div>
                 </Card>

@@ -4,14 +4,14 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Wallet, Image as ImageIcon, Settings, Heart, Target } from "lucide-react";
+import { Home, Wallet, Settings, Heart, MessageCircleHeart } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { icon: Home, label: "Home", href: "/dashboard" },
   { icon: Wallet, label: "Budget", href: "/budget" },
-  { icon: Target, label: "Goals", href: "/goals" },
+  { icon: MessageCircleHeart, label: "Chat", href: "/chat" },
   { icon: Heart, label: "Feed", href: "/feed" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
+import { COUPLE_CHAT_CATEGORY } from "@/lib/chat";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,8 +43,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
-    const isSingle = (profile as any).user_type === 'SINGLE';
+    const isSingle = profile.user_type === "SINGLE";
     const isOwner = user.id === id;
+    const accessScope: Prisma.PostWhereInput = isSingle
+      ? { author_id: user.id, couple_id: null }
+      : { couple_id: id };
+    const searchFilter: Prisma.PostWhereInput = query
+      ? {
+          content: {
+            contains: query,
+            mode: "insensitive",
+          },
+        }
+      : {};
 
     if (!isSingle && (!profile.couple_id || profile.couple_id !== id)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
@@ -54,18 +67,13 @@ export async function GET(request: NextRequest) {
 
     const posts = await prisma.post.findMany({
       where: {
-        ...(isSingle
-          ? { author_id: user.id, couple_id: null }
-          : { couple_id: id }
-        ) as any,
+        ...accessScope,
         is_deleted: false,
-        ...(query ? {
-          content: {
-            contains: query,
-            mode: 'insensitive'
-          }
-        } : {})
-      },
+        NOT: {
+          category: COUPLE_CHAT_CATEGORY,
+        },
+        ...searchFilter,
+      } satisfies Prisma.PostWhereInput,
       orderBy: { created_at: "desc" },
       skip: page * pageSize,
       take: pageSize,
@@ -100,10 +108,11 @@ export async function GET(request: NextRequest) {
     );
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API Error in /api/posts:", error);
+    const message = error instanceof Error ? error.message : "Server error";
     return NextResponse.json(
-      { error: error?.message || "Server error" },
+      { error: message },
       { status: 500 }
     );
   }
