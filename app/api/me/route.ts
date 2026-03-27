@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfileWithCouple } from "@/lib/db-utils";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const user = await getCachedUser();
@@ -10,9 +12,7 @@ export async function GET() {
         return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    console.log("API/ME: fetching profile for user", user.id);
     const profile = await getCachedProfileWithCouple(user.id);
-    console.log("API/ME: profile found:", !!profile, "couple found:", !!profile?.couple);
 
     const response = NextResponse.json({
       user,
@@ -22,13 +22,13 @@ export async function GET() {
 
     response.headers.set(
       "Cache-Control",
-      "private, max-age=30, stale-while-revalidate=60"
+      "no-store"
     );
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message ?? "Server error" },
+      { error: error instanceof Error ? error.message : "Server error" },
       { status: 500 }
     );
   }

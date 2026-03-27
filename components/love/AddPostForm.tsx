@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCouple } from "@/hooks/use-couple";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { useSession } from "next-auth/react";
+import { toast } from "@/lib/toast";
 
 interface AddPostFormProps {
     embedded?: boolean;
@@ -304,8 +305,11 @@ export function AddPostForm({ embedded = false, className, onSuccess }: AddPostF
                 // Update Recent Memory on dashboard
                 queryClient.invalidateQueries({ queryKey: ['recent-posts', couple.id] });
             }
+            toast.success("Memory created", "Your new memory is live.");
         } catch (e: any) {
-            setError(e?.message || 'Something went wrong');
+            const message = e?.message || 'Something went wrong';
+            setError(message);
+            toast.error("Couldn't create memory", message);
         } finally {
             setSubmitting(false);
         }

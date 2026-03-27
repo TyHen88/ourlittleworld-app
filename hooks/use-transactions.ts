@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage, toast } from "@/lib/toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface Transaction {
@@ -9,6 +10,7 @@ interface Transaction {
     category: string;
     note: string | null;
     payer: "HIS" | "HERS" | "SHARED";
+    type?: "INCOME" | "EXPENSE";
     created_by: string;
     transaction_date: string;
     created_at: string;
@@ -88,8 +90,17 @@ export function useCreateTransaction() {
         onSuccess: (data, variables) => {
             // Invalidate queries to trigger refetch
             const id = variables.coupleId || variables.userId;
-            queryClient.invalidateQueries({ queryKey: ['transactions', id] });
-            queryClient.invalidateQueries({ queryKey: ['budget-summary', id] });
+            if (id) {
+                queryClient.invalidateQueries({ queryKey: ['transactions', id] });
+                queryClient.invalidateQueries({ queryKey: ['budget-summary', id] });
+            }
+            toast.success(
+                data.type === "INCOME" ? "Income added" : "Transaction added",
+                `${data.category} for $${Number(data.amount).toFixed(2)} was saved.`,
+            );
+        },
+        onError: (error) => {
+            toast.error("Couldn't save transaction", getErrorMessage(error, "Failed to create transaction"));
         },
     });
 }
@@ -100,15 +111,17 @@ export function useUpdateTransaction() {
     return useMutation({
         mutationFn: async (data: {
             id: string;
-            coupleId: string;
+            coupleId?: string;
+            userId?: string;
             amount?: number;
             category?: string;
             note?: string;
             payer?: "HIS" | "HERS" | "SHARED";
             transactionDate?: string;
         }) => {
-            const { id, coupleId, ...updateData } = data;
+            const { id, coupleId, userId, ...updateData } = data;
             void coupleId;
+            void userId;
 
             const res = await fetch(`/api/transactions/${id}`, {
                 method: "PUT",
@@ -125,8 +138,15 @@ export function useUpdateTransaction() {
             return json.data as Transaction;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['transactions', variables.coupleId] });
-            queryClient.invalidateQueries({ queryKey: ['budget-summary', variables.coupleId] });
+            const ownerId = variables.coupleId || variables.userId;
+            if (ownerId) {
+                queryClient.invalidateQueries({ queryKey: ['transactions', ownerId] });
+                queryClient.invalidateQueries({ queryKey: ['budget-summary', ownerId] });
+            }
+            toast.success("Transaction updated", `${data.category} was updated.`);
+        },
+        onError: (error) => {
+            toast.error("Couldn't update transaction", getErrorMessage(error, "Failed to update transaction"));
         },
     });
 }
@@ -135,7 +155,7 @@ export function useDeleteTransaction() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (data: { id: string; coupleId: string }) => {
+        mutationFn: async (data: { id: string; coupleId?: string; userId?: string }) => {
             const res = await fetch(`/api/transactions/${data.id}`, {
                 method: "DELETE",
             });
@@ -149,8 +169,15 @@ export function useDeleteTransaction() {
             return json;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['transactions', variables.coupleId] });
-            queryClient.invalidateQueries({ queryKey: ['budget-summary', variables.coupleId] });
+            const ownerId = variables.coupleId || variables.userId;
+            if (ownerId) {
+                queryClient.invalidateQueries({ queryKey: ['transactions', ownerId] });
+                queryClient.invalidateQueries({ queryKey: ['budget-summary', ownerId] });
+            }
+            toast.success("Transaction deleted", "The transaction was removed.");
+        },
+        onError: (error) => {
+            toast.error("Couldn't delete transaction", getErrorMessage(error, "Failed to delete transaction"));
         },
     });
 }

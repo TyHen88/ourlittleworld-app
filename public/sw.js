@@ -1,69 +1,136 @@
-const CACHE_NAME = "ourlittleworld-v3"
-const urlsToCache = ["/", "/landing", "/manifest.json"]
+const CACHE_NAME = "ourlittleworld-static-v4";
+const OFFLINE_FALLBACK_URL = "/landing";
+const PRECACHE_URLS = [
+  OFFLINE_FALLBACK_URL,
+  "/manifest.json",
+  "/pwa-192x192.png",
+  "/pwa-512x512.png",
+  "/screenshot-mobile.png",
+  "/screenshot-desktop.png",
+];
+
+const CACHEABLE_PUBLIC_ASSET = /\.(?:png|jpg|jpeg|webp|gif|svg|ico|woff2?|ttf)$/i;
+
+function isSameOrigin(url) {
+  return url.origin === self.location.origin;
+}
+
+function isRuntimeCacheableAsset(requestUrl) {
+  if (!isSameOrigin(requestUrl)) {
+    return false;
+  }
+
+  if (
+    requestUrl.pathname.startsWith("/api/") ||
+    requestUrl.pathname.startsWith("/_next/") ||
+    requestUrl.pathname.startsWith("/dashboard") ||
+    requestUrl.pathname.startsWith("/feed") ||
+    requestUrl.pathname.startsWith("/budget") ||
+    requestUrl.pathname.startsWith("/goals") ||
+    requestUrl.pathname.startsWith("/settings") ||
+    requestUrl.pathname.startsWith("/trips") ||
+    requestUrl.pathname.startsWith("/world") ||
+    requestUrl.pathname.startsWith("/support") ||
+    requestUrl.pathname.startsWith("/profile")
+  ) {
+    return false;
+  }
+
+  if (requestUrl.search) {
+    return false;
+  }
+
+  return CACHEABLE_PUBLIC_ASSET.test(requestUrl.pathname);
+}
+
+function canStoreResponse(response) {
+  if (!response || response.status !== 200 || response.type !== "basic") {
+    return false;
+  }
+
+  const cacheControl = response.headers.get("Cache-Control") ?? "";
+  return !/(no-store|no-cache|private)/i.test(cacheControl);
+}
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache)
-    }),
-  )
-})
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME && cacheName.startsWith("ourlittleworld-")) {
+            return caches.delete(cacheName);
+          }
+
+          return undefined;
+        }),
+      );
+
+      if ("navigationPreload" in self.registration) {
+        await self.registration.navigationPreload.enable();
+      }
+
+      await self.clients.claim();
+    })(),
+  );
+});
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
-    return
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+
+  if (!isSameOrigin(requestUrl)) {
+    return;
   }
 
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match("/landing")),
-    )
-    return
+      (async () => {
+        try {
+          const preloadResponse = await event.preloadResponse;
+          if (preloadResponse) {
+            return preloadResponse;
+          }
+
+          return await fetch(event.request);
+        } catch {
+          const cache = await caches.open(CACHE_NAME);
+          return (await cache.match(OFFLINE_FALLBACK_URL)) ?? Response.error();
+        }
+      })(),
+    );
+    return;
+  }
+
+  if (!isRuntimeCacheableAsset(requestUrl)) {
+    return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      if (response) {
-        return response
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cachedResponse = await cache.match(event.request);
+
+      if (cachedResponse) {
+        return cachedResponse;
       }
 
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== "basic") {
-          return response
-        }
+      const networkResponse = await fetch(event.request);
+      if (canStoreResponse(networkResponse)) {
+        cache.put(event.request, networkResponse.clone());
+      }
 
-        const requestUrl = new URL(event.request.url)
-        const isProtectedAppRoute =
-          requestUrl.pathname.startsWith("/dashboard") ||
-          requestUrl.pathname.startsWith("/feed") ||
-          requestUrl.pathname.startsWith("/budget") ||
-          requestUrl.pathname.startsWith("/profile")
-
-        if (isProtectedAppRoute) {
-          return response
-        }
-
-        const responseToCache = response.clone()
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache)
-        })
-        return response
-      })
-    }),
-  )
-})
-
-self.addEventListener("activate", (event) => {
-  const cacheWhitelist = [CACHE_NAME]
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName)
-          }
-        }),
-      )
-    }),
-  )
-})
+      return networkResponse;
+    })(),
+  );
+});

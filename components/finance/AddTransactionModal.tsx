@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
-import { ShoppingBag, Coffee, Home, Heart, DollarSign, Calendar, TrendingUp, Upload, CheckCircle2, XCircle, TrendingDown, Wallet } from "lucide-react";
-import { useCreateTransaction, useTransactions, useBudgetSummary } from "@/hooks/use-transactions";
+import { ShoppingBag, Coffee, Home, Heart, DollarSign, Calendar, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { useCreateTransaction } from "@/hooks/use-transactions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCouple } from "@/hooks/use-couple";
+import { cn } from "@/lib/utils";
 
 interface AddTransactionModalProps {
     open: boolean;
@@ -138,223 +138,251 @@ export function AddTransactionModal({ open, onOpenChange, coupleId }: AddTransac
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[420px] border-none shadow-2xl bg-white/95 backdrop-blur-xl rounded-3xl p-6">
-                <DialogHeader>
-                    <DialogTitle className="text-center text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
-                        <Wallet className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={20} />
-                        {isSingle ? "Add Entry" : "Add Transaction"}
-                    </DialogTitle>
-                </DialogHeader>
+        <div
+            className={cn(
+                "fixed inset-0 z-50 flex items-end justify-center transition-all duration-300",
+                open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            )}
+            onClick={() => onOpenChange(false)}
+        >
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
 
-                <div className="space-y-4 py-3">
-                    {/* Transaction Type Toggle */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Type</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => {
-                                    setTransactionType("EXPENSE");
-                                    setCategory("Shopping");
-                                }}
-                                className={`p-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center ${transactionType === "EXPENSE"
-                                    ? "bg-red-100 text-red-600 ring-2 ring-offset-2 ring-red-300"
-                                    : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                                    }`}
-                            >
-                                <TrendingDown size={16} className="mr-1.5" />
-                                Expense
-                            </motion.button>
-                            <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => {
-                                    setTransactionType("INCOME");
-                                    setCategory("Salary");
-                                }}
-                                className={`p-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-center ${transactionType === "INCOME"
-                                    ? "bg-green-100 text-green-600 ring-2 ring-offset-2 ring-green-300"
-                                    : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                                    }`}
-                            >
-                                <TrendingUp size={16} className="mr-1.5" />
-                                Income
-                            </motion.button>
+            <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: open ? 0 : "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full max-w-none overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[84vh] sm:max-w-sm"
+            >
+                <div className="max-h-[92dvh] overflow-y-auto px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:max-h-[84vh]">
+                    <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3" />
+
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className={cn(
+                            "p-2.5 rounded-2xl",
+                            isSingle ? "bg-emerald-100 text-emerald-600" : "bg-romantic-blush text-romantic-heart"
+                        )}>
+                            <Wallet size={20} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-base font-black text-slate-800">
+                                {isSingle ? "Add Entry" : "Add Transaction"}
+                            </h3>
+                            <p className="text-[11px] text-slate-500 font-medium">
+                                Add a new {transactionType === "INCOME" ? "income" : "expense"} record
+                            </p>
                         </div>
                     </div>
 
-                    {/* Amount Input */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Amount</label>
-                        <div className="relative">
-                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                            <Input
-                                type="number"
-                                step="0.01"
-                                placeholder="0.00"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                className="pl-10 text-2xl font-bold h-12 rounded-2xl"
-                                autoFocus
-                            />
-                        </div>
-                    </div>
-
-                    {/* Category Selection */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Category</label>
-                        <div className="grid grid-cols-3 gap-1.5">
-                            {categories.map((cat) => {
-                                const Icon = cat.icon;
-                                return (
-                                    <motion.button
-                                        key={cat.name}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => setCategory(cat.name)}
-                                        className={`p-2 rounded-xl flex flex-col items-center gap-0.5 transition-all ${category === cat.name
-                                            ? `${cat.color} ring-2 ring-offset-1 ring-slate-300`
-                                            : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                                            }`}
-                                    >
-                                        <Icon size={16} />
-                                        <span className="text-[9px] font-bold">{cat.name}</span>
-                                    </motion.button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* Payer Selection - Only for couples */}
-                    {!isSingle && (
+                    <div className="space-y-3 py-1">
+                        {/* Transaction Type Toggle */}
                         <div>
-                            <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Who Paid?</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {PAYERS.map((p) => (
-                                    <motion.button
-                                        key={p.value}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => setPayer(p.value as any)}
-                                        className={`p-3 rounded-2xl font-bold text-sm transition-all ${payer === p.value
-                                            ? `${p.color} ring-2 ring-offset-2 ring-slate-300`
-                                            : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-                                            }`}
-                                    >
-                                        {p.label}
-                                    </motion.button>
-                                ))}
+                            <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-slate-600">Type</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => {
+                                        setTransactionType("EXPENSE");
+                                        setCategory("Shopping");
+                                    }}
+                                    className={`flex items-center justify-center rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${transactionType === "EXPENSE"
+                                        ? "bg-red-100 text-red-600 ring-2 ring-offset-2 ring-red-300"
+                                        : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                        }`}
+                                >
+                                    <TrendingDown size={14} className="mr-1.5" />
+                                    Expense
+                                </motion.button>
+                                <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => {
+                                        setTransactionType("INCOME");
+                                        setCategory("Salary");
+                                    }}
+                                    className={`flex items-center justify-center rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${transactionType === "INCOME"
+                                        ? "bg-green-100 text-green-600 ring-2 ring-offset-2 ring-green-300"
+                                        : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                        }`}
+                                >
+                                    <TrendingUp size={14} className="mr-1.5" />
+                                    Income
+                                </motion.button>
                             </div>
                         </div>
-                    )}
 
-                    {/* Receipt Upload : disabled for now */}
-                    {/* <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Receipt (Optional)</label>
-                        <div className="flex items-center gap-2">
-                            <label className="flex-1 cursor-pointer">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-
-                                        setUploadStatus("uploading");
-                                        setIsExtracting(true);
-
-                                        try {
-                                            const formData = new FormData();
-                                            formData.append("file", file);
-
-                                            const res = await fetch("/api/ocr/extract", {
-                                                method: "POST",
-                                                body: formData,
-                                            });
-
-                                            const json = await res.json();
-
-                                            if (!res.ok) throw new Error(json.error);
-
-                                            // Auto-populate fields from OCR
-                                            if (json.data.amount) setAmount(json.data.amount.toString());
-                                            if (json.data.date) setDate(json.data.date);
-                                            if (json.data.name) setNote(json.data.name);
-
-                                            setUploadStatus("success");
-                                        } catch (err) {
-                                            setUploadStatus("error");
-                                            setError("Failed to extract receipt data");
-                                        } finally {
-                                            setIsExtracting(false);
-                                        }
-                                    }}
+                        {/* Amount Input */}
+                        <div>
+                            <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-slate-600">Amount</label>
+                            <div className="relative">
+                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    className="h-11 rounded-xl pl-9 text-[18px] font-bold [font-size:18px]"
+                                    autoFocus
                                 />
-                                <div className="flex items-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-slate-200 hover:border-romantic-heart hover:bg-romantic-blush/10 transition-all">
-                                    <Upload size={16} className="text-slate-400" />
-                                    <span className="text-xs font-medium text-slate-500">
-                                        {isExtracting ? "Extracting..." : "Upload Receipt"}
-                                    </span>
-                                </div>
-                            </label>
-                            {uploadStatus === "success" && (
-                                <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
-                            )}
-                            {uploadStatus === "error" && (
-                                <XCircle size={20} className="text-red-500 flex-shrink-0" />
-                            )}
+                            </div>
                         </div>
-                    </div> */}
 
-                    {/* Note Input */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Note (Optional)</label>
-                        <Input
-                            placeholder="What was this for?"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            className="rounded-2xl text-sm"
-                        />
-                    </div>
+                        {/* Category Selection */}
+                        <div>
+                            <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-slate-600">Category</label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {categories.map((cat) => {
+                                    const Icon = cat.icon;
+                                    return (
+                                        <motion.button
+                                            key={cat.name}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => setCategory(cat.name)}
+                                            className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] transition-all ${category === cat.name
+                                                ? `${cat.color} ring-2 ring-offset-1 ring-slate-300`
+                                                : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                                }`}
+                                        >
+                                            <Icon size={14} />
+                                            <span className="font-bold leading-tight">{cat.name}</span>
+                                        </motion.button>
+                                    );
+                                })}
+                            </div>
+                        </div>
 
-                    {/* Date Input */}
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Date</label>
-                        <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                        {/* Payer Selection - Only for couples */}
+                        {!isSingle && (
+                            <div>
+                                <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-slate-600">Who Paid?</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {PAYERS.map((p) => (
+                                        <motion.button
+                                            key={p.value}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => setPayer(p.value as any)}
+                                            className={`rounded-xl px-2.5 py-2.5 text-xs font-bold transition-all ${payer === p.value
+                                                ? `${p.color} ring-2 ring-offset-2 ring-slate-300`
+                                                : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                                }`}
+                                        >
+                                            {p.label}
+                                        </motion.button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Receipt Upload : disabled for now */}
+                        {/* <div>
+                            <label className="text-[10px] font-bold text-slate-600 mb-1.5 block uppercase tracking-wide">Receipt (Optional)</label>
+                            <div className="flex items-center gap-2">
+                                <label className="flex-1 cursor-pointer">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+
+                                            setUploadStatus("uploading");
+                                            setIsExtracting(true);
+
+                                            try {
+                                                const formData = new FormData();
+                                                formData.append("file", file);
+
+                                                const res = await fetch("/api/ocr/extract", {
+                                                    method: "POST",
+                                                    body: formData,
+                                                });
+
+                                                const json = await res.json();
+
+                                                if (!res.ok) throw new Error(json.error);
+
+                                                // Auto-populate fields from OCR
+                                                if (json.data.amount) setAmount(json.data.amount.toString());
+                                                if (json.data.date) setDate(json.data.date);
+                                                if (json.data.name) setNote(json.data.name);
+
+                                                setUploadStatus("success");
+                                            } catch (err) {
+                                                setUploadStatus("error");
+                                                setError("Failed to extract receipt data");
+                                            } finally {
+                                                setIsExtracting(false);
+                                            }
+                                        }}
+                                    />
+                                    <div className="flex items-center gap-2 p-2.5 rounded-xl border-2 border-dashed border-slate-200 hover:border-romantic-heart hover:bg-romantic-blush/10 transition-all">
+                                        <Upload size={16} className="text-slate-400" />
+                                        <span className="text-xs font-medium text-slate-500">
+                                            {isExtracting ? "Extracting..." : "Upload Receipt"}
+                                        </span>
+                                    </div>
+                                </label>
+                                {uploadStatus === "success" && (
+                                    <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
+                                )}
+                                {uploadStatus === "error" && (
+                                    <XCircle size={20} className="text-red-500 flex-shrink-0" />
+                                )}
+                            </div>
+                        </div> */}
+
+                        {/* Note Input */}
+                        <div>
+                            <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-slate-600">Note (Optional)</label>
                             <Input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                className="pl-10 rounded-2xl"
+                                placeholder="What was this for?"
+                                value={note}
+                                onChange={(e) => setNote(e.target.value)}
+                                className="h-10 rounded-xl text-base [font-size:16px]"
                             />
                         </div>
-                    </div>
 
-                    {error && (
-                        <div className="text-sm text-red-500 text-center font-medium">
-                            {error}
+                        {/* Date Input */}
+                        <div>
+                            <label className="mb-1.5 block text-[9px] font-bold uppercase tracking-wide text-slate-600">Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                <Input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                    className="h-10 rounded-xl pl-9 text-base [font-size:16px]"
+                                />
+                            </div>
                         </div>
-                    )}
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-3">
-                        <Button
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            className="flex-1 rounded-2xl"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleSubmit}
-                            disabled={createTransaction.isPending}
-                            className={`flex-1 rounded-2xl ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600 border-none' : 'bg-gradient-button'}`}
-                        >
-                            {createTransaction.isPending ? "Adding..." : "Add Transaction"}
-                        </Button>
+                        {error && (
+                            <div className="text-xs text-red-500 text-center font-medium">
+                                {error}
+                            </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 pt-1">
+                            <Button
+                                variant="outline"
+                                onClick={() => onOpenChange(false)}
+                                className="h-10 flex-1 rounded-xl text-xs"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={createTransaction.isPending}
+                                className={`h-10 flex-1 rounded-xl text-xs ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600 border-none' : 'bg-gradient-button'}`}
+                            >
+                                {createTransaction.isPending ? "Adding..." : "Add Transaction"}
+                            </Button>
+                        </div>
                     </div>
                 </div>
-            </DialogContent>
-        </Dialog>
+            </motion.div>
+        </div>
     );
 }

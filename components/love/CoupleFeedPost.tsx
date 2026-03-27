@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Heart, MessageCircle, Share2, MoreHorizontal, X, ChevronLeft, ChevronRight, Send, CornerDownRight, ZoomIn, ZoomOut, Download, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toggleLikePost, addComment, addReply, deletePost } from "@/lib/actions/post";
+import { toast } from "@/lib/toast";
 
 interface PostProps {
     id: string;
@@ -325,7 +326,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
     return (
         <Card className={cn(
-            "overflow-hidden border-none shadow-xl bg-white/90 backdrop-blur-sm rounded-4xl group relative",
+            "group relative overflow-hidden rounded-[1.75rem] border-none bg-white/90 shadow-lg backdrop-blur-sm",
             isDeleting && "opacity-50 pointer-events-none"
         )}>
             {isDeleting && (
@@ -337,23 +338,23 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                 </div>
             )}
             {/* Post Header */}
-            <div className="border-b border-slate-100 p-4 flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <div className="flex items-center gap-3">
-                    <Avatar className="w-10 h-10 ring-2 ring-romantic-blush/20">
+                    <Avatar className="h-9 w-9 ring-2 ring-romantic-blush/20">
                         {avatarUrl && <AvatarImage src={avatarUrl} alt={author} />}
                         <AvatarFallback className="bg-gradient-button text-white text-xs font-bold">{author[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                        <h4 className="text-sm font-bold text-slate-800">{author}</h4>
-                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">{timestamp}</p>
+                        <h4 className="text-[13px] font-bold text-slate-800">{author}</h4>
+                        <p className="text-[9px] font-medium uppercase tracking-tight text-slate-400">{timestamp}</p>
                     </div>
                 </div>
                 <div className="relative">
                     <button 
                         onClick={() => setShowOptions(!showOptions)}
-                        className="text-slate-300 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100"
+                        className="rounded-full p-1 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600"
                     >
-                        <MoreHorizontal size={20} />
+                        <MoreHorizontal size={18} />
                     </button>
 
                     <AnimatePresence>
@@ -367,16 +368,16 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                     initial={{ opacity: 0, scale: 0.9, y: -10 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                    className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-20 overflow-hidden"
+                                    className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-2xl border border-slate-100 bg-white py-1.5 shadow-2xl"
                                 >
                                     <button
                                         onClick={() => {
                                             setShowOptions(false);
                                             // Handle sharing or other options
                                         }}
-                                        className="w-full px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
                                     >
-                                        <Share2 size={16} />
+                                        <Share2 size={15} />
                                         Share Memory
                                     </button>
                                     
@@ -401,17 +402,18 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                                         if (targetId) {
                                                             queryClient.setQueryData(POST_KEYS.recent(targetId), previousRecent);
                                                         }
-                                                        alert(res.error || "Failed to delete post.");
+                                                        toast.error("Couldn't delete memory", res.error || "Failed to delete post.");
                                                         setIsDeleting(false);
                                                     } else {
+                                                        toast.success("Memory deleted", "The memory was removed.");
                                                         setIsDeleted(true);
                                                     }
                                                 }
                                             }}
                                             disabled={isDeleting}
-                                            className="w-full px-4 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50"
                                         >
-                                            <X size={16} />
+                                            <X size={15} />
                                             {isDeleting ? "Deleting..." : "Delete Memory"}
                                         </button>
                                     )}
@@ -423,9 +425,9 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             </div>
 
             {/* Post Content - Separated by borders, no rounding, with Read More */}
-            <div className="bg-slate-50/30 px-5">
+            <div className="bg-slate-50/30 px-4">
                 <p className={cn(
-                    "text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words text-[15px]",
+                    "whitespace-pre-wrap break-words text-[14px] font-medium leading-relaxed text-slate-700",
                     !isExpanded && "line-clamp-3"
                 )}>
                     {content}
@@ -433,7 +435,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                 {content.length > 150 && (
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className="text-romantic-heart text-[10px] font-black tracking-widest mt-2 hover:opacity-70 transition-opacity"
+                        className="mt-1.5 text-[9px] font-black tracking-widest text-romantic-heart transition-opacity hover:opacity-70"
                     >
                         {isExpanded ? "Show Less" : "Read More"}
                     </button>
@@ -442,9 +444,9 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
             {/* Post Images Grid */}
             {images.length > 0 && (
-                <div className="px-4 pb-4">
+                <div className="px-3.5 pb-3.5">
                     <div className={cn(
-                        "grid gap-1 rounded-3xl overflow-hidden",
+                        "grid gap-1 overflow-hidden rounded-[1.35rem]",
                         images.length === 1 ? "grid-cols-1" :
                             images.length === 2 ? "grid-cols-2" :
                                 "grid-cols-2 grid-rows-2"
@@ -687,7 +689,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             </AnimatePresence>
 
             {/* Actions */}
-            <div className="px-5 pb-5 flex items-center gap-6">
+            <div className="flex items-center gap-5 px-4 pb-4">
                 <button
                     onClick={toggleLike}
                     disabled={isLiking}
@@ -699,7 +701,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                 "transition-all duration-300",
                                 isLiked ? "fill-romantic-heart text-romantic-heart scale-110" : "text-slate-400 group-hover/btn:text-romantic-petal"
                             )}
-                            size={22}
+                            size={20}
                         />
                         <AnimatePresence>
                             {isLiked && (
@@ -709,12 +711,12 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                     exit={{ opacity: 0 }}
                                     className="absolute inset-0 text-romantic-heart pointer-events-none"
                                 >
-                                    <Heart fill="currentColor" size={22} />
+                                    <Heart fill="currentColor" size={20} />
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
-                    <span className={cn("text-xs font-bold", isLiked ? "text-romantic-heart" : "text-slate-400")}>
+                    <span className={cn("text-[11px] font-bold", isLiked ? "text-romantic-heart" : "text-slate-400")}>
                         {isLiking ? "..." : likesCount}
                     </span>
                 </button>
@@ -726,12 +728,12 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                         isCommentsOpen ? "text-romantic-heart" : "text-slate-400 hover:text-slate-600"
                     )}
                 >
-                    <MessageCircle size={22} />
-                    <span className="text-xs font-bold">{dynamicCommentsCount}</span>
+                    <MessageCircle size={20} />
+                    <span className="text-[11px] font-bold">{dynamicCommentsCount}</span>
                 </button>
 
-                <button className="flex items-center gap-2 text-slate-400 hover:text-slate-600 transition-colors ml-auto">
-                    <Share2 size={20} />
+                <button className="ml-auto flex items-center gap-2 text-slate-400 transition-colors hover:text-slate-600">
+                    <Share2 size={18} />
                 </button>
             </div>
 
@@ -744,7 +746,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden bg-slate-50/50 border-t border-slate-100"
                     >
-                        <div className="p-4 space-y-4">
+                        <div className="space-y-3.5 p-3.5">
                             {/* Comment Input */}
                             <div className="flex items-center gap-2">
                                 <Avatar className="w-8 h-8">
@@ -771,7 +773,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                             </div>
 
                             {/* Comments List */}
-                            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="custom-scrollbar max-h-[280px] space-y-3.5 overflow-y-auto pr-2">
                                 {(localMetadata?.comments?.length ?? 0) === 0 ? (
                                     <p className="text-center text-xs text-slate-400 py-2">No comments yet. Be the first!</p>
                                 ) : (

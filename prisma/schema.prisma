@@ -31,6 +31,7 @@ model User {
   // Custom fields from Profile
   full_name            String?
   avatar_url           String?
+  bio                  String?   @db.Text
 
   onboarding_completed Boolean   @default(false)
   user_type            String    @default("COUPLE") // "SINGLE" or "COUPLE"

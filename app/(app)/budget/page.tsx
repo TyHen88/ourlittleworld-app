@@ -88,7 +88,7 @@ export default function BudgetPage() {
             >
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
+                        <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
                             <Wallet className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
                             {isSingle ? "My Balance" : "Shared Balance"}
                         </h1>
@@ -115,7 +115,7 @@ export default function BudgetPage() {
                 </div>
             </motion.header>
 
-            {statusInfo && transactions && transactions.length > 0 && (
+            {/*{statusInfo && transactions && transactions.length > 0 && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -131,7 +131,7 @@ export default function BudgetPage() {
                         </div>
                     </Card>
                 </motion.div>
-            )}
+            )} */}
 
             {hasBudget && (
                 <motion.div
@@ -312,7 +312,7 @@ export default function BudgetPage() {
                 </>
             )}
 
-            {hasBudget && transactions && transactions.length > 0 && !detailModalOpen && (
+            {hasBudget && transactions && transactions.length > 0 && !detailModalOpen && !transactionModalOpen && (
                 <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}

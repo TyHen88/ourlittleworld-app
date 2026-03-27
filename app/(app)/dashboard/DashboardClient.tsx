@@ -7,7 +7,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, Bell, Upload, MessageCircleHeart, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
-import { DailyMoodModal } from "@/components/moods/DailyMoodModal";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
 
@@ -46,7 +45,6 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ user, profile, couple, daysTogether, daysActive }: DashboardClientProps) {
-    const [moodModalOpen, setMoodModalOpen] = useState(false);
     const [displayMode, setDisplayMode] = useState<"days" | "months">("days");
     const isSingle = profile?.user_type === "SINGLE";
 
@@ -61,7 +59,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
             {/* Header Section */}
             <header className="flex items-center justify-between">
                 <div className="space-y-1">
-                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
+                    <h1 className="text-xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
                         {isSingle ? (
                             <Stars className="text-emerald-500 fill-emerald-500" size={24} />
                         ) : (
@@ -289,22 +287,6 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <p className="text-xs text-slate-500 mt-1">Check your progress</p>
                     </motion.a>
 
-                    <motion.button
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setMoodModalOpen(true)}
-                        className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group"
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className="p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors">
-                                <Heart className="text-pink-600" size={20} />
-                            </div>
-                            <ArrowRight className="text-pink-300 group-hover:text-pink-400 transition-colors" size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Daily Mood</h4>
-                        <p className="text-xs text-slate-500 mt-1">How are you feeling?</p>
-                    </motion.button>
-
                     <motion.a
                         href="/calendar"
                         whileHover={{ scale: 1.02, y: -2 }}
@@ -479,11 +461,6 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
             {/* Floating Button for Mood Check-in */}
             {/* Main Floating Button for Mood Check-in is now handled by AIFloatingAdvisor */}
             <AIFloatingAdvisor isSingle={isSingle} />
-
-            <DailyMoodModal
-                open={moodModalOpen}
-                onOpenChange={setMoodModalOpen}
-            />
         </div>
     );
 }

@@ -2,88 +2,382 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-    MapPin, 
-    Calendar, 
-    DollarSign, 
-    Plus, 
-    ArrowLeft, 
-    X, 
-    Plane, 
-    Compass, 
-    History,
-    MoreVertical,
+import {
+    MapPin,
+    MapPinned,
+    Calendar,
+    Plus,
+    ArrowLeft,
+    X,
+    Plane,
+    Compass,
     Trash2,
-    CheckCircle2,
     Clock,
-    Sparkles,
-    Heart,
-    Stars
+    Stars,
+    MoveRight,
+    NotebookText,
+    PencilLine,
+    Users
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getErrorMessage, toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { createTrip, deleteTrip } from "@/lib/actions/trips";
+import { createTrip, deleteTrip, updateTrip } from "@/lib/actions/trips";
 import { useRouter } from "next/navigation";
 
-interface TripsClientProps {
-    user: any;
-    profile: any;
-    initialTrips: any[];
+type TripBudgetCurrency = "USD" | "KHR";
+
+interface TripRecord {
+    budget?: number | string | null;
+    destination: string;
+    end_date: string | Date;
+    id: string;
+    metadata?: unknown;
+    notes?: string | null;
+    start_date: string | Date;
+    status?: string | null;
+    title: string;
 }
 
-export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
-    const router = useRouter();
-    const [trips, setTrips] = useState(initialTrips);
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+interface TripFormState {
+    budget: string;
+    budgetCurrency: TripBudgetCurrency;
+    destination: string;
+    endDate: string;
+    isSolo: boolean;
+    notes: string;
+    startDate: string;
+    title: string;
+}
 
-    const isSingle = profile?.user_type === 'SINGLE';
-    const themeColor = isSingle ? "emerald" : "romantic";
-    const accentColor = isSingle ? "emerald-600" : "romantic-heart";
+interface TripsClientProps {
+    user: unknown;
+    profile: {
+        user_type?: string | null;
+    } | null;
+    initialTrips: TripRecord[];
+}
 
-    const [newTrip, setNewTrip] = useState({
+interface CambodiaDestinationOption {
+    aliases?: string[];
+    label: string;
+    note?: string;
+}
+
+const CAMBODIA_DESTINATIONS: CambodiaDestinationOption[] = [
+    { label: "Banteay Meanchey" },
+    { label: "Battambang" },
+    { label: "Kampong Cham" },
+    { label: "Kampong Chhnang" },
+    { label: "Kampong Speu" },
+    { label: "Kampong Thom" },
+    { label: "Kampot" },
+    { label: "Kandal" },
+    { label: "Kep" },
+    { label: "Koh Kong" },
+    { label: "Kratie" },
+    { label: "Mondulkiri" },
+    { label: "Oddar Meanchey" },
+    { label: "Pailin" },
+    { label: "Phnom Penh", aliases: ["Phnom Penh (Capital City)"], note: "Capital city" },
+    { label: "Preah Sihanouk", aliases: ["Sihanoukville"] },
+    { label: "Preah Vihear" },
+    { label: "Prey Veng" },
+    { label: "Pursat" },
+    { label: "Rattanakiri", aliases: ["Ratanakiri"] },
+    { label: "Siem Reap" },
+    { label: "Stung Treng" },
+    { label: "Svay Rieng" },
+    { label: "Takeo" },
+    { label: "Tbong Khmum", aliases: ["Tboung Khmum"] },
+];
+
+function normalizeDestination(value: string) {
+    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function matchesCambodiaDestination(option: CambodiaDestinationOption, value: string) {
+    const normalizedValue = normalizeDestination(value);
+
+    if (!normalizedValue) return true;
+
+    return [option.label, ...(option.aliases ?? [])].some((candidate) =>
+        normalizeDestination(candidate).includes(normalizedValue),
+    );
+}
+
+function findCambodiaDestination(value: string) {
+    const normalizedValue = normalizeDestination(value);
+
+    if (!normalizedValue) return null;
+
+    return (
+        CAMBODIA_DESTINATIONS.find((option) =>
+            [option.label, ...(option.aliases ?? [])].some(
+                (candidate) => normalizeDestination(candidate) === normalizedValue,
+            ),
+        ) ?? null
+    );
+}
+
+function createEmptyTripForm(isSolo: boolean): TripFormState {
+    return {
         title: "",
         destination: "",
         startDate: "",
         endDate: "",
         budget: "",
+        budgetCurrency: "USD",
         notes: "",
-        isSolo: isSingle
-    });
+        isSolo,
+    };
+}
+
+function getTripBudgetCurrency(trip: Pick<TripRecord, "metadata"> | { metadata?: unknown }) {
+    if (!trip.metadata || typeof trip.metadata !== "object" || Array.isArray(trip.metadata)) {
+        return "USD";
+    }
+
+    const budgetCurrency = (trip.metadata as { budgetCurrency?: unknown }).budgetCurrency;
+
+    return budgetCurrency === "KHR" ? "KHR" : "USD";
+}
+
+function formatTripBudget(amount: number | string, currency: TripBudgetCurrency) {
+    const numericAmount = typeof amount === "number" ? amount : Number(amount);
+
+    if (!Number.isFinite(numericAmount)) return "";
+
+    if (currency === "KHR") {
+        return `${new Intl.NumberFormat("en-US", {
+            maximumFractionDigits: 0,
+        }).format(numericAmount)}៛`;
+    }
+
+    const hasDecimals = Math.abs(numericAmount % 1) > 0.000001;
+
+    return `$${new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: hasDecimals ? 2 : 0,
+        maximumFractionDigits: 2,
+    }).format(numericAmount)}`;
+}
+
+function parseTripBudgetInput(value: string, currency: TripBudgetCurrency) {
+    const normalized = value.replace(/,/g, "").trim();
+
+    if (!normalized) return null;
+
+    const amount = currency === "KHR"
+        ? Number(normalized.replace(/[^\d]/g, ""))
+        : Number(normalized.replace(/[^\d.]/g, ""));
+
+    if (!Number.isFinite(amount)) return null;
+
+    return currency === "KHR"
+        ? Math.round(amount)
+        : Math.round(amount * 100) / 100;
+}
+
+function formatTripBudgetInput(value: string, currency: TripBudgetCurrency) {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) return "";
+
+    if (currency === "KHR") {
+        const digits = trimmedValue.replace(/[^\d]/g, "");
+
+        if (!digits) return "";
+
+        return new Intl.NumberFormat("en-US", {
+            maximumFractionDigits: 0,
+        }).format(Number(digits));
+    }
+
+    const cleanValue = trimmedValue.replace(/[^\d.]/g, "");
+    const hasDecimalPoint = cleanValue.includes(".");
+    const [rawIntegerPart = "", rawDecimalPart = ""] = cleanValue.split(".");
+    const integerPart = rawIntegerPart.replace(/^0+(?=\d)/, "") || (rawIntegerPart ? "0" : "");
+    const formattedIntegerPart = integerPart
+        ? new Intl.NumberFormat("en-US", {
+            maximumFractionDigits: 0,
+        }).format(Number(integerPart))
+        : "";
+    const decimalPart = rawDecimalPart.replace(/\./g, "").slice(0, 2);
+
+    if (!formattedIntegerPart && !hasDecimalPoint) return "";
+
+    if (hasDecimalPoint) {
+        return `${formattedIntegerPart || "0"}.${decimalPart}`;
+    }
+
+    return formattedIntegerPart;
+}
+
+function toTripForm(trip: TripRecord, isSolo: boolean): TripFormState {
+    const budgetCurrency = getTripBudgetCurrency(trip);
+
+    return {
+        title: trip.title,
+        destination: trip.destination,
+        startDate: format(new Date(trip.start_date), "yyyy-MM-dd"),
+        endDate: format(new Date(trip.end_date), "yyyy-MM-dd"),
+        budget: trip.budget ? formatTripBudgetInput(trip.budget.toString(), budgetCurrency) : "",
+        budgetCurrency,
+        notes: trip.notes ?? "",
+        isSolo,
+    };
+}
+
+export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
+    void user;
+
+    const router = useRouter();
+    const [trips, setTrips] = useState(initialTrips);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDestinationMenuOpen, setIsDestinationMenuOpen] = useState(false);
+    const [editingTripId, setEditingTripId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+
+    const isSingle = profile?.user_type === 'SINGLE';
+    const isEditingTrip = editingTripId !== null;
+
+    const [newTrip, setNewTrip] = useState<TripFormState>(() => createEmptyTripForm(isSingle));
+
+    const filteredDestinations = CAMBODIA_DESTINATIONS.filter((option) =>
+        matchesCambodiaDestination(option, newTrip.destination),
+    );
+    const selectedDestination = findCambodiaDestination(newTrip.destination);
+
+    const resetTripForm = () => {
+        setNewTrip(createEmptyTripForm(isSingle));
+        setEditingTripId(null);
+        setIsDestinationMenuOpen(false);
+    };
+
+    const closeTripModal = () => {
+        setIsAddModalOpen(false);
+        resetTripForm();
+    };
+
+    const openCreateTripModal = () => {
+        resetTripForm();
+        setIsAddModalOpen(true);
+    };
+
+    const openEditTripModal = (trip: TripRecord) => {
+        setEditingTripId(trip.id);
+        setNewTrip(toTripForm(trip, isSingle));
+        setIsDestinationMenuOpen(false);
+        setIsAddModalOpen(true);
+    };
+
+    const selectDestination = (destination: CambodiaDestinationOption) => {
+        setNewTrip((prevTrip) => ({
+            ...prevTrip,
+            destination: destination.label,
+        }));
+        setIsDestinationMenuOpen(false);
+    };
+
+    const handleBudgetInputChange = (value: string) => {
+        setNewTrip((prevTrip) => ({
+            ...prevTrip,
+            budget: formatTripBudgetInput(value, prevTrip.budgetCurrency),
+        }));
+    };
+
+    const handleBudgetCurrencyChange = (currency: TripBudgetCurrency) => {
+        setNewTrip((prevTrip) => {
+            if (prevTrip.budgetCurrency === currency) {
+                return prevTrip;
+            }
+
+            const parsedBudget = parseTripBudgetInput(prevTrip.budget, prevTrip.budgetCurrency);
+
+            if (prevTrip.budget) {
+                toast.info(
+                    "Currency updated",
+                    "The number was kept as-is and not converted. Adjust it if needed.",
+                );
+            }
+
+            return {
+                ...prevTrip,
+                budgetCurrency: currency,
+                budget: parsedBudget == null
+                    ? ""
+                    : formatTripBudgetInput(parsedBudget.toString(), currency),
+            };
+        });
+    };
 
     const handleAddTrip = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const provinceDestination = findCambodiaDestination(newTrip.destination);
+
+        if (!provinceDestination) {
+            toast.error(
+                "Choose a Cambodia destination",
+                "Select one of Cambodia's 25 provinces or Phnom Penh from the search list.",
+            );
+            setIsDestinationMenuOpen(true);
+            return;
+        }
+
+        const parsedBudget = parseTripBudgetInput(newTrip.budget, newTrip.budgetCurrency);
+
+        if (newTrip.budget.trim() && parsedBudget == null) {
+            toast.error(
+                "Invalid budget amount",
+                `Enter a valid ${newTrip.budgetCurrency === "KHR" ? "Riel" : "Dollar"} amount.`,
+            );
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            const result = await createTrip({
+            const payload = {
                 title: newTrip.title,
-                destination: newTrip.destination,
+                destination: provinceDestination.label,
                 startDate: new Date(newTrip.startDate),
                 endDate: new Date(newTrip.endDate),
-                budget: newTrip.budget ? parseFloat(newTrip.budget) : undefined,
+                budget: parsedBudget ?? undefined,
+                budgetCurrency: newTrip.budgetCurrency,
                 notes: newTrip.notes,
                 isSolo: newTrip.isSolo
-            });
+            };
+            const result = editingTripId
+                ? await updateTrip(editingTripId, payload)
+                : await createTrip(payload);
 
             if (result.success) {
-                setTrips([result.data, ...trips]);
-                setIsAddModalOpen(false);
-                setNewTrip({
-                    title: "",
-                    destination: "",
-                    startDate: "",
-                    endDate: "",
-                    budget: "",
-                    notes: "",
-                    isSolo: isSingle
-                });
+                setTrips((prevTrips) =>
+                    editingTripId
+                        ? prevTrips.map((trip) =>
+                            trip.id === editingTripId ? result.data : trip,
+                        )
+                        : [result.data, ...prevTrips],
+                );
+                closeTripModal();
+                toast.success(
+                    editingTripId ? "Trip updated" : "Trip created",
+                    editingTripId
+                        ? `${result.data.title} was updated.`
+                        : `${result.data.title} is now in your planner.`,
+                );
                 router.refresh();
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
+            toast.error(
+                editingTripId ? "Couldn't update trip" : "Couldn't create trip",
+                getErrorMessage(error, "Please try again."),
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -94,15 +388,20 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
         try {
             const result = await deleteTrip(tripId);
             if (result.success) {
-                setTrips(trips.filter(t => t.id !== tripId));
+                setTrips((prevTrips) => prevTrips.filter((trip) => trip.id !== tripId));
+                if (editingTripId === tripId) {
+                    closeTripModal();
+                }
+                toast.success("Trip deleted", "The trip was removed from your planner.");
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
+            toast.error("Couldn't delete trip", getErrorMessage(error, "Please try again."));
         }
     };
 
-    const upcomingTrips = trips.filter(t => new Date(t.end_date) >= new Date());
-    const pastTrips = trips.filter(t => new Date(t.end_date) < new Date());
+    const upcomingTrips = trips.filter((trip) => trip.status !== "COMPLETED");
+    const pastTrips = trips.filter((trip) => trip.status === "COMPLETED");
     const filteredTrips = activeTab === "upcoming" ? upcomingTrips : pastTrips;
 
     return (
@@ -110,37 +409,28 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
             {/* Header */}
             <header className={`sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b ${isSingle ? 'border-emerald-100' : 'border-romantic-blush/30'}`}>
                 <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
-                    <button onClick={() => router.back()} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
-                        <ArrowLeft size={20} className="text-slate-600" />
-                    </button>
-                    <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
-                        {isSingle ? <Stars className="text-emerald-500" size={20} /> : <Compass className="text-romantic-heart" size={20} />}
-                        Trip Planner
-                    </h1>
-                    <div className="w-10" /> {/* Spacer */}
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <button onClick={() => router.back()} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
+                            <ArrowLeft size={20} className="text-slate-600" />
+                        </button>
+                        <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2 text-left">
+                            {isSingle ? <Stars className="text-emerald-500" size={20} /> : <Compass className="text-romantic-heart" size={20} />}
+                            Trip Planner
+                        </h1>
+                    </div>
                 </div>
             </header>
 
-            <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
-                {/* Stats / Welcome */}
-                <div className="text-center space-y-2">
-                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${isSingle ? 'bg-emerald-50 text-emerald-600' : 'bg-romantic-blush/30 text-romantic-heart'}`}>
-                        {isSingle ? 'Solo Adventures' : "Our Shared Travels"}
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900 leading-tight">
-                        {isSingle ? "Where to next, Explorer?" : "Where's our next adventure?"}
-                    </h2>
-                </div>
-
+            <div className="max-w-2xl mx-auto px-4 py-4 space-y-8">
                 {/* Tabs */}
                 <div className="flex bg-slate-100 p-1 rounded-2xl w-full">
-                    <button 
+                    <button
                         onClick={() => setActiveTab("upcoming")}
                         className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${activeTab === "upcoming" ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
                     >
                         Upcoming
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab("past")}
                         className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${activeTab === "past" ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
                     >
@@ -155,13 +445,17 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                             <div className={`w-20 h-20 mx-auto rounded-3xl flex items-center justify-center ${isSingle ? 'bg-emerald-50' : 'bg-romantic-blush/20'}`}>
                                 <Plane size={32} className={isSingle ? 'text-emerald-400' : 'text-romantic-heart/40'} />
                             </div>
-                            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No trips planned yet</p>
-                            <Button 
-                                onClick={() => setIsAddModalOpen(true)}
-                                className={`rounded-full px-6 font-bold shadow-lg ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-romantic-heart hover:bg-romantic-heart/90'}`}
-                            >
-                                Start Planning
-                            </Button>
+                            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">
+                                {activeTab === "past" ? "No memories yet" : "No trips planned yet"}
+                            </p>
+                            {activeTab === "upcoming" && (
+                                <Button
+                                    onClick={openCreateTripModal}
+                                    className={`rounded-full px-6 font-bold shadow-lg ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-romantic-heart hover:bg-romantic-heart/90'}`}
+                                >
+                                    Start Planning
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         filteredTrips.map((trip, idx) => (
@@ -171,44 +465,111 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: idx * 0.1 }}
                             >
-                                <Card className="overflow-hidden border-none shadow-sm hover:shadow-md transition-shadow group">
-                                    <div className="p-5 flex gap-4">
-                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 ${isSingle ? 'bg-emerald-50 text-emerald-600' : 'bg-romantic-blush/40 text-romantic-heart'}`}>
-                                            <MapPin size={24} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div>
-                                                    <h3 className="text-lg font-bold text-slate-800 truncate">{trip.title}</h3>
-                                                    <p className="text-sm font-medium text-slate-500 truncate">{trip.destination}</p>
+                                <Card
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => openEditTripModal(trip)}
+                                    onKeyDown={(event) => {
+                                        if (event.key !== "Enter" && event.key !== " ") return;
+                                        event.preventDefault();
+                                        openEditTripModal(trip);
+                                    }}
+                                    className="cursor-pointer overflow-hidden border border-slate-200/80 bg-white shadow-sm transition-shadow hover:shadow-md"
+                                >
+                                    <div className={`h-1 w-full ${isSingle ? 'bg-emerald-500/80' : 'bg-romantic-heart/80'}`} />
+                                    <div className="p-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="mb-2 flex items-center gap-2">
+                                                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isSingle ? 'bg-emerald-50 text-emerald-700' : 'bg-romantic-blush/25 text-romantic-heart'}`}>
+                                                        {isSingle ? "My Trip" : "Our Trip"}
+                                                    </span>
+                                                    {trip.status === 'ONGOING' && (
+                                                        <span className="inline-flex items-center rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                                                            Ongoing
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <button 
-                                                    onClick={() => handleDeleteTrip(trip.id)}
-                                                    className="p-1.5 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+
+                                                <div className="flex items-center gap-3 text-lg font-black tracking-tight text-slate-900 sm:text-xl">
+                                                    <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full ${isSingle ? 'bg-emerald-50 text-emerald-600' : 'bg-romantic-blush/25 text-romantic-heart'}`}>
+                                                        {isSingle ? <Stars size={14} /> : <Users size={14} />}
+                                                    </span>
+                                                    <span className="shrink-0">{isSingle ? "My" : "Our"}</span>
+                                                    <div className="flex min-w-8 flex-1 items-center">
+                                                        <div className="h-px flex-1 bg-slate-200" />
+                                                        <MoveRight size={18} className="shrink-0 text-slate-300" />
+                                                    </div>
+                                                    <span className={cn(
+                                                        "inline-flex min-w-0 items-center justify-end gap-1.5 truncate text-right",
+                                                        isSingle ? "text-emerald-600" : "text-romantic-heart"
+                                                    )}>
+                                                        <MapPinned size={15} className="shrink-0" />
+                                                        <span className="truncate">{trip.destination}</span>
+                                                    </span>
+                                                </div>
+
+                                                <p className="mt-1 inline-flex max-w-full items-center gap-1.5 truncate text-sm font-semibold text-slate-500">
+                                                    <Plane size={13} className="shrink-0 text-slate-400" />
+                                                    <span className="truncate">{trip.title}</span>
+                                                </p>
+                                            </div>
+
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openEditTripModal(trip);
+                                                    }}
+                                                    className={`rounded-full p-2 transition-colors ${isSingle ? 'text-emerald-400 hover:bg-emerald-50 hover:text-emerald-600' : 'text-romantic-heart/60 hover:bg-romantic-blush/20 hover:text-romantic-heart'}`}
+                                                >
+                                                    <PencilLine size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        void handleDeleteTrip(trip.id);
+                                                    }}
+                                                    className="rounded-full p-2 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500"
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
                                             </div>
-                                            
-                                            <div className="mt-4 flex flex-wrap gap-3">
-                                                <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-slate-400">
-                                                    <Calendar size={12} />
+                                        </div>
+
+                                        <div className="mt-4 grid gap-2.5">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
+                                                    <Calendar size={12} className="text-slate-400" />
                                                     {format(new Date(trip.start_date), 'MMM d')} - {format(new Date(trip.end_date), 'MMM d, yyyy')}
                                                 </div>
-                                                {trip.budget && (
-                                                    <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-emerald-500">
-                                                        <DollarSign size={12} />
-                                                        Budget: ${parseFloat(trip.budget.toString()).toLocaleString()}
+                                                {trip.budget ? (
+                                                    <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold ${isSingle ? 'bg-emerald-50 text-emerald-700' : 'bg-romantic-blush/25 text-romantic-heart'}`}>
+                                                        {/* <span className="text-[10px] font-black">
+                                                            {getTripBudgetCurrency(trip) === "KHR" ? "៛" : "$"}
+                                                        </span> */}
+                                                        {formatTripBudget(trip.budget, getTripBudgetCurrency(trip))}
                                                     </div>
-                                                )}
+                                                ) : null}
                                             </div>
+
+                                            {trip.notes ? (
+                                                <div className="flex items-start gap-2 rounded-2xl bg-slate-50 px-3 py-2.5">
+                                                    <NotebookText size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                                                    <p className="text-[11px] font-medium leading-relaxed text-slate-500">
+                                                        {trip.notes}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2.5">
+                                                    <MapPin size={14} className="shrink-0 text-slate-400" />
+                                                    <p className="text-[11px] font-medium text-slate-500">
+                                                        {isSingle ? "Solo plan ready for this destination." : "Shared getaway ready for both of you."}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    {trip.status === 'ONGOING' && (
-                                        <div className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest text-center py-1">
-                                            Currently Traveling
-                                        </div>
-                                    )}
                                 </Card>
                             </motion.div>
                         ))
@@ -217,113 +578,249 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
             </div>
 
             {/* Floating Action Button */}
-            <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsAddModalOpen(true)}
-                className={`fixed bottom-24 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-40 border-2 border-white text-white ${isSingle ? 'bg-emerald-500' : 'bg-romantic-heart'}`}
-            >
-                <Plus size={24} />
-            </motion.button>
+            {!isAddModalOpen && (
+                <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={openCreateTripModal}
+                    className={`fixed bottom-24 right-6 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center z-40 border-2 border-white text-white ${isSingle ? 'bg-emerald-500' : 'bg-romantic-heart'}`}
+                >
+                    <Plus size={24} />
+                </motion.button>
+            )}
 
             {/* Add Trip Modal */}
             <AnimatePresence>
                 {isAddModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div 
+                    <div className="fixed inset-0 z-50 flex items-end justify-center">
+                        <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                            onClick={() => setIsAddModalOpen(false)}
+                            onClick={closeTripModal}
                         />
-                        <motion.div 
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="relative w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl p-6"
+                        <motion.div
+                            initial={{ y: "100%" }}
+                            animate={{ y: 0 }}
+                            exit={{ y: "100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                            className="relative w-full max-w-none overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-lg sm:rounded-3xl sm:mb-4"
                         >
-                            <div className="flex items-center justify-between mb-8">
-                                <h2 className="text-xl font-black text-slate-800">Plan New Trip</h2>
-                                <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                                    <X size={20} className="text-slate-400" />
-                                </button>
-                            </div>
+                            <div className="max-h-[90dvh] overflow-y-auto px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-6">
+                                <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200" />
 
-                            <form onSubmit={handleAddTrip} className="space-y-5">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Trip Name</label>
-                                    <Input 
-                                        required
-                                        placeholder="e.g. Summer in Kyoto"
-                                        value={newTrip.title}
-                                        onChange={e => setNewTrip({...newTrip, title: e.target.value})}
-                                        className="rounded-2xl border-slate-100 focus:ring-emerald-500"
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Destination</label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                        <Input 
-                                            required
-                                            placeholder="Where are you going?"
-                                            value={newTrip.destination}
-                                            onChange={e => setNewTrip({...newTrip, destination: e.target.value})}
-                                            className="pl-12 rounded-2xl border-slate-100 focus:ring-emerald-500"
-                                        />
+                                <div className="mb-4 flex items-center gap-3">
+                                    <div className={cn(
+                                        "rounded-2xl p-2.5",
+                                        isSingle ? "bg-emerald-100 text-emerald-600" : "bg-romantic-blush/30 text-romantic-heart"
+                                    )}>
+                                        {isSingle ? <Stars size={20} /> : <Compass size={20} />}
                                     </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Start Date</label>
-                                        <Input 
-                                            required
-                                            type="date"
-                                            value={newTrip.startDate}
-                                            onChange={e => setNewTrip({...newTrip, startDate: e.target.value})}
-                                            className="rounded-2xl border-slate-100 focus:ring-emerald-500"
-                                        />
+                                    <div className="min-w-0 flex-1">
+                                        <h2 className="text-base font-black text-slate-800 sm:text-lg">
+                                            {isEditingTrip ? "Edit Trip" : "Plan New Trip"}
+                                        </h2>
+                                        <p className="text-[11px] font-medium text-slate-500">
+                                            {isEditingTrip
+                                                ? "Update the destination, dates, budget, or notes for this trip"
+                                                : isSingle
+                                                    ? "Map out your next solo adventure"
+                                                    : "Set dates, place, and budget for your next trip"}
+                                        </p>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">End Date</label>
-                                        <Input 
-                                            required
-                                            type="date"
-                                            value={newTrip.endDate}
-                                            onChange={e => setNewTrip({...newTrip, endDate: e.target.value})}
-                                            className="rounded-2xl border-slate-100 focus:ring-emerald-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Budget (Optional)</label>
-                                    <div className="relative">
-                                        <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                        <Input 
-                                            type="number"
-                                            placeholder="0.00"
-                                            value={newTrip.budget}
-                                            onChange={e => setNewTrip({...newTrip, budget: e.target.value})}
-                                            className="pl-12 rounded-2xl border-slate-100 focus:ring-emerald-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="pt-4 pb-2">
-                                    <Button 
-                                        type="submit"
-                                        disabled={isSubmitting}
-                                        className={`w-full py-6 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-romantic-heart hover:bg-romantic-heart/90'}`}
+                                    <button
+                                        onClick={closeTripModal}
+                                        className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100"
                                     >
-                                        {isSubmitting ? <Clock className="animate-spin" size={18} /> : <Plus size={18} />}
-                                        {isSubmitting ? "Creating Trip..." : "Create Trip"}
-                                    </Button>
+                                        <X size={18} />
+                                    </button>
                                 </div>
-                            </form>
+
+                                <form onSubmit={handleAddTrip} className="space-y-3">
+                                    <div className="space-y-1.5">
+                                        <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Trip Name</label>
+                                        <Input
+                                            required
+                                            placeholder="e.g. Kampot Beach"
+                                            value={newTrip.title}
+                                            onChange={e => setNewTrip({ ...newTrip, title: e.target.value })}
+                                            className={`h-11 rounded-xl border-slate-100 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Destination</label>
+                                        <div className="relative">
+                                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                                            <Input
+                                                required
+                                                autoComplete="off"
+                                                placeholder="Search Cambodia province"
+                                                value={newTrip.destination}
+                                                onBlur={() => setIsDestinationMenuOpen(false)}
+                                                onChange={(e) => {
+                                                    setNewTrip({ ...newTrip, destination: e.target.value });
+                                                    setIsDestinationMenuOpen(true);
+                                                }}
+                                                onFocus={() => setIsDestinationMenuOpen(true)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key !== "Enter" || filteredDestinations.length === 0) return;
+
+                                                    event.preventDefault();
+                                                    selectDestination(selectedDestination ?? filteredDestinations[0]);
+                                                }}
+                                                className={`h-11 rounded-xl border-slate-100 pl-9 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                            />
+
+                                            {isDestinationMenuOpen && (
+                                                <div className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl">
+                                                    <div className="max-h-56 overflow-y-auto p-1.5">
+                                                        {filteredDestinations.length > 0 ? (
+                                                            filteredDestinations.map((destination) => (
+                                                                <button
+                                                                    key={destination.label}
+                                                                    type="button"
+                                                                    onMouseDown={(event) => {
+                                                                        event.preventDefault();
+                                                                        selectDestination(destination);
+                                                                    }}
+                                                                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors ${selectedDestination?.label === destination.label
+                                                                        ? isSingle
+                                                                            ? "bg-emerald-50 text-emerald-700"
+                                                                            : "bg-romantic-blush/20 text-romantic-heart"
+                                                                        : "text-slate-600 hover:bg-slate-50"
+                                                                        }`}
+                                                                >
+                                                                    <div className="min-w-0">
+                                                                        <p className="truncate text-sm font-bold">
+                                                                            {destination.label}
+                                                                        </p>
+                                                                        <p className="text-[10px] font-medium text-slate-400">
+                                                                            {destination.note ?? "Province"}
+                                                                        </p>
+                                                                    </div>
+                                                                    <MapPin size={14} className="shrink-0 opacity-60" />
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="px-3 py-3 text-xs font-medium text-slate-500">
+                                                                No Cambodia province matches that search.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="ml-1 flex items-center justify-between gap-3">
+                                            <p className="text-[10px] font-medium text-slate-400">
+                                                Type to search Cambodia&apos;s 25 provinces and Phnom Penh.
+                                            </p>
+                                            <span className="text-[10px] font-semibold text-slate-400">
+                                                {filteredDestinations.length} match{filteredDestinations.length === 1 ? "" : "es"}
+                                            </span>
+                                        </div>
+                                        {newTrip.destination.trim() && !selectedDestination && (
+                                            <p className="ml-1 text-[10px] font-medium text-amber-500">
+                                                Choose a destination from the list before creating the trip.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Start Date</label>
+                                            <Input
+                                                required
+                                                type="date"
+                                                value={newTrip.startDate}
+                                                onChange={e => setNewTrip({ ...newTrip, startDate: e.target.value })}
+                                                className={`h-11 rounded-xl border-slate-100 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">End Date</label>
+                                            <Input
+                                                required
+                                                type="date"
+                                                value={newTrip.endDate}
+                                                onChange={e => setNewTrip({ ...newTrip, endDate: e.target.value })}
+                                                className={`h-11 rounded-xl border-slate-100 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Budget (Optional)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-slate-300">
+                                                {newTrip.budgetCurrency === "KHR" ? "៛" : "$"}
+                                            </span>
+                                            <Input
+                                                type="text"
+                                                inputMode={newTrip.budgetCurrency === "KHR" ? "numeric" : "decimal"}
+                                                placeholder={newTrip.budgetCurrency === "KHR" ? "0" : "0.00"}
+                                                value={newTrip.budget}
+                                                onChange={e => handleBudgetInputChange(e.target.value)}
+                                                className={`h-11 rounded-xl border-slate-100 pl-9 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                            />
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {(["USD", "KHR"] as const).map((currency) => (
+                                                <button
+                                                    key={currency}
+                                                    type="button"
+                                                    onClick={() => handleBudgetCurrencyChange(currency)}
+                                                    className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${newTrip.budgetCurrency === currency
+                                                        ? isSingle
+                                                            ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                                            : "border-romantic-heart bg-romantic-blush/20 text-romantic-heart"
+                                                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                                        }`}
+                                                >
+                                                    {currency === "USD" ? "Dollar ($)" : "Riel (៛)"}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {newTrip.budget && (
+                                            <p className="ml-1 text-[10px] font-medium text-slate-400">
+                                                Displayed as {formatTripBudget(newTrip.budget, newTrip.budgetCurrency)}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Notes (Optional)</label>
+                                        <textarea
+                                            placeholder="Any plans, reminders, or ideas for this trip?"
+                                            value={newTrip.notes}
+                                            onChange={(e) => setNewTrip({ ...newTrip, notes: e.target.value })}
+                                            className={`min-h-[88px] w-full resize-none rounded-xl border border-slate-100 px-3 py-2.5 text-base text-slate-800 outline-none transition-[color,box-shadow,border-color] [font-size:16px] ${isSingle ? 'focus:border-emerald-500 focus:ring-3 focus:ring-emerald-100' : 'focus:border-romantic-heart focus:ring-3 focus:ring-romantic-blush/40'}`}
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-2 pt-1">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={closeTripModal}
+                                            className="h-10 flex-1 rounded-xl text-xs"
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className={`h-10 flex-1 rounded-xl text-xs font-bold shadow-lg transition-all ${isSingle ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-romantic-heart hover:bg-romantic-heart/90'}`}
+                                        >
+                                            <span className="flex items-center justify-center gap-2">
+                                                {isSubmitting ? <Clock className="animate-spin" size={16} /> : isEditingTrip ? <PencilLine size={16} /> : <Plus size={16} />}
+                                                {isSubmitting ? (isEditingTrip ? "Saving..." : "Creating...") : isEditingTrip ? "Save Trip" : "Create Trip"}
+                                            </span>
+                                        </Button>
+                                    </div>
+                                </form>
+                            </div>
                         </motion.div>
                     </div>
                 )}

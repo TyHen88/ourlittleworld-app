@@ -2,12 +2,10 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TopProgressBar } from "@/components/ui/TopProgressBar";
 
 export function PostSkeleton() {
   return (
     <Card className="overflow-hidden border-none shadow-xl bg-white/90 backdrop-blur-sm rounded-4xl p-0 relative">
-      <TopProgressBar />
       <div className="p-4 flex items-center justify-between border-b border-slate-100">
         <div className="flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-full" />

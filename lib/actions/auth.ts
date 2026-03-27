@@ -146,8 +146,8 @@ export async function signOut() {
         await nextAuthSignOut();
         revalidatePath('/');
         return true;
-    } catch (error: any) {
-        if (error.message?.includes("NEXT_REDIRECT")) throw error;
+    } catch (error: unknown) {
+        if (error instanceof Error && error.message?.includes("NEXT_REDIRECT")) throw error;
         console.error('[SIGNOUT_ERROR]', error);
         throw new Error("Failed to sign out");
     }
@@ -176,7 +176,7 @@ export async function getCurrentUser() {
         throw new Error('Failed to fetch profile');
     }
 }
-export async function updateCurrentUserProfile(data: { full_name?: string; avatar_url?: string }) {
+export async function updateCurrentUserProfile(data: { full_name?: string; avatar_url?: string; bio?: string }) {
     const user = await getCachedUser();
     if (!user || !user.id) throw new Error('Not authenticated');
 
@@ -188,11 +188,12 @@ export async function updateCurrentUserProfile(data: { full_name?: string; avata
                 name: typeof data.full_name === 'string' ? data.full_name : undefined,
                 avatar_url: typeof data.avatar_url === 'string' ? data.avatar_url : undefined,
                 image: typeof data.avatar_url === 'string' ? data.avatar_url : undefined,
+                bio: typeof data.bio === 'string' ? data.bio : undefined,
             }
         });
         
-        revalidatePath("/(app)/dashboard", "page");
-        revalidatePath("/(app)/settings", "page");
+        revalidatePath("/dashboard", "page");
+        revalidatePath("/settings", "page");
 
         return updated;
     } catch (error: unknown) {

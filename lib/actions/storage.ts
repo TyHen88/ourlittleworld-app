@@ -1,5 +1,6 @@
 "use server";
 
+import type { UploadApiResponse } from "cloudinary";
 import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { revalidatePath } from "next/cache";
@@ -21,7 +22,7 @@ export async function uploadAvatar(formData: FormData) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Upload to Cloudinary using a stream to handle the buffer from Next.js Server Action
-    const result: any = await new Promise((resolve, reject) => {
+    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: "ourlittleworld/avatars",
@@ -33,6 +34,7 @@ export async function uploadAvatar(formData: FormData) {
         },
         (error, result) => {
           if (error) return reject(error);
+          if (!result) return reject(new Error("Upload failed"));
           resolve(result);
         }
       );
@@ -52,15 +54,17 @@ export async function uploadAvatar(formData: FormData) {
     });
     
     // Invalidate caches to show the new avatar immediately
-    revalidatePath("/(app)/dashboard", "page");
-    revalidatePath("/(app)/settings", "page");
+    revalidatePath("/dashboard", "page");
+    revalidatePath("/settings", "page");
 
     return { success: true, publicUrl };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Cloudinary upload error:", error);
     return { 
       success: false, 
-      error: error.message || "Something went wrong during the upload. Please ensure CLOUDINARY credentials are set in .env" 
+      error: error instanceof Error
+        ? error.message
+        : "Something went wrong during the upload. Please ensure CLOUDINARY credentials are set in .env" 
     };
   }
 }

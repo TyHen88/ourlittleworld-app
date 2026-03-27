@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getCachedProfileWithCouple } from "@/lib/db-utils";
+import { ChatHeader } from "@/components/chat/ChatHeader";
 import { CoupleMessenger } from "@/components/chat/CoupleMessenger";
 
 export const metadata: Metadata = {
@@ -19,14 +20,8 @@ export default async function ChatPage() {
   const couple = profile?.couple ?? null;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-6 pb-32">
-      <header className="mb-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Messenger</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tighter text-slate-800">Couple Chat</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          A private message thread for you and your partner.
-        </p>
-      </header>
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-5 sm:pt-4 md:mx-auto md:w-full md:max-w-2xl md:px-6">
+      <ChatHeader user={{ id: session.user.id }} couple={couple} />
 
       <CoupleMessenger
         user={{ id: session.user.id, name: session.user.name }}

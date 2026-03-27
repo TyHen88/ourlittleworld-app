@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage, toast } from "@/lib/toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface SavingsGoal {
@@ -74,7 +75,14 @@ export function useCreateSavingsGoal() {
             return json.data as SavingsGoal;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.userId || variables.coupleId] });
+            const ownerId = variables.userId || variables.coupleId;
+            if (ownerId) {
+                queryClient.invalidateQueries({ queryKey: ['savings-goals', ownerId] });
+            }
+            toast.success("Goal created", `"${data.title}" is now being tracked.`);
+        },
+        onError: (error) => {
+            toast.error("Couldn't create goal", getErrorMessage(error, "Failed to create savings goal"));
         },
     });
 }
@@ -114,7 +122,17 @@ export function useUpdateSavingsGoal() {
             return json.data as SavingsGoal;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
+            const ownerId = variables.userId || variables.coupleId;
+            if (ownerId) {
+                queryClient.invalidateQueries({ queryKey: ['savings-goals', ownerId] });
+            }
+            toast.success(
+                variables.isCompleted ? "Goal updated" : "Goal saved",
+                variables.isCompleted ? `"${data.title}" has been marked complete.` : `"${data.title}" was updated.`,
+            );
+        },
+        onError: (error) => {
+            toast.error("Couldn't update goal", getErrorMessage(error, "Failed to update savings goal"));
         },
     });
 }
@@ -137,7 +155,14 @@ export function useDeleteSavingsGoal() {
             return json;
         },
         onSuccess: (data, variables) => {
-            queryClient.invalidateQueries({ queryKey: ['savings-goals', variables.id || variables.coupleId] });
+            const ownerId = variables.userId || variables.coupleId;
+            if (ownerId) {
+                queryClient.invalidateQueries({ queryKey: ['savings-goals', ownerId] });
+            }
+            toast.success("Goal deleted", "The goal was removed.");
+        },
+        onError: (error) => {
+            toast.error("Couldn't delete goal", getErrorMessage(error, "Failed to delete savings goal"));
         },
     });
 }

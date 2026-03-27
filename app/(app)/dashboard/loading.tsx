@@ -1,6 +1,5 @@
-"use client";
-import { DashboardSkeleton } from "@/components/love/DashboardSkeleton";
+import { FullPageLoader } from "@/components/FullPageLoader";
 
 export default function Loading() {
-  return <DashboardSkeleton />;
+  return <FullPageLoader />;
 }

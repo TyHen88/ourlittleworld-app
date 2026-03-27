@@ -9,6 +9,7 @@ import { useCouple } from "@/hooks/use-couple";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { POST_KEYS, prependPostToCaches, removePostFromCaches } from "@/hooks/use-posts";
+import { toast } from "@/lib/toast";
 
 type PreviewImage = {
     id: string;
@@ -316,10 +317,14 @@ export default function CreatePostPage() {
                 queryClient.invalidateQueries({ queryKey: POST_KEYS.all });
             }
 
+            toast.success("Memory created", "Your new memory is live.");
+
             // Redirect after successful completion
             router.push('/feed');
         } catch (e: any) {
-            setError(e?.message || 'Something went wrong');
+            const message = e?.message || 'Something went wrong';
+            setError(message);
+            toast.error("Couldn't create memory", message);
             setSubmitting(false);
         }
     };

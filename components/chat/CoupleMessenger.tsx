@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCoupleChat } from "@/hooks/use-couple-chat";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   COUPLE_CHAT_EVENT,
@@ -58,16 +57,17 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<CoupleChatMessage[]>([]);
-  const [realtimeState, setRealtimeState] = useState("connecting");
-  const [onlineCount, setOnlineCount] = useState(0);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [messengerHeight, setMessengerHeight] = useState<number | null>(null);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoScrollRef = useRef(true);
   const previousScrollHeightRef = useRef<number | null>(null);
   const isSingle = profile?.user_type === "SINGLE";
   const coupleId = couple?.id as string | undefined;
-  const partner = couple?.members?.find((member) => member.id !== user.id) ?? null;
   const {
     data,
     isLoading,
@@ -81,10 +81,68 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     !uploadingImage &&
     (draft.trim().length > 0 || pendingImages.length > 0);
 
+  const scrollToLatestMessage = (behavior: ScrollBehavior = "auto") => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (bottomAnchorRef.current) {
+          bottomAnchorRef.current.scrollIntoView({
+            block: "end",
+            behavior,
+          });
+          return;
+        }
+
+        const container = scrollRef.current;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
+        }
+      });
+    });
+  };
+
   useEffect(() => {
     const historyMessages = data?.pages.flatMap((page) => page.data) ?? [];
     setMessages((currentMessages) => mergeMessages(currentMessages, historyMessages));
   }, [data?.pages]);
+
+  useEffect(() => {
+    const updateMessengerHeight = () => {
+      const root = rootRef.current;
+      if (!root || typeof window === "undefined") {
+        return;
+      }
+
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const rootTop = root.getBoundingClientRect().top;
+      const keyboardOpen =
+        window.innerWidth < 768 &&
+        !!viewport &&
+        viewport.height < window.innerHeight - 120;
+      const bottomOffset = window.innerWidth < 768 ? (keyboardOpen ? 12 : 112) : 32;
+      const nextHeight = Math.floor(viewportHeight - rootTop - bottomOffset);
+
+      setIsKeyboardOpen(keyboardOpen);
+      setMessengerHeight(nextHeight > 320 ? nextHeight : 320);
+    };
+
+    updateMessengerHeight();
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", updateMessengerHeight);
+    viewport?.addEventListener("scroll", updateMessengerHeight);
+    window.addEventListener("resize", updateMessengerHeight);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateMessengerHeight);
+      viewport?.removeEventListener("scroll", updateMessengerHeight);
+      window.removeEventListener("resize", updateMessengerHeight);
+    };
+  }, []);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -100,10 +158,19 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     }
 
     if (autoScrollRef.current) {
-      container.scrollTop = container.scrollHeight;
-      autoScrollRef.current = false;
+      scrollToLatestMessage();
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (!messages.length) {
+      return;
+    }
+
+    if (autoScrollRef.current || isKeyboardOpen) {
+      scrollToLatestMessage();
+    }
+  }, [isKeyboardOpen, messages.length, messengerHeight]);
 
   useEffect(() => {
     if (!coupleId || isSingle) {
@@ -112,7 +179,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
 
     const client = getAblyRealtimeClient(user.id);
     if (!client) {
-      setRealtimeState("unavailable");
+      setError("Realtime chat is currently unavailable");
       return;
     }
 
@@ -127,7 +194,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     ] as const;
 
     const updateConnectionState = () => {
-      setRealtimeState(client.connection.state);
       if (client.connection.state === "connected") {
         setError(null);
       }
@@ -136,17 +202,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     const handleConnectionFailure = (stateChange: {
       reason?: { message?: string };
     }) => {
-      setRealtimeState(client.connection.state);
       setError(stateChange.reason?.message || "Realtime connection failed");
-    };
-
-    const refreshPresence = async () => {
-      try {
-        const members = await channel.presence.get();
-        setOnlineCount(new Set(members.map((member) => member.clientId)).size);
-      } catch {
-        setOnlineCount(0);
-      }
     };
 
     const handleMessage = (ablyMessage: { data?: unknown }) => {
@@ -165,10 +221,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       );
     };
 
-    const handlePresenceChange = () => {
-      void refreshPresence();
-    };
-
     updateConnectionState();
     connectionEvents.forEach((event) => {
       client.connection.on(event, updateConnectionState);
@@ -177,7 +229,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     client.connection.on("suspended", handleConnectionFailure);
 
     void channel.subscribe(COUPLE_CHAT_EVENT, handleMessage);
-    void channel.presence.subscribe(handlePresenceChange);
 
     void (async () => {
       try {
@@ -185,9 +236,8 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
         await channel.presence.enter({
           name: profile?.full_name || user.name || "User",
         });
-        await refreshPresence();
       } catch {
-        setRealtimeState("failed");
+        setError("Realtime connection failed");
       }
     })();
 
@@ -198,7 +248,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       client.connection.off("failed", handleConnectionFailure);
       client.connection.off("suspended", handleConnectionFailure);
       channel.unsubscribe(COUPLE_CHAT_EVENT, handleMessage);
-      channel.presence.unsubscribe(handlePresenceChange);
       void channel.presence.leave();
     };
   }, [coupleId, isSingle, profile?.full_name, user.id, user.name]);
@@ -326,54 +375,21 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   }
 
   return (
-    <div className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-xl">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-romantic-blush/20 via-white to-romantic-lavender/20 px-6 py-5">
-        <div className="flex items-center gap-4">
-          <div className="flex -space-x-3">
-            <Avatar className="h-11 w-11 border-4 border-white shadow-sm">
-              <AvatarFallback className="bg-romantic-blush font-bold text-romantic-heart">
-                {profile?.full_name?.[0] || user?.name?.[0] || "Y"}
-              </AvatarFallback>
-            </Avatar>
-            <Avatar className="h-11 w-11 border-4 border-white shadow-sm">
-              <AvatarFallback className="bg-romantic-lavender font-bold text-slate-700">
-                {partner?.full_name?.[0] || "P"}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">
-              Private Thread
-            </p>
-            <div className="flex items-center gap-3">
-              <h2 className="truncate text-xl font-black tracking-tight text-slate-800">
-                {couple?.couple_name || "Couple Chat"}
-              </h2>
-              <span
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em]",
-                  realtimeState === "connected"
-                    ? "bg-emerald-50 text-emerald-600"
-                    : realtimeState === "connecting"
-                      ? "bg-amber-50 text-amber-600"
-                      : "bg-slate-100 text-slate-500"
-                )}
-              >
-                {realtimeState === "connected" ? "Live" : realtimeState}
-              </span>
-            </div>
-            <p className="text-sm text-slate-500">
-              {onlineCount > 1
-                ? `${partner?.full_name?.split(" ")[0] || "Your partner"} is online now.`
-                : "Just the two of you."}
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <div
+      ref={rootRef}
+      className="flex min-h-0 flex-1 basis-0 flex-col overflow-hidden bg-white"
+      style={messengerHeight ? { height: `${messengerHeight}px`, maxHeight: `${messengerHeight}px` } : undefined}
+    >
       <div
         ref={scrollRef}
-        className="flex h-[58vh] min-h-[24rem] flex-col gap-4 overflow-y-auto bg-slate-50/70 px-4 py-5"
+        onScroll={(event) => {
+          autoScrollRef.current = isNearBottom(event.currentTarget);
+        }}
+        className={cn(
+          "flex min-h-0 flex-1 basis-0 flex-col gap-4 overflow-y-scroll touch-pan-y bg-slate-50/70 px-3 sm:px-4",
+          isKeyboardOpen ? "py-3" : "py-4 sm:py-5"
+        )}
+        style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}
       >
         {hasNextPage && (
           <div className="sticky top-0 z-10 flex justify-center">
@@ -530,6 +546,11 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                               width={720}
                               height={540}
                               className="h-48 w-full object-cover"
+                              onLoad={() => {
+                                if (autoScrollRef.current) {
+                                  scrollToLatestMessage();
+                                }
+                              }}
                             />
                           </a>
                         ))}
@@ -565,9 +586,16 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
             })}
           </AnimatePresence>
         )}
+
+        <div ref={bottomAnchorRef} className="h-px shrink-0" aria-hidden="true" />
       </div>
 
-      <div className="border-t border-slate-100 bg-white px-4 py-4">
+      <div
+        className={cn(
+          "border-t border-slate-100 bg-white px-3 transition-all sm:px-4",
+          isKeyboardOpen ? "py-3" : "py-4"
+        )}
+      >
         {error && (
           <p className="mb-3 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
         )}
@@ -620,23 +648,23 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
           onChange={(event) => void handleFileSelect(event)}
         />
 
-        <p className="mb-3 text-[11px] font-medium text-slate-400">
-          {uploadingImage
-            ? "Uploading image..."
-            : pendingImages.length > 0
-              ? `${pendingImages.length}/${MAX_PENDING_IMAGES} image${pendingImages.length > 1 ? "s" : ""} attached`
-              : "Press Enter to send"}
-        </p>
+        {(uploadingImage || pendingImages.length > 0) && (
+          <p className="mb-3 text-[11px] font-medium text-slate-400">
+            {uploadingImage
+              ? "Uploading image..."
+              : `${pendingImages.length}/${MAX_PENDING_IMAGES} image${pendingImages.length > 1 ? "s" : ""} attached`}
+          </p>
+        )}
 
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingImage || pendingImages.length >= MAX_PENDING_IMAGES}
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.25rem] border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-romantic-blush/70 hover:text-romantic-heart disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-romantic-blush/70 hover:text-romantic-heart disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Add image"
           >
-            {uploadingImage ? <LoaderCircle className="animate-spin" size={18} /> : <ImageIcon size={18} />}
+            {uploadingImage ? <LoaderCircle className="animate-spin" size={16} /> : <ImageIcon size={16} />}
           </button>
           <textarea
             value={draft}
@@ -649,20 +677,20 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
             }}
             rows={1}
             placeholder="Message your partner..."
-            className="min-h-[3.25rem] flex-1 resize-none rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-romantic-heart"
+            className="min-h-[2.75rem] flex-1 resize-none rounded-[1.25rem] border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-romantic-heart"
           />
           <button
             type="button"
             onClick={() => void handleSend()}
             disabled={!canSend}
             className={cn(
-              "flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition",
+              "flex h-10 w-10 items-center justify-center rounded-full text-white shadow-lg transition",
               canSend
                 ? "bg-gradient-button"
                 : "cursor-not-allowed bg-slate-300"
             )}
           >
-            {sending ? <LoaderCircle className="animate-spin" size={18} /> : <Send size={18} />}
+            {sending ? <LoaderCircle className="animate-spin" size={16} /> : <Send size={16} />}
           </button>
         </div>
       </div>

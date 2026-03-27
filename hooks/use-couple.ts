@@ -23,10 +23,16 @@ export interface CoupleData {
 
 export interface UserProfile {
     id: string;
-    full_name: string;
-    couple_id: string;
-    avatar_url: string;
-    nickname?: string;
+    full_name: string | null;
+    couple_id: string | null;
+    avatar_url: string | null;
+    email?: string | null;
+    user_type?: string | null;
+    onboarding_completed?: boolean;
+    created_at?: string;
+    bio?: string | null;
+    nickname?: string | null;
+    couple?: CoupleData | null;
 }
 
 export function useCouple() {
@@ -34,7 +40,7 @@ export function useCouple() {
     const user = session?.user;
 
     // 2. Fetch Profile & Couple
-    const coupleQuery = useQuery({
+    const coupleQuery = useQuery<UserProfile | null>({
         queryKey: ["couple", user?.id],
         queryFn: async () => {
             if (!user?.id) return null;
@@ -46,7 +52,8 @@ export function useCouple() {
 
                 const res = await fetch('/api/me', { 
                     method: 'GET',
-                    signal: controller.signal
+                    signal: controller.signal,
+                    cache: "no-store",
                 });
                 
                 clearTimeout(timeoutId);
@@ -68,7 +75,7 @@ export function useCouple() {
     });
 
     const profile = coupleQuery.data;
-    const couple = (profile as any)?.couple as CoupleData | undefined;
+    const couple = profile?.couple ?? undefined;
     const daysTogether = couple ? calculateDaysTogether(couple.start_date) : 0;
 
     // Determine if we are truly loading or if we should show a fallback

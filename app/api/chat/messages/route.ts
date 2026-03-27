@@ -109,10 +109,17 @@ export async function GET(request: NextRequest) {
         serializeCoupleChatMessage(message as CoupleChatMessageRecord)
       );
 
-    return NextResponse.json({
-      data: serializedMessages,
-      nextCursor: messages.length === limit ? messages[messages.length - 1]?.id ?? null : null,
-    });
+    return NextResponse.json(
+      {
+        data: serializedMessages,
+        nextCursor: messages.length === limit ? messages[messages.length - 1]?.id ?? null : null,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-cache, no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch messages";
     console.error("Error fetching couple chat:", error);

@@ -35,8 +35,21 @@ export default function RootLayout({
             __html: `
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', async () => {
+                  let didReloadForController = false;
+
                   if ('${process.env.NODE_ENV}' === 'production') {
-                    navigator.serviceWorker.register('/sw.js');
+                    try {
+                      navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        if (didReloadForController) return;
+                        didReloadForController = true;
+                        window.location.reload();
+                      });
+
+                      const registration = await navigator.serviceWorker.register('/sw.js');
+                      await registration.update();
+                    } catch (error) {
+                      console.warn('Service worker registration failed', error);
+                    }
                     return;
                   }
 
@@ -48,7 +61,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="bg-romantic-warm text-slate-800 antialiased">
+      <body
+        className="bg-romantic-warm text-slate-800 antialiased"
+        suppressHydrationWarning
+      >
         <Providers>
           <LoveThemeProvider>
             {children}

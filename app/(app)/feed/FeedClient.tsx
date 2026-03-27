@@ -11,6 +11,7 @@ import { usePosts, prependPostToCaches } from "@/hooks/use-posts";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { Stars, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -84,10 +85,10 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                 return true;
             })
             .map((row: any) => {
-            const authorName =
-                row?.author?.full_name ||
-                (row?.author_id && user?.id && row.author_id === user.id ? profile?.full_name : null) ||
-                (isSingle ? "You" : "My Forever");
+                const authorName =
+                    row?.author?.full_name ||
+                    (row?.author_id && user?.id && row.author_id === user.id ? profile?.full_name : null) ||
+                    (isSingle ? "You" : "My Forever");
 
                 return {
                     id: row?.id,
@@ -229,14 +230,14 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                 initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
-                className="p-6 space-y-6 max-w-2xl mx-auto pb-32"
+                className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6"
             >
-                <div className="space-y-4">
-                    <Skeleton className="h-10 w-48 rounded-lg" />
+                <div className="space-y-3">
+                    <Skeleton className="h-8 w-40 rounded-lg" />
                     <Skeleton className="h-4 w-64 rounded-lg" />
                 </div>
                 {/* ... other loading skeletons ... */}
-                <div className="space-y-8 mt-8">
+                <div className="mt-6 space-y-6">
                     {[1, 2, 3].map((i) => (
                         <PostSkeleton key={i} />
                     ))}
@@ -254,16 +255,16 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
             initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="p-6 space-y-6 max-w-2xl mx-auto pb-32"
+            className="max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6"
         >
             {!couple && !isSingle ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
-                    <div className="w-32 h-32 bg-romantic-blush/30 rounded-full flex items-center justify-center animate-pulse">
-                        <MessageCircleHeart className="text-romantic-heart/40" size={64} />
+                <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center">
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-romantic-blush/30 animate-pulse">
+                        <MessageCircleHeart className="text-romantic-heart/40" size={48} />
                     </div>
-                    <div className="space-y-3">
-                        <h2 className="text-3xl font-black text-slate-800">No Couple Connected</h2>
-                        <p className="text-slate-500 max-w-sm">
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-black text-slate-800">No Couple Connected</h2>
+                        <p className="max-w-sm text-sm text-slate-500">
                             Connect with your partner to share memories, photos, and milestones in your private feed.
                         </p>
                     </div>
@@ -278,27 +279,27 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                 </div>
             ) : (
                 <>
-                    <header className="space-y-4">
+                    <header className="space-y-3.5">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                                <h1 className="flex items-center gap-2 text-lg font-black tracking-tight text-slate-800 sm:text-xl">
                                     {isSingle ? (
-                                        <Stars className="text-emerald-500 h-6 w-6" />
+                                        <Stars className="h-5 w-5 text-emerald-500 sm:h-6 sm:w-6" />
                                     ) : (
-                                        <Sparkles className="text-romantic-heart h-6 w-6" />
+                                        <Sparkles className="h-5 w-5 text-romantic-heart sm:h-6 sm:w-6" />
                                     )}
                                     {isSingle ? "Personal Journal" : "Our Memories"}
                                 </h1>
-                                <p className="text-sm text-slate-500 mt-1">
+                                <p className="mt-1 text-xs text-slate-500 sm:text-sm">
                                     {isSingle ? "A collection of your journey and growth" : "Every moment with you is a gift"}
                                 </p>
                             </div>
-                            <button onClick={() => router.push("/dashboard")} className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors">
-                                <ArrowLeft className="text-slate-500" size={20} />
+                            <button onClick={() => router.push("/dashboard")} className="rounded-full bg-slate-50 p-1.5 transition-colors hover:bg-slate-100 sm:p-2">
+                                <ArrowLeft className="text-slate-500" size={18} />
                             </button>
                         </div>
 
-                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        <div className="flex flex-wrap gap-2">
                             {[
                                 { value: "all", label: "All", icon: Sparkles, count: filterCounts.all },
                                 { value: "photos", label: "Photos", icon: ImageIcon, count: filterCounts.photos },
@@ -312,15 +313,31 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                         key={tab.value}
                                         onClick={() => { setFilter(tab.value as FilterType); setSelectedCategory(null); }}
                                         className={cn(
-                                            "flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap",
+                                            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all",
                                             isActive 
-                                                ? (isSingle ? "bg-emerald-500 text-white shadow-lg" : "bg-romantic-heart text-white shadow-lg")
-                                                : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+                                                ? (isSingle
+                                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                                                    : "border-romantic-blush/50 bg-romantic-blush/20 text-romantic-heart shadow-sm")
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                                         )}
                                     >
-                                        <Icon size={16} />
-                                        {tab.label}
-                                        <span className={cn("text-xs px-1.5 py-0.5 rounded-full", isActive ? "bg-white/20" : "bg-slate-100")}>{tab.count}</span>
+                                        <div className={cn(
+                                            "flex h-5 w-5 items-center justify-center rounded-full",
+                                            isActive
+                                                ? (isSingle ? "bg-emerald-100" : "bg-white/70")
+                                                : "bg-slate-100"
+                                        )}>
+                                            <Icon size={11} />
+                                        </div>
+                                        <span>{tab.label}</span>
+                                        <span className={cn(
+                                            "rounded-full px-1.5 py-0.5 text-[9px] leading-none",
+                                            isActive
+                                                ? (isSingle ? "bg-emerald-100 text-emerald-700" : "bg-white/70 text-romantic-heart")
+                                                : "bg-slate-100 text-slate-500"
+                                        )}>
+                                            {tab.count}
+                                        </span>
                                     </button>
                                 );
                             })}
@@ -328,56 +345,58 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
 
                         <div className="relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input
+                            <Input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder={isSingle ? "Search your journal..." : "Search memories..."}
                                 className={cn(
-                                    "w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 focus:outline-none bg-white font-medium",
-                                    isSingle ? "focus:border-emerald-500" : "focus:border-romantic-heart"
+                                    "h-11 rounded-2xl border-slate-200 bg-white pl-11 pr-4 text-base font-medium shadow-sm",
+                                    isSingle
+                                        ? "focus-visible:border-emerald-500 focus-visible:ring-emerald-100"
+                                        : "focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40"
                                 )}
                             />
                         </div>
                     </header>
 
-                    <section className="space-y-6">
+                    <section className="space-y-5">
                         {postsToDisplay.length === 0 ? (
                             <div className={cn(
-                                "text-center py-20 rounded-3xl border-2 border-dashed",
+                                "rounded-3xl border-2 border-dashed py-14 text-center",
                                 isSingle ? "bg-emerald-50/50 border-emerald-100" : "bg-gradient-to-br from-romantic-blush/20 to-white border-romantic-blush/30"
                             )}>
-                                <p className="text-slate-600 font-bold text-lg">
+                                <p className="text-base font-bold text-slate-600">
                                     {isSingle ? "Your journal is empty. What's on your mind today?" : "No memories found"}
                                 </p>
                                 {isSingle && (
-                                    <Button 
+                                    <Button
                                         onClick={() => router.push('/create-post')}
-                                        className="mt-4 bg-emerald-500 hover:bg-emerald-600 rounded-full font-bold"
+                                        className="mt-4 rounded-full bg-emerald-500 text-xs font-bold hover:bg-emerald-600"
                                     >
                                         Write First Entry
                                     </Button>
                                 )}
                             </div>
                         ) : groupedPosts && !selectedCategory ? (
-                           <div className="space-y-8">
+                            <div className="space-y-6">
                                 <div className="flex items-end justify-between px-1">
                                     <div>
-                                        <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                                        <h2 className="text-lg font-black tracking-tight text-slate-800">
                                             {isSingle ? "Collections" : "Memory Collections"}
                                         </h2>
-                                        <p className="text-sm text-slate-500 mt-1">
+                                        <p className="mt-1 text-xs text-slate-500 sm:text-sm">
                                             {isSingle ? "Browse your moments like a photo library" : "Open a category to revisit your favorite moments"}
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">
                                             {collectionGroups.length} folders
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     {collectionGroups.map((group, groupIndex) => (
                                         <motion.button
                                             key={group.catName}
@@ -386,10 +405,10 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: groupIndex * 0.06 }}
                                             onClick={() => setSelectedCategory(group.catName)}
-                                            className="overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 text-left shadow-[0_20px_50px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm transition-transform hover:-translate-y-1"
+                                            className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 text-left shadow-[0_18px_42px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm transition-transform hover:-translate-y-1"
                                         >
-                                            <div className="p-3">
-                                                <div className="grid grid-cols-2 gap-2 rounded-[1.5rem] bg-slate-100/80 p-2">
+                                            <div className="p-2.5">
+                                                <div className="grid grid-cols-2 gap-1.5 rounded-[1.35rem] bg-slate-100/80 p-1.5">
                                                     {Array.from({ length: 4 }).map((_, imageIndex) => {
                                                         const coverImage = group.coverImages[imageIndex];
                                                         return (
@@ -421,25 +440,25 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between px-5 pb-5">
+                                            <div className="flex items-center justify-between px-4 pb-4">
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-2">
-                                                        <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br text-lg shadow-sm", group.catInfo.color)}>
+                                                        <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br text-base shadow-sm", group.catInfo.color)}>
                                                             {group.catInfo.icon}
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <h3 className="truncate text-lg font-black tracking-tight text-slate-800">
+                                                            <h3 className="truncate text-base font-black tracking-tight text-slate-800">
                                                                 {group.catName}
                                                             </h3>
-                                                            <p className="text-xs font-semibold text-slate-500">
+                                                            <p className="text-[11px] font-semibold text-slate-500">
                                                                 {group.posts.length} {group.posts.length === 1 ? "memory" : "memories"}
                                                                 {group.photoCount > 0 ? ` • ${group.photoCount} photos` : ""}
                                                             </p>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                                                    <ChevronRight size={18} />
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                                                    <ChevronRight size={16} />
                                                 </div>
                                             </div>
                                         </motion.button>
@@ -447,18 +466,18 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-6">
+                            <div className="space-y-4">
                                 {selectedCategory && (
-                                    <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white/80 px-4 py-3 shadow-sm">
+                                    <div className="flex items-center justify-between rounded-3xl border border-slate-200 bg-white/80 px-4 py-2.5 shadow-sm">
                                         <div className="flex items-center gap-3">
-                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                                                <FolderOpen size={20} />
+                                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                                                <FolderOpen size={18} />
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                                                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
                                                     Collection
                                                 </p>
-                                                <h3 className="text-lg font-black tracking-tight text-slate-800">
+                                                <h3 className="text-base font-black tracking-tight text-slate-800">
                                                     {selectedCategory}
                                                 </h3>
                                             </div>
@@ -466,7 +485,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            className="rounded-full font-semibold text-slate-600"
+                                            className="rounded-full px-3 text-xs font-semibold text-slate-600"
                                             onClick={() => setSelectedCategory(null)}
                                         >
                                             Back to folders
@@ -480,13 +499,13 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
-                                
+
                                 <div className="pt-8 text-center" ref={sentinelRef}>
                                     {isFetchingNextPage ? (
                                         <div className="flex items-center justify-center gap-3 py-6"><div className="w-6 h-6 border-3 border-romantic-blush/30 border-t-romantic-heart rounded-full animate-spin" /><span className="text-sm text-slate-500">Gathering more...</span></div>
                                     ) : hasNextPage ? (
-                                        <div className="text-xs text-slate-400 font-bold uppercase py-6">Scroll for more ✨</div>
-                                    ) : <div className="text-xs text-slate-400 font-black uppercase py-10 italic">This is where it all began.</div>}
+                                        <div className="py-6 text-[11px] font-bold uppercase text-slate-400">Scroll for more ✨</div>
+                                    ) : <div className="py-8 text-[11px] font-black uppercase italic text-slate-400">This is where it all began.</div>}
                                 </div>
                             </div>
                         )}
@@ -494,22 +513,24 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                 </>
             )}
 
-            <motion.button
-                initial={shouldReduceMotion ? false : { opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5, type: "spring" }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => router.push('/create-post')}
-                className={cn(
-                    "fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full border-2 border-white text-white shadow-2xl",
-                    isSingle
-                        ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-                        : "bg-gradient-button"
-                )}
-            >
-                {isSingle ? <Pencil className="h-7 w-7" /> : <MessageCircleHeart size={28} />}
-            </motion.button>
+            {(couple || isSingle) && (
+                <motion.button
+                    initial={shouldReduceMotion ? false : { opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.5, type: "spring" }}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => router.push('/create-post')}
+                    className={cn(
+                        "fixed bottom-24 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white text-white shadow-2xl",
+                        isSingle
+                            ? "bg-gradient-to-br from-emerald-500 to-teal-600"
+                            : "bg-gradient-button"
+                    )}
+                >
+                    {isSingle ? <Pencil className="h-5 w-5" /> : <MessageCircleHeart size={23} />}
+                </motion.button>
+            )}
         </motion.div>
     );
 }

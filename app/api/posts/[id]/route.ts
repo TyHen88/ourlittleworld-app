@@ -55,12 +55,12 @@ export async function GET(
     const response = NextResponse.json({ data: post });
     response.headers.set(
       "Cache-Control",
-      "private, max-age=10, stale-while-revalidate=20"
+      "private, no-cache, no-store, max-age=0, must-revalidate"
     );
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message ?? "Server error" },
+      { error: error instanceof Error ? error.message : "Server error" },
       { status: 500 }
     );
   }

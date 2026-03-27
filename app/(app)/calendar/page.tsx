@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCouple } from "@/hooks/use-couple";
 import { useTransactions } from "@/hooks/use-transactions";
 import { FullPageLoader } from "@/components/FullPageLoader";
@@ -25,6 +26,7 @@ import {
     Coffee,
     Home,
     Download,
+    type LucideIcon,
 } from "lucide-react";
 import {
     BarChart,
@@ -50,7 +52,7 @@ import {
     getWeek,
 } from "date-fns";
 
-const CATEGORY_ICONS: Record<string, any> = {
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
     Shopping: ShoppingBag,
     Coffee: Coffee,
     Home: Home,
@@ -279,7 +281,7 @@ export default function CalendarPage() {
             >
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
+                        <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
                             <CalendarIcon className="text-romantic-heart" size={32} />
                             Calendar
                         </h1>
@@ -351,7 +353,7 @@ export default function CalendarPage() {
                                 {format(currentMonth, "MMMM yyyy")}
                             </h2>
                             {txLoading && (
-                                <span className="text-[10px] text-slate-400 animate-pulse">Loading...</span>
+                                <Skeleton className="mx-auto mt-1 h-3 w-16 rounded-full" />
                             )}
                         </div>
                         <button

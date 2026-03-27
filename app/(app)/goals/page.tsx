@@ -120,23 +120,31 @@ export default function GoalsPage() {
     // Handle quick progress update
     const handleQuickUpdate = async (goalId: string, amount: number) => {
         if (!currentId) return;
-        
-        await updateGoal.mutateAsync({
-            id: goalId,
-            coupleId: currentId,
-            currentAmount: amount,
-        });
+
+        try {
+            await updateGoal.mutateAsync({
+                id: goalId,
+                coupleId: currentId,
+                currentAmount: amount,
+            });
+        } catch {
+            // Toast feedback is handled in the shared mutation hook.
+        }
     };
 
     // Handle mark as complete
     const handleMarkComplete = async (goalId: string) => {
         if (!currentId) return;
-        
-        await updateGoal.mutateAsync({
-            id: goalId,
-            coupleId: currentId,
-            isCompleted: true,
-        });
+
+        try {
+            await updateGoal.mutateAsync({
+                id: goalId,
+                coupleId: currentId,
+                isCompleted: true,
+            });
+        } catch {
+            // Toast feedback is handled in the shared mutation hook.
+        }
     };
 
     if (coupleLoading) return <FullPageLoader />;
@@ -387,7 +395,7 @@ export default function GoalsPage() {
                                                             size="sm"
                                                             onClick={(e) => {
                                                                 e.preventDefault();
-                                                                handleMarkComplete(goal.id);
+                                                                void handleMarkComplete(goal.id);
                                                             }}
                                                             className="flex-1 rounded-full bg-green-500 hover:bg-green-600 text-white"
                                                         >

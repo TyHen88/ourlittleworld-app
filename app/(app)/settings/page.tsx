@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCouple } from "@/hooks/use-couple";
+import { useCouple, type UserProfile } from "@/hooks/use-couple";
 import { deleteAccount, signOut, updateCurrentUserProfile } from "@/lib/actions/auth";
 import { uploadAvatar } from "@/lib/actions/storage";
+import { getErrorMessage, toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChangePasswordModal } from "@/components/settings/ChangePasswordModal";
@@ -93,26 +94,50 @@ export default function SettingsPage() {
     }, [user, isLoading, router]);
 
     useEffect(() => {
-        if (profile) {
+        if (profile && !editing) {
             setFormData({
-                full_name: (profile as any)?.full_name || "",
-                avatar_url: (profile as any)?.avatar_url || "",
-                bio: (profile as any)?.bio || "",
+                full_name: profile.full_name || "",
+                avatar_url: profile.avatar_url || "",
+                bio: profile.bio || "",
             });
         }
-    }, [profile]);
+    }, [profile, editing]);
+
+    const syncProfileCache = (updates: Partial<Pick<UserProfile, "full_name" | "avatar_url" | "bio">>) => {
+        if (!user?.id) return;
+
+        queryClient.setQueryData<UserProfile | null>(['couple', user.id], (old) => {
+            if (!old) return old;
+
+            return {
+                ...old,
+                ...updates,
+                couple: old.couple
+                    ? {
+                        ...old.couple,
+                        members: old.couple.members?.map((member) =>
+                            member.id === user.id
+                                ? {
+                                    ...member,
+                                    full_name: updates.full_name ?? member.full_name,
+                                    avatar_url: updates.avatar_url ?? member.avatar_url,
+                                }
+                                : member
+                        ),
+                    }
+                    : old.couple,
+            };
+        });
+    };
 
     const handleSave = async () => {
         if (!user) return;
 
-        const previousData = queryClient.getQueryData(['couple', user.id]);
-        queryClient.setQueryData(['couple', user.id], (old: any) => {
-            if (!old) return old;
-            return {
-                ...old,
-                full_name: formData.full_name,
-                avatar_url: formData.avatar_url,
-            };
+        const previousData = queryClient.getQueryData<UserProfile | null>(['couple', user.id]);
+        syncProfileCache({
+            full_name: formData.full_name,
+            avatar_url: formData.avatar_url,
+            bio: formData.bio,
         });
 
         setEditing(false);
@@ -121,38 +146,50 @@ export default function SettingsPage() {
             await updateCurrentUserProfile({
                 full_name: formData.full_name,
                 avatar_url: formData.avatar_url,
+                bio: formData.bio,
             });
-            queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
-        } catch (error: any) {
+            await queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
+            toast.success("Profile updated", "Your changes have been saved.");
+        } catch (error: unknown) {
             queryClient.setQueryData(['couple', user.id], previousData);
             setEditing(true);
-            alert(error.message || 'Failed to update profile');
+            toast.error("Couldn't update profile", getErrorMessage(error, "Failed to update profile"));
         }
     };
 
     const handleAvatarFileSelected = async (file: File) => {
         if (!user?.id) return;
 
+        const previousAvatarUrl = formData.avatar_url;
+        let previewUrl: string | undefined;
+
         setUploadingAvatar(true);
         try {
-            const formData = new FormData();
-            formData.append("file", file);
+            const uploadFormData = new FormData();
+            uploadFormData.append("file", file);
 
             // Preview immediately
-            const previewUrl = URL.createObjectURL(file);
-            setFormData((prev) => ({ ...prev, avatar_url: previewUrl }));
+            const nextPreviewUrl = URL.createObjectURL(file);
+            previewUrl = nextPreviewUrl;
+            setFormData((prev) => ({ ...prev, avatar_url: nextPreviewUrl }));
 
-            const result = await uploadAvatar(formData);
+            const result = await uploadAvatar(uploadFormData);
             if (result.success && result.publicUrl) {
                 setFormData((prev) => ({ ...prev, avatar_url: result.publicUrl }));
-                queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
+                syncProfileCache({ avatar_url: result.publicUrl });
+                await queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
+                toast.success("Photo updated", "Your profile photo has been saved.");
             } else {
                 throw new Error(result.error || "Upload failed");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+            setFormData((prev) => ({ ...prev, avatar_url: previousAvatarUrl }));
             console.error("Avatar upload failed:", error);
-            // Revert preview on error if needed
+            toast.error("Couldn't update photo", getErrorMessage(error, "Avatar upload failed"));
         } finally {
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+            }
             setUploadingAvatar(false);
         }
     };
@@ -177,7 +214,7 @@ export default function SettingsPage() {
             text: `Join my world! Use my invite code: ${couple.invite_code}`,
             url: `${window.location.origin}/onboarding?code=${couple.invite_code}`,
         };
-        
+
         try {
             if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
                 await navigator.share(shareData);
@@ -197,12 +234,12 @@ export default function SettingsPage() {
         setDeletingAccount(true);
         try {
             await deleteAccount();
-        } catch (err: any) {
+        } catch (err: unknown) {
             // Next.js redirects throw a special error that we should ignore on the client
-            if (err.message?.includes("NEXT_REDIRECT")) return;
-            
+            if (err instanceof Error && err.message?.includes("NEXT_REDIRECT")) return;
+
             console.error("Delete failed:", err);
-            alert(err.message || "Failed to delete account");
+            toast.error("Couldn't delete account", getErrorMessage(err, "Failed to delete account"));
             setDeletingAccount(false);
         }
     };
@@ -222,11 +259,41 @@ export default function SettingsPage() {
         { id: "help", label: "Help", icon: HelpCircle, color: "text-slate-600", bg: "bg-slate-50" },
     ];
 
+    const profileTone = isSingle
+        ? {
+            accent: "text-emerald-600",
+            border: "border-emerald-100",
+            softBg: "bg-emerald-50/70",
+            heroBg: "bg-gradient-to-br from-white via-emerald-50/80 to-emerald-100/60",
+            heroGlow: "bg-gradient-to-r from-emerald-100/90 to-transparent",
+            chip: "bg-emerald-50 text-emerald-700",
+            button: "bg-emerald-600 hover:bg-emerald-700",
+            buttonGhost: "border-emerald-200 hover:bg-emerald-50",
+            focus: "focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100",
+            avatarBorder: "border-emerald-100",
+            avatarButton: "bg-emerald-600",
+            avatarFallback: "bg-emerald-500",
+        }
+        : {
+            accent: "text-blue-600",
+            border: "border-blue-100",
+            softBg: "bg-blue-50/70",
+            heroBg: "bg-gradient-to-br from-white via-blue-50/80 to-romantic-blush/30",
+            heroGlow: "bg-gradient-to-r from-blue-100/90 to-transparent",
+            chip: "bg-blue-50 text-blue-700",
+            button: "bg-blue-600 hover:bg-blue-700",
+            buttonGhost: "border-blue-200 hover:bg-blue-50",
+            focus: "focus:border-blue-500 focus:ring-4 focus:ring-blue-100",
+            avatarBorder: "border-blue-100",
+            avatarButton: "bg-blue-600",
+            avatarFallback: "bg-gradient-button",
+        };
+
     return (
         <div className={cn(
             "min-h-screen p-6 pb-32",
-            isSingle 
-                ? "bg-gradient-to-br from-emerald-50 via-white to-indigo-50/20" 
+            isSingle
+                ? "bg-gradient-to-br from-emerald-50 via-white to-indigo-50/20"
                 : "bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20"
         )}>
             <div className="max-w-4xl mx-auto space-y-6">
@@ -244,11 +311,11 @@ export default function SettingsPage() {
                             <ArrowLeft className="text-slate-600" size={20} />
                         </a>
                         <div>
-                            <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
+                            <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <SettingsIcon className={isSingle ? "text-emerald-600" : "text-romantic-heart"} size={28} />
                                 Settings
                             </h1>
-                            <p className="text-sm text-slate-500 mt-0.5">Manage your account and preferences</p>
+                            {/* <p className="text-sm text-slate-500 mt-0.5">Manage your account and preferences</p> */}
                         </div>
                     </div>
                     <Button
@@ -302,19 +369,14 @@ export default function SettingsPage() {
                     >
                         {/* Profile Section */}
                         {activeSection === "profile" && (
-                            <Card className="p-6 border-none shadow-lg bg-white rounded-3xl">
-                                <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                                    <User className={isSingle ? "text-emerald-600" : "text-blue-600"} size={24} />
-                                    Profile Information
-                                </h2>
+                            <Card className="overflow-hidden rounded-3xl border-none bg-white p-6 shadow-lg">
 
                                 <div className="space-y-6">
-                                    {/* Avatar Section */}
-                                    <div className="flex items-center gap-6">
+                                    <div className="flex flex-col items-center gap-5 border-b border-slate-100 pb-6 text-center">
                                         <div className="relative">
-                                            <Avatar className={cn("w-24 h-24 border-4 shadow-lg", isSingle ? "border-emerald-100" : "border-blue-100")}>
+                                            <Avatar className={cn("h-24 w-24 border-4 shadow-lg", profileTone.avatarBorder)}>
                                                 <AvatarImage src={formData.avatar_url} />
-                                                <AvatarFallback className={cn("text-white text-2xl font-bold", isSingle ? "bg-emerald-500" : "bg-gradient-button")}>
+                                                <AvatarFallback className={cn("text-2xl font-bold text-white", profileTone.avatarFallback)}>
                                                     {formData.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
                                                 </AvatarFallback>
                                             </Avatar>
@@ -323,7 +385,7 @@ export default function SettingsPage() {
                                                     type="button"
                                                     onClick={() => avatarInputRef.current?.click()}
                                                     disabled={uploadingAvatar}
-                                                    className={cn("absolute bottom-0 right-0 p-2 text-white rounded-full shadow-lg hover:scale-110 transition-transform", isSingle ? "bg-emerald-600" : "bg-blue-600")}
+                                                    className={cn("absolute bottom-0 right-0 rounded-full p-2 text-white shadow-lg transition-transform hover:scale-110", profileTone.avatarButton)}
                                                 >
                                                     <Camera size={16} />
                                                 </button>
@@ -341,51 +403,89 @@ export default function SettingsPage() {
                                             />
                                         </div>
 
-                                        <div className="flex-1">
-                                            {editing ? (
-                                                <div className="space-y-3">
-                                                    <div>
-                                                        <Label className="text-xs font-bold text-slate-600 uppercase">Full Name</Label>
-                                                        <Input
-                                                            value={formData.full_name}
-                                                            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                                                            className="mt-1 rounded-xl"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <h3 className="text-2xl font-bold text-slate-800">{profile?.full_name || "No name set"}</h3>
-                                                    <p className="text-sm text-slate-500 mt-1">{user?.email}</p>
-                                                </div>
+                                        <div className="min-w-0">
+
+                                            {editing && (
+                                                <p className="mt-2 text-sm text-slate-500">
+                                                    {uploadingAvatar ? "Uploading photo..." : "Tap the camera button to update your photo."}
+                                                </p>
                                             )}
                                         </div>
                                     </div>
 
-                                    {/* Bio Section */}
-                                    {editing && (
+                                    <div className="space-y-5">
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-600 uppercase">Bio</Label>
-                                            <textarea
-                                                value={formData.bio}
-                                                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                                                placeholder={isSingle ? "Write a little about yourself..." : "Tell your partner about yourself..."}
-                                                className={cn("w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none resize-none", isSingle ? "focus:border-emerald-500" : "focus:border-blue-500")}
-                                                rows={3}
-                                                maxLength={200}
-                                            />
-                                            <p className="text-xs text-slate-400 text-right">{formData.bio.length}/200</p>
-                                        </div>
-                                    )}
+                                            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                                <User className={profileTone.accent} size={14} />
+                                                Full Name
+                                            </div>
 
-                                    {/* Action Buttons */}
-                                    <div className="flex gap-3 pt-4">
+                                            {editing ? (
+                                                <div className="space-y-2">
+                                                    <Label className="sr-only">Full Name</Label>
+                                                    <Input
+                                                        value={formData.full_name}
+                                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                                        placeholder="Your name"
+                                                        className={cn("h-12 rounded-2xl border-slate-200 bg-slate-50 px-4 text-base shadow-sm", profileTone.focus)}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="border-b border-slate-100 pb-4">
+                                                    <p className="text-base font-semibold text-slate-800">
+                                                        {profile?.full_name || "Add your name"}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                                <Mail className="text-slate-500" size={14} />
+                                                Email
+                                            </div>
+
+                                            <div className="border-b border-slate-100 pb-4">
+                                                <p className="break-all text-base font-semibold text-slate-800">
+                                                    {user?.email || "No email found"}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                                <Info className={profileTone.accent} size={14} />
+                                                Bio
+                                            </div>
+
+                                            {editing ? (
+                                                <div className="space-y-2">
+                                                    <Label className="sr-only">Bio</Label>
+                                                    <textarea
+                                                        value={formData.bio}
+                                                        onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                                                        placeholder={isSingle ? "Write a little about yourself..." : "Tell your partner about yourself..."}
+                                                        className={cn("min-h-[140px] w-full resize-none rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed shadow-sm outline-none", profileTone.focus)}
+                                                        rows={4}
+                                                        maxLength={200}
+                                                    />
+                                                    <p className="text-right text-xs font-medium text-slate-500">{formData.bio.length}/200</p>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm leading-relaxed text-slate-600">
+                                                    {profile?.bio || "No bio added yet. Add a few words about yourself to make your profile feel complete."}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                                         {editing ? (
                                             <>
                                                 <Button
                                                     onClick={handleSave}
                                                     disabled={uploadingAvatar}
-                                                    className={cn("flex-1 rounded-xl text-white", isSingle ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700")}
+                                                    className={cn("h-12 flex-1 rounded-2xl text-white shadow-sm", profileTone.button)}
                                                 >
                                                     <Save size={18} className="mr-2" />
                                                     Save Changes
@@ -396,11 +496,11 @@ export default function SettingsPage() {
                                                         setFormData({
                                                             full_name: profile?.full_name || "",
                                                             avatar_url: profile?.avatar_url || "",
-                                                            bio: "",
+                                                            bio: profile?.bio || "",
                                                         });
                                                     }}
                                                     variant="outline"
-                                                    className="flex-1 rounded-xl"
+                                                    className="h-12 flex-1 rounded-2xl border-slate-200"
                                                 >
                                                     <X size={18} className="mr-2" />
                                                     Cancel
@@ -410,7 +510,7 @@ export default function SettingsPage() {
                                             <Button
                                                 onClick={() => setEditing(true)}
                                                 variant="outline"
-                                                className={cn("w-full rounded-xl border-blue-200 hover:bg-blue-50", isSingle && "border-emerald-200 hover:bg-emerald-50")}
+                                                className={cn("h-12 w-full rounded-2xl", profileTone.buttonGhost)}
                                             >
                                                 <Edit2 size={18} className="mr-2" />
                                                 Edit Profile
@@ -418,21 +518,20 @@ export default function SettingsPage() {
                                         )}
                                     </div>
 
-                                    {/* Stats */}
-                                    <div className="grid grid-cols-3 gap-3 pt-4 border-t">
-                                        <div className={cn("text-center p-3 rounded-xl", isSingle ? "bg-emerald-50" : "bg-blue-50")}>
+                                    <div className="grid grid-cols-3 gap-3 border-t pt-4">
+                                        <div className={cn("rounded-xl p-3 text-center", isSingle ? "bg-emerald-50" : "bg-blue-50")}>
                                             <p className={cn("text-2xl font-black", isSingle ? "text-emerald-600" : "text-blue-600")}>
                                                 {isSingle ? "Solo" : daysTogether}
                                             </p>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase">{isSingle ? "Explorer" : "Days Together"}</p>
+                                            <p className="text-[10px] font-bold uppercase text-slate-500">{isSingle ? "Explorer" : "Days Together"}</p>
                                         </div>
-                                        <div className="text-center p-3 bg-pink-50 rounded-xl">
+                                        <div className="rounded-xl bg-pink-50 p-3 text-center">
                                             <p className="text-2xl font-black text-pink-600">0</p>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase">Posts</p>
+                                            <p className="text-[10px] font-bold uppercase text-slate-500">Posts</p>
                                         </div>
-                                        <div className="text-center p-3 bg-purple-50 rounded-xl">
+                                        <div className="rounded-xl bg-purple-50 p-3 text-center">
                                             <p className="text-2xl font-black text-purple-600">0</p>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase">Photos</p>
+                                            <p className="text-[10px] font-bold uppercase text-slate-500">Photos</p>
                                         </div>
                                     </div>
                                 </div>
@@ -472,7 +571,7 @@ export default function SettingsPage() {
                                         {couple.members && couple.members.length < 2 && (
                                             <div className="p-6 bg-gradient-to-br from-pink-50/50 to-rose-50/50 rounded-3xl border border-pink-100 shadow-sm relative overflow-hidden">
                                                 <div className="absolute -right-8 -top-8 w-32 h-32 bg-pink-200/20 rounded-full blur-2xl" />
-                                                
+
                                                 <div className="relative z-10 space-y-4 text-center">
                                                     <div className="space-y-1">
                                                         <Label className="text-[10px] font-black text-pink-500 uppercase tracking-[0.2em] flex items-center justify-center gap-2">
@@ -485,7 +584,7 @@ export default function SettingsPage() {
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <button
                                                             onClick={copyInviteCode}
@@ -511,7 +610,7 @@ export default function SettingsPage() {
                                                             <span>Share</span>
                                                         </button>
                                                     </div>
-                                                    
+
                                                     <p className="text-[10px] text-slate-400 font-medium">
                                                         Share this code with your partner to connect.
                                                     </p>
@@ -538,7 +637,7 @@ export default function SettingsPage() {
                                                 Share your world with someone special to unlock memories, budgets, and more.
                                             </p>
                                         </div>
-                                        <Button 
+                                        <Button
                                             onClick={() => router.push("/onboarding")}
                                             className="rounded-full bg-gradient-button px-8 shadow-lg shadow-romantic-heart/20"
                                         >
@@ -664,7 +763,7 @@ export default function SettingsPage() {
                                 <div className="space-y-3">
                                     {[
                                         { label: "Change Password", icon: Lock, action: () => setIsChangePasswordOpen(true) },
-                                        { label: "Download Your Data", icon: Download, action: () => {} },
+                                        { label: "Download Your Data", icon: Download, action: () => { } },
                                         { label: isSingle ? "Delete Personal Data" : "Delete Account", icon: Trash2, action: () => setShowDeleteConfirm(true), danger: true },
                                     ].map((item) => {
                                         if (item.label === "Download Your Data") return null;
@@ -711,7 +810,7 @@ export default function SettingsPage() {
 
                                         if (item.label === "Report a Bug") return null;
                                         const Icon = item.icon;
-                                        
+
                                         const Content = (
                                             <div className="flex items-center justify-between w-full">
                                                 <div className="flex items-center gap-3">
@@ -728,7 +827,7 @@ export default function SettingsPage() {
 
                                         if (item.href) {
                                             return (
-                                                <Link 
+                                                <Link
                                                     key={item.label}
                                                     href={item.href}
                                                     className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
@@ -755,10 +854,10 @@ export default function SettingsPage() {
             </div>
 
             {/* Change Password Modal */}
-            <ChangePasswordModal 
-                isOpen={isChangePasswordOpen} 
-                onClose={() => setIsChangePasswordOpen(false)} 
-                userEmail={user?.email || ""} 
+            <ChangePasswordModal
+                isOpen={isChangePasswordOpen}
+                onClose={() => setIsChangePasswordOpen(false)}
+                userEmail={user?.email || ""}
             />
 
             {/* Delete Confirmation Modal */}
@@ -774,7 +873,7 @@ export default function SettingsPage() {
                             <div className="mx-auto w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
                                 <AlertTriangle className="text-red-600" size={32} />
                             </div>
-                             <div className="space-y-2">
+                            <div className="space-y-2">
                                 <h3 className="2xl font-black text-slate-800">{isSingle ? "Delete Data?" : "Delete Account?"}</h3>
                                 <p className="text-sm text-slate-500">
                                     This action is permanent and cannot be undone. You will lose all your {isSingle ? "personal " : ""}data and memories.

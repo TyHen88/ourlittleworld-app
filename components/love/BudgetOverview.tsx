@@ -7,6 +7,7 @@ import { useBudgetSummary } from "@/hooks/use-transactions";
 import { BudgetSetupModal } from "@/components/finance/BudgetSetupModal";
 import { useCouple } from "@/hooks/use-couple";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 interface BudgetOverviewProps {
@@ -24,8 +25,28 @@ export function BudgetOverview({ id, period = "month", date }: BudgetOverviewPro
     if (isLoading) {
         return (
             <Card className="p-6 border-none shadow-xl bg-white/80 backdrop-blur-md rounded-4xl">
-                <div className="h-40 flex items-center justify-center">
-                    <div className="animate-pulse text-slate-400">Loading...</div>
+                <div className="space-y-6">
+                    <div className="space-y-3 pr-10">
+                        <Skeleton className="h-3 w-24 rounded-full" />
+                        <Skeleton className="h-8 w-40 rounded-2xl" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        {[1, 2, 3, 4].map((item) => (
+                            <div key={item} className="rounded-3xl bg-slate-50 p-4">
+                                <Skeleton className="h-3 w-16 rounded-full" />
+                                <Skeleton className="mt-4 h-8 w-20 rounded-2xl" />
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="space-y-4 rounded-3xl bg-slate-50/80 p-4">
+                        <div className="space-y-2">
+                            <Skeleton className="h-4 w-32 rounded-full" />
+                            <Skeleton className="h-3 w-40 rounded-full" />
+                        </div>
+                        <Skeleton className="h-40 w-full rounded-3xl" />
+                    </div>
                 </div>
             </Card>
         );
@@ -70,7 +91,6 @@ export function BudgetOverview({ id, period = "month", date }: BudgetOverviewPro
     }));
 
     const total = summary.balance?.total ?? 0;
-    const periodLabel = period === "day" ? "Today" : period === "year" ? "This Year" : "This Month";
     const summaryCards = isSingle
         ? [
             { label: "Income", value: totalIncome, icon: ArrowUpRight, tone: "text-emerald-700", bg: "bg-emerald-50" },
@@ -107,12 +127,6 @@ export function BudgetOverview({ id, period = "month", date }: BudgetOverviewPro
                             isSingle ? "text-emerald-600/70" : "text-romantic-heart/70"
                         )}>
                             {isSingle ? "My Balance" : "Shared Balance"}
-                        </p>
-                        <h3 className="text-2xl font-black text-slate-900 mt-2">{periodLabel} balance summary</h3>
-                        <p className="text-sm text-slate-500 mt-1">
-                            {isSingle
-                                ? "See how much you earned, spent, saved, and what remains for the selected period."
-                                : "See how much came in, went out, and what remains in your shared balance for the selected period."}
                         </p>
                     </div>
 
