@@ -4,14 +4,14 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, Wallet, Settings, Heart, MessageCircleHeart } from "lucide-react";
+import { Home, Wallet, Settings, Heart, MessageCircleHeart, Plane } from "lucide-react";
 
+import { useCouple } from "@/hooks/use-couple";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { icon: Home, label: "Home", href: "/dashboard" },
   { icon: Wallet, label: "Budget", href: "/budget" },
-  { icon: MessageCircleHeart, label: "Chat", href: "/chat" },
   { icon: Heart, label: "Feed", href: "/feed" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];
@@ -55,7 +55,18 @@ function isMobileKeyboardOpen() {
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { profile } = useCouple();
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const isSingle = profile?.user_type === "SINGLE";
+  const navItems = [
+    BASE_NAV_ITEMS[0],
+    BASE_NAV_ITEMS[1],
+    isSingle
+      ? { icon: Plane, label: "Trips", href: "/trips" }
+      : { icon: MessageCircleHeart, label: "Chat", href: "/chat" },
+    BASE_NAV_ITEMS[2],
+    BASE_NAV_ITEMS[3],
+  ];
 
   useEffect(() => {
     const updateKeyboardState = () => {
@@ -93,7 +104,7 @@ export function BottomNav() {
       aria-hidden={isKeyboardOpen}
     >
       <nav className="max-w-md mx-auto h-16 bg-white/80 backdrop-blur-xl border border-romantic-blush/30 shadow-2xl rounded-full flex items-center justify-around px-6 pointer-events-auto">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link key={item.href} href={item.href} className="relative p-2 group">
