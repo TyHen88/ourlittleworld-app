@@ -7,7 +7,7 @@ This guide will walk you through setting up the **OurLittleWorld** project for l
 ## 📋 Prerequisites
 
 Before you begin, ensure you have the following installed:
-- **Node.js** (v20+ recommended)
+- **Node.js** (v22 recommended)
 - **PostgreSQL** (v14+ recommended)
 - **npm** (comes with Node.js)
 
@@ -26,14 +26,13 @@ npm install
 Locate the `.env` file in the root directory. If it doesn't exist, create it. Use the template below and fill in your actual credentials:
 
 ```bash
-# Site URL (for Auth callbacks)
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-
 # Database Connection (PostgreSQL)
 # Format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 DATABASE_URL="postgresql://your_user:your_password@localhost:5432/ourlittleworld_db"
+DIRECT_URL="postgresql://your_user:your_password@localhost:5432/ourlittleworld_db"
 
-# NextAuth Security
+# Auth.js
+AUTH_URL="http://localhost:3000"
 AUTH_SECRET="your_generated_secret_here" # Use 'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"' to generate one
 
 # SMTP (Email Provider for Login Codes)
@@ -44,7 +43,7 @@ SMTP_PASSWORD="your-app-password"
 SMTP_FROM="OurLittleWorld <noreply@example.com>"
 
 # AI Features
-GEMINI_API_KEY="your_google_gemini_api_key"
+OPENAI_API_KEY="your_openai_api_key"
 ```
 
 ---
@@ -83,6 +82,27 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Railway deployment
+
+For Railway production, configure these variables in your service:
+
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+DIRECT_URL=${{Postgres.DATABASE_URL}}
+AUTH_URL=https://your-app-domain.up.railway.app
+AUTH_SECRET=your_generated_secret_here
+SMTP_HOST="smtp.yourprovider.com"
+SMTP_PORT=587
+SMTP_USER="your-email@example.com"
+SMTP_PASSWORD="your-app-password"
+SMTP_FROM="OurLittleWorld <noreply@example.com>"
+```
+
+Railway uses the repo's `railway.json` to:
+- run `npm run build`
+- apply migrations with `npm run db:deploy`
+- start the app with `npm run start`
 
 ---
 
