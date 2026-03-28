@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, Bell, Upload, MessageCircleHeart, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
+import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, Bell, Upload, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
@@ -435,25 +435,29 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                             </div>
                         </div>
 
-                        <div className="h-px bg-slate-100" />
+                        {!isSingle && (
+                            <>
+                                <div className="h-px bg-slate-100" />
 
-                        <a href="/chat" className="flex items-start gap-3 group">
-                            <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
-                                <MessageCircleHeart className="text-indigo-600" size={18} />
-                            </div>
-                            <div className="flex-1">
-                                <h4 className="font-bold text-slate-800 text-sm">{isSingle ? "Couple Chat" : "Private Messenger"}</h4>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    {isSingle ? "Connect with a partner to unlock this tab" : "Send private messages only your partner can read"}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-2">
-                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">
-                                        {isSingle ? "Couple Only" : "Live"}
-                                    </span>
-                                </div>
-                            </div>
-                            <ArrowRight className="text-slate-300 group-hover:text-indigo-400 transition-colors mt-1" size={16} />
-                        </a>
+                                <a href="/chat" className="flex items-start gap-3 group">
+                                    <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
+                                        <Heart className="text-indigo-600 fill-indigo-600" size={18} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="font-bold text-slate-800 text-sm">Private Messenger</h4>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Send private messages only your partner can read
+                                        </p>
+                                        <div className="flex items-center gap-1.5 mt-2">
+                                            <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">
+                                                Live
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <ArrowRight className="text-slate-300 group-hover:text-indigo-400 transition-colors mt-1" size={16} />
+                                </a>
+                            </>
+                        )}
                     </div>
                 </Card>
             </motion.section>

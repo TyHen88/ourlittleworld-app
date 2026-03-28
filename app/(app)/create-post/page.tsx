@@ -17,6 +17,17 @@ type PreviewImage = {
     file: File;
 };
 
+type CreatePostMetadata = {
+    category: string;
+    comments: unknown[];
+    comments_count: number;
+    images: string[];
+    likes: string[];
+    likes_count: number;
+    feeling?: string;
+    location?: string;
+};
+
 export default function CreatePostPage() {
     const queryClient = useQueryClient();
     const router = useRouter();
@@ -233,6 +244,7 @@ export default function CreatePostPage() {
 
         try {
             const trimmed = content.trim();
+            const normalizedCategory = category?.trim() || "Other";
             let imageUrls: string[] = [];
 
             if (previewImages.length > 0) {
@@ -256,7 +268,8 @@ export default function CreatePostPage() {
             }
 
             // Add tagged partner and other metadata
-            const nextMetadata: any = {
+            const nextMetadata: CreatePostMetadata = {
+                category: normalizedCategory,
                 images: imageUrls,
                 likes: [],
                 likes_count: 0,
@@ -266,7 +279,6 @@ export default function CreatePostPage() {
 
             if (feeling) nextMetadata.feeling = feeling;
             if (location.trim()) nextMetadata.location = location.trim();
-            if (category) nextMetadata.category = category;
 
             // Optimistic Update
             const optimisticPost = {
@@ -275,7 +287,7 @@ export default function CreatePostPage() {
                 author_id: user?.id,
                 content: trimmed,
                 image_url: imageUrls[0] || null,
-                category: category || null,
+                category: normalizedCategory,
                 metadata: nextMetadata,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
@@ -321,8 +333,8 @@ export default function CreatePostPage() {
 
             // Redirect after successful completion
             router.push('/feed');
-        } catch (e: any) {
-            const message = e?.message || 'Something went wrong';
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Something went wrong';
             setError(message);
             toast.error("Couldn't create memory", message);
             setSubmitting(false);

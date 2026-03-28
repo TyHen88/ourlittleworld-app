@@ -4,13 +4,11 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
-import { PostSkeleton } from "@/components/love/PostSkeleton";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { MessageCircleHeart, Sparkles, Image as ImageIcon, Clock, Heart as HeartIcon, Search, ArrowLeft, ChevronRight, FolderOpen } from "lucide-react";
 import { usePosts, prependPostToCaches } from "@/hooks/use-posts";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Stars, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,10 +16,67 @@ import { useQueryClient } from "@tanstack/react-query";
 
 type FilterType = "all" | "photos" | "recent" | "favorites";
 
+interface FeedUser {
+    id?: string;
+    name?: string | null;
+}
+
+interface FeedProfile {
+    user_type?: string | null;
+    full_name?: string | null;
+}
+
+interface FeedCouple {
+    id?: string;
+}
+
+interface FeedPostMetadata {
+    category?: string;
+    images?: string[];
+    likes?: string[];
+    likes_count?: number;
+    comments_count?: number;
+}
+
+interface FeedPostAuthor {
+    full_name?: string | null;
+    avatar_url?: string | null;
+}
+
+interface FeedPostRecord {
+    id: string;
+    author_id: string;
+    content: string;
+    created_at: string | Date;
+    category: string | null;
+    image_url: string | null;
+    metadata: FeedPostMetadata | null;
+    author: FeedPostAuthor | null;
+}
+
+interface FeedPostCard {
+    id: string;
+    author: string;
+    content: string;
+    timestamp: string;
+    reactions: number;
+    comments: number;
+    imageUrl: string | null;
+    avatarUrl: string | null;
+    metadata?: FeedPostMetadata;
+    category: string;
+    authorId: string | null;
+}
+
+function normalizePostCategory(value: string | null | undefined) {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : "Other";
+}
+
 interface FeedClientProps {
-    user: any;
-    profile: any;
-    couple: any;
+    user: FeedUser;
+    profile: FeedProfile | null;
+    couple: FeedCouple | null;
 }
 
 export default function FeedClient({ user, profile, couple }: FeedClientProps) {
@@ -54,6 +109,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
         try {
             const parsed = JSON.parse(pendingPost);
             prependPostToCaches(queryClient, id, parsed);
+            setSelectedCategory(normalizePostCategory(parsed?.category));
         } catch (error) {
             console.error("Failed to hydrate pending post", error);
         } finally {
@@ -64,8 +120,12 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
     const mappedPosts = useMemo(() => {
         if (!data) return [];
 
-        const formatTimestamp = (value: any) => {
+        const formatTimestamp = (value: unknown) => {
             try {
+                if (!(typeof value === "string" || typeof value === "number" || value instanceof Date)) {
+                    return String(value ?? "");
+                }
+
                 const d = new Date(value);
                 return Number.isNaN(d.getTime()) ? String(value ?? "") : d.toLocaleString();
             } catch {
@@ -74,17 +134,18 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
         };
 
         const seen = new Set<string>();
+        const rows = data.pages.flatMap((page) => page.data as FeedPostRecord[]);
 
-        return data.pages
-            .flatMap(page => page.data)
-            .filter((row: any) => {
+        return rows
+            .filter((row) => {
                 const postId = row?.id;
                 if (!postId) return true;
                 if (seen.has(postId)) return false;
                 seen.add(postId);
                 return true;
             })
-            .map((row: any) => {
+            .map((row): FeedPostCard => {
+                const normalizedCategory = normalizePostCategory(row?.category);
                 const authorName =
                     row?.author?.full_name ||
                     (row?.author_id && user?.id && row.author_id === user.id ? profile?.full_name : null) ||
@@ -99,8 +160,8 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                     comments: Number(row?.metadata?.comments_count ?? 0),
                     imageUrl: row?.image_url ?? null,
                     avatarUrl: row?.author?.avatar_url ?? null,
-                    metadata: row?.metadata ?? null,
-                    category: row?.category ?? null,
+                    metadata: row?.metadata ? { ...row.metadata, category: normalizedCategory } : undefined,
+                    category: normalizedCategory,
                     authorId: row?.author_id ?? null,
                 };
             });
@@ -178,11 +239,10 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
     const groupedPosts = useMemo(() => {
         if (filter !== "all" || searchQuery.trim() || selectedCategory) return null;
 
-        const groups: Record<string, any[]> = {};
+        const groups: Record<string, FeedPostCard[]> = {};
         mappedPosts.forEach(post => {
-            const cat = post.category || "Other";
-            if (!groups[cat]) groups[cat] = [];
-            groups[cat].push(post);
+            if (!groups[post.category]) groups[post.category] = [];
+            groups[post.category].push(post);
         });
 
         return Object.entries(groups).filter(([, posts]) => posts.length > 0);
@@ -224,30 +284,8 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
 
     const isLoadingInitial = postsLoading && mappedPosts.length === 0;
 
-    if (isLoadingInitial) {
-        return (
-            <motion.div
-                initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, ease: "easeOut" }}
-                className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6"
-            >
-                <div className="space-y-3">
-                    <Skeleton className="h-8 w-40 rounded-lg" />
-                    <Skeleton className="h-4 w-64 rounded-lg" />
-                </div>
-                {/* ... other loading skeletons ... */}
-                <div className="mt-6 space-y-6">
-                    {[1, 2, 3].map((i) => (
-                        <PostSkeleton key={i} />
-                    ))}
-                </div>
-            </motion.div>
-        );
-    }
-
     const postsToDisplay = selectedCategory
-        ? filteredPosts.filter(p => (p.category || "Other") === selectedCategory)
+        ? filteredPosts.filter(p => p.category === selectedCategory)
         : filteredPosts;
 
     return (
@@ -255,7 +293,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
             initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6"
+            className="max-w-2xl mx-auto space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6"
         >
             {!couple && !isSingle ? (
                 <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center">
@@ -314,7 +352,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                         onClick={() => { setFilter(tab.value as FilterType); setSelectedCategory(null); }}
                                         className={cn(
                                             "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold transition-all",
-                                            isActive 
+                                            isActive
                                                 ? (isSingle
                                                     ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
                                                     : "border-romantic-blush/50 bg-romantic-blush/20 text-romantic-heart shadow-sm")
@@ -361,7 +399,22 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                     </header>
 
                     <section className="space-y-5">
-                        {postsToDisplay.length === 0 ? (
+                        {isLoadingInitial ? (
+                            <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-slate-200 bg-white/80 py-14 text-center shadow-sm">
+                                <div className={cn(
+                                    "h-9 w-9 animate-spin rounded-full border-[3px] border-slate-200 border-t-slate-500",
+                                    isSingle && "border-emerald-100 border-t-emerald-500"
+                                )} />
+                                <div className="space-y-1">
+                                    <p className="text-sm font-bold text-slate-700">
+                                        {isSingle ? "Loading your journal..." : "Loading your memories..."}
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                        Syncing your latest posts
+                                    </p>
+                                </div>
+                            </div>
+                        ) : postsToDisplay.length === 0 ? (
                             <div className={cn(
                                 "rounded-3xl border-2 border-dashed py-14 text-center",
                                 isSingle ? "bg-emerald-50/50 border-emerald-100" : "bg-gradient-to-br from-romantic-blush/20 to-white border-romantic-blush/30"
@@ -495,7 +548,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                 <AnimatePresence mode="popLayout">
                                     {postsToDisplay.map((p, index) => (
                                         <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
-                                            <CoupleFeedPost {...p} currentUserId={user?.id} coupleId={couple?.id} authorId={p.authorId} />
+                                            <CoupleFeedPost {...p} currentUserId={user?.id} coupleId={couple?.id} authorId={p.authorId ?? undefined} />
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>

@@ -105,6 +105,10 @@ export async function createPost(input: {
     try {
         const { user, profile, isSingle } = await getPostAccessContext();
         const content = (input.content ?? "").trim();
+        const normalizedCategory =
+            typeof input.metadata?.category === "string" && input.metadata.category.trim()
+                ? input.metadata.category.trim()
+                : "Other";
 
         const imageUrls = Array.isArray(input.imageUrls) ? input.imageUrls.filter(Boolean) : [];
         if (!content && imageUrls.length === 0) {
@@ -117,6 +121,7 @@ export async function createPost(input: {
                 ? {
                     ...(baseMetadata ?? {}),
                     ...(imageUrls.length > 0 ? { images: imageUrls } : {}),
+                    category: normalizedCategory,
                 }
                 : undefined;
 
@@ -130,7 +135,7 @@ export async function createPost(input: {
             author_id: user.id,
             content,
             image_url: imageUrls[0] ?? null,
-            category: typeof input.metadata?.category === "string" ? input.metadata.category : null,
+            category: normalizedCategory,
             ...(nextMetadata ? { metadata: nextMetadata as Prisma.InputJsonValue } : {}),
         };
 

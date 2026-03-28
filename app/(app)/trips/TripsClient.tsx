@@ -727,7 +727,7 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <div className="space-y-1.5">
                                             <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Start Date</label>
                                             <Input
@@ -735,7 +735,13 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                                                 type="date"
                                                 value={newTrip.startDate}
                                                 onChange={e => setNewTrip({ ...newTrip, startDate: e.target.value })}
-                                                className={`h-11 rounded-xl border-slate-100 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                                className={cn(
+                                                    "h-11 rounded-xl border-slate-100 px-3 text-sm [font-size:16px] sm:text-base",
+                                                    "[&::-webkit-calendar-picker-indicator]:ml-2 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:overflow-hidden [&::-webkit-datetime-edit]:p-0",
+                                                    isSingle
+                                                        ? "focus-visible:border-emerald-500 focus-visible:ring-emerald-100"
+                                                        : "focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40"
+                                                )}
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -745,7 +751,13 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                                                 type="date"
                                                 value={newTrip.endDate}
                                                 onChange={e => setNewTrip({ ...newTrip, endDate: e.target.value })}
-                                                className={`h-11 rounded-xl border-slate-100 text-base [font-size:16px] ${isSingle ? 'focus-visible:border-emerald-500 focus-visible:ring-emerald-100' : 'focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40'}`}
+                                                className={cn(
+                                                    "h-11 rounded-xl border-slate-100 px-3 text-sm [font-size:16px] sm:text-base",
+                                                    "[&::-webkit-calendar-picker-indicator]:ml-2 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-datetime-edit]:min-w-0 [&::-webkit-datetime-edit]:overflow-hidden [&::-webkit-datetime-edit]:p-0",
+                                                    isSingle
+                                                        ? "focus-visible:border-emerald-500 focus-visible:ring-emerald-100"
+                                                        : "focus-visible:border-romantic-heart focus-visible:ring-romantic-blush/40"
+                                                )}
                                             />
                                         </div>
                                     </div>
