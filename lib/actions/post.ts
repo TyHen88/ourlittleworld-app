@@ -52,6 +52,27 @@ function getMetadataObject(value: Prisma.JsonValue | CreatePostMetadata | undefi
     return { ...value } as StoredPostMetadata;
 }
 
+function getPostPushUrl() {
+    return "/feed";
+}
+
+function getPostAuthorLabel(profile: PostProfile) {
+    return profile.full_name?.trim() || "Your partner";
+}
+
+const postPushOptions = {
+    TTL: 10 * 60,
+    urgency: "normal" as const,
+};
+
+async function sendPostPushNotification(params: Parameters<typeof sendPushNotificationToUsers>[0]) {
+    try {
+        await sendPushNotificationToUsers(params);
+    } catch (pushError) {
+        console.error("Post push notification error:", pushError);
+    }
+}
+
 async function getPostAccessContext() {
     const user = await getCachedUserOrThrow();
     if (!user.id) throw new Error("User ID is missing");
@@ -154,39 +175,36 @@ export async function createPost(input: {
         });
 
         if (!isSingle && profile.couple_id) {
-            try {
-                const recipients = await prisma.user.findMany({
-                    where: {
-                        couple_id: profile.couple_id,
-                        id: {
-                            not: user.id,
-                        },
+            const recipients = await prisma.user.findMany({
+                where: {
+                    couple_id: profile.couple_id,
+                    id: {
+                        not: user.id,
                     },
-                    select: {
-                        id: true,
+                },
+                select: {
+                    id: true,
+                },
+            });
+
+            if (recipients.length > 0) {
+                const authorName = profile.full_name?.trim() || "Your partner";
+                const preview = content
+                    ? content.slice(0, 120)
+                    : imageUrls.length > 0
+                        ? `${authorName} shared ${imageUrls.length > 1 ? "new photos" : "a new photo"}.`
+                        : `${authorName} shared a new post.`;
+
+                await sendPostPushNotification({
+                    userIds: recipients.map((recipient) => recipient.id),
+                    payload: {
+                        title: `${authorName} posted something new`,
+                        body: preview,
+                        url: "/feed",
+                        tag: `post-${data.id}`,
                     },
+                    options: postPushOptions,
                 });
-
-                if (recipients.length > 0) {
-                    const authorName = profile.full_name?.trim() || "Your partner";
-                    const preview = content
-                        ? content.slice(0, 120)
-                        : imageUrls.length > 0
-                            ? `${authorName} shared ${imageUrls.length > 1 ? "new photos" : "a new photo"}.`
-                            : `${authorName} shared a new post.`;
-
-                    await sendPushNotificationToUsers({
-                        userIds: recipients.map((recipient) => recipient.id),
-                        payload: {
-                            title: `${authorName} posted something new`,
-                            body: preview,
-                            url: "/feed",
-                            tag: `post-${data.id}`,
-                        },
-                    });
-                }
-            } catch (pushError) {
-                console.error("Post push notification error:", pushError);
             }
         }
 
@@ -286,6 +304,21 @@ export async function toggleLikePost(postId: string) {
             data: { metadata: nextMetadata as Prisma.InputJsonValue }
         });
 
+        const isNewLike = userIndex === -1;
+        if (isNewLike && post.author_id !== user.id) {
+            const actorName = getPostAuthorLabel(actor.profile);
+            await sendPostPushNotification({
+                userIds: [post.author_id],
+                payload: {
+                    title: `${actorName} liked your post`,
+                    body: "Someone reacted to your latest memory.",
+                    url: getPostPushUrl(),
+                    tag: `post-like-${postId}`,
+                },
+                options: postPushOptions,
+            });
+        }
+
         return { success: true, metadata: nextMetadata };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "An unknown error occurred";
@@ -332,6 +365,20 @@ export async function addComment(postId: string, content: string) {
             data: { metadata: nextMetadata as Prisma.InputJsonValue }
         });
 
+        if (post.author_id !== user.id) {
+            const actorName = getPostAuthorLabel(profile);
+            await sendPostPushNotification({
+                userIds: [post.author_id],
+                payload: {
+                    title: `${actorName} commented on your post`,
+                    body: trimmedContent.slice(0, 120),
+                    url: getPostPushUrl(),
+                    tag: `post-comment-${postId}`,
+                },
+                options: postPushOptions,
+            });
+        }
+
         return { success: true, comment: newComment, metadata: nextMetadata };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "An unknown error occurred";
@@ -355,6 +402,10 @@ export async function addReply(postId: string, commentId: string, content: strin
 
         const commentIndex = comments.findIndex((comment) => comment.id === commentId);
         if (commentIndex === -1) return { success: false, error: "Comment not found" };
+        const commentAuthorId =
+            typeof comments[commentIndex]?.author_id === "string"
+                ? comments[commentIndex].author_id
+                : null;
 
         const newReply: StoredPostReply = {
             id: crypto.randomUUID(),
@@ -382,6 +433,21 @@ export async function addReply(postId: string, commentId: string, content: strin
             where: { id: postId },
             data: { metadata: nextMetadata as Prisma.InputJsonValue }
         });
+
+        const replyRecipients = [...new Set([post.author_id, commentAuthorId].filter((recipientId): recipientId is string => Boolean(recipientId) && recipientId !== user.id))];
+        if (replyRecipients.length > 0) {
+            const actorName = getPostAuthorLabel(profile);
+            await sendPostPushNotification({
+                userIds: replyRecipients,
+                payload: {
+                    title: `${actorName} replied to a comment`,
+                    body: trimmedContent.slice(0, 120),
+                    url: getPostPushUrl(),
+                    tag: `post-reply-${postId}-${commentId}`,
+                },
+                options: postPushOptions,
+            });
+        }
 
         return { success: true, reply: newReply, metadata: nextMetadata };
     } catch (error: unknown) {

@@ -348,7 +348,12 @@ export default function SettingsPage() {
             }
 
             setNotifications((prev) => ({ ...prev, push: true }));
-            toast.success("Push enabled", "This device will now receive partner updates.");
+            toast.success(
+                "Push enabled",
+                isSingle
+                    ? "This device will now receive reminders and trip alerts."
+                    : "This device will now receive partner updates."
+            );
         } catch (error: unknown) {
             toast.error("Couldn't update push notifications", getErrorMessage(error, "Failed to update push notifications"));
         } finally {
@@ -831,9 +836,7 @@ export default function SettingsPage() {
                                         {
                                             key: "push",
                                             label: "Push Notifications",
-                                            desc: pushSupported
-                                                ? "Get notified on this device when your partner sends a message or creates a post."
-                                                : "Push notifications are not available in this browser.",
+                                            desc: "Receive updates directly on your device",
                                             icon: Bell,
                                         },
                                         { key: "email", label: "Email Notifications", desc: "Receive updates via email", icon: Mail },

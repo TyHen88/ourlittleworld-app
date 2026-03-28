@@ -17,7 +17,9 @@ import {
     MoveRight,
     NotebookText,
     PencilLine,
-    Users
+    Users,
+    Bell,
+    Check
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,7 @@ interface TripFormState {
     endDate: string;
     isSolo: boolean;
     notes: string;
+    remindDayBefore: boolean;
     startDate: string;
     title: string;
 }
@@ -122,6 +125,7 @@ function createEmptyTripForm(isSolo: boolean): TripFormState {
         budgetCurrency: "USD",
         notes: "",
         isSolo,
+        remindDayBefore: false,
     };
 }
 
@@ -217,6 +221,7 @@ function toTripForm(trip: TripRecord, isSolo: boolean): TripFormState {
         budgetCurrency,
         notes: trip.notes ?? "",
         isSolo,
+        remindDayBefore: Boolean(trip.trip_reminder_enabled),
     };
 }
 
@@ -367,7 +372,8 @@ export function TripsClient({ user, profile }: TripsClientProps) {
                 budget: parsedBudget ?? undefined,
                 budgetCurrency: newTrip.budgetCurrency,
                 notes: newTrip.notes,
-                isSolo: newTrip.isSolo
+                isSolo: newTrip.isSolo,
+                remindDayBefore: newTrip.remindDayBefore,
             };
             const result = editingTripId
                 ? await updateTrip(editingTripId, payload)
@@ -552,14 +558,20 @@ export function TripsClient({ user, profile }: TripsClientProps) {
                                             </div>
                                         </div>
 
-                                        <div className="mt-4 grid gap-2.5">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
-                                                    <Calendar size={12} className="text-slate-400" />
-                                                    {format(new Date(trip.start_date), 'MMM d')} - {format(new Date(trip.end_date), 'MMM d, yyyy')}
-                                                </div>
-                                                {trip.budget ? (
-                                                    <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold ${isSingle ? 'bg-emerald-50 text-emerald-700' : 'bg-romantic-blush/25 text-romantic-heart'}`}>
+                                            <div className="mt-4 grid gap-2.5">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
+                                                        <Calendar size={12} className="text-slate-400" />
+                                                        {format(new Date(trip.start_date), 'MMM d')} - {format(new Date(trip.end_date), 'MMM d, yyyy')}
+                                                    </div>
+                                                    {trip.trip_reminder_enabled ? (
+                                                        <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold ${isSingle ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                                                            <Bell size={12} />
+                                                            Reminds the day before
+                                                        </div>
+                                                    ) : null}
+                                                    {trip.budget ? (
+                                                        <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold ${isSingle ? 'bg-emerald-50 text-emerald-700' : 'bg-romantic-blush/25 text-romantic-heart'}`}>
                                                         {/* <span className="text-[10px] font-black">
                                                             {getTripBudgetCurrency(trip) === "KHR" ? "៛" : "$"}
                                                         </span> */}
@@ -841,6 +853,44 @@ export function TripsClient({ user, profile }: TripsClientProps) {
                                             className={`min-h-[88px] w-full resize-none rounded-xl border border-slate-100 px-3 py-2.5 text-base text-slate-800 outline-none transition-[color,box-shadow,border-color] [font-size:16px] ${isSingle ? 'focus:border-emerald-500 focus:ring-3 focus:ring-emerald-100' : 'focus:border-romantic-heart focus:ring-3 focus:ring-romantic-blush/40'}`}
                                         />
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setNewTrip((prevTrip) => ({
+                                                ...prevTrip,
+                                                remindDayBefore: !prevTrip.remindDayBefore,
+                                            }))
+                                        }
+                                        className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${newTrip.remindDayBefore
+                                            ? isSingle
+                                                ? 'border-emerald-300 bg-emerald-50'
+                                                : 'border-amber-300 bg-amber-50'
+                                            : 'border-slate-200 bg-slate-50 hover:bg-white'
+                                            }`}
+                                    >
+                                        <div className={cn(
+                                            "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                                            newTrip.remindDayBefore
+                                                ? isSingle
+                                                    ? "border-emerald-500 bg-emerald-500 text-white"
+                                                    : "border-amber-500 bg-amber-500 text-white"
+                                                : "border-slate-300 bg-white text-transparent"
+                                        )}>
+                                            <Check size={12} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <Bell size={15} className={newTrip.remindDayBefore ? (isSingle ? "text-emerald-600" : "text-amber-600") : "text-slate-400"} />
+                                                <p className="text-sm font-bold text-slate-800">
+                                                    Remind me one day before
+                                                </p>
+                                            </div>
+                                            <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">
+                                                Adds this trip to the Reminder page and sends a push notification the day before it starts.
+                                            </p>
+                                        </div>
+                                    </button>
 
                                     <div className="flex gap-2 pt-1">
                                         <Button

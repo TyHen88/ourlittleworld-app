@@ -61,10 +61,13 @@ function normalizeTripMetadata(metadata: Prisma.JsonValue | null | undefined) {
     return { ...(metadata as Record<string, Prisma.JsonValue>) };
 }
 
-function sanitizeTrip<T extends { budget: Prisma.Decimal | number | null }>(trip: T) {
+function sanitizeTrip<T extends { budget: Prisma.Decimal | number | null; reminder?: { id: string; is_deleted?: boolean } | null }>(trip: T) {
+    const { reminder, ...rest } = trip;
+
     return {
-        ...trip,
+        ...rest,
         budget: trip.budget ? Number(trip.budget.toString()) : 0,
+        trip_reminder_enabled: Boolean(reminder && !reminder.is_deleted),
     };
 }
 
@@ -169,6 +172,14 @@ export async function GET(request: NextRequest) {
         const trips = await prisma.trip.findMany({
             where: {
                 AND: [where, cursorFilter],
+            },
+            include: {
+                reminder: {
+                    select: {
+                        id: true,
+                        is_deleted: true,
+                    },
+                },
             },
             orderBy: [{ start_date: "desc" }, { created_at: "desc" }, { id: "desc" }],
             take: limit,

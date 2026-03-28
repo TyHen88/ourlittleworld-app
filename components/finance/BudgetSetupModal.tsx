@@ -26,31 +26,34 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
     const isSingle = profile?.user_type === 'SINGLE';
     const queryClient = useQueryClient();
 
-    const [monthlyTotal, setMonthlyTotal] = useState(currentBudget?.monthly_total || 2000);
-    const [hisBudget, setHisBudget] = useState(currentBudget?.his_budget || (isSingle ? 0 : 600));
-    const [hersBudget, setHersBudget] = useState(currentBudget?.hers_budget || (isSingle ? 0 : 500));
-    const [sharedBudget, setSharedBudget] = useState(currentBudget?.shared_budget || (isSingle ? monthlyTotal : 900));
+    const [monthlyTotal, setMonthlyTotal] = useState(0);
+    const [hisBudget, setHisBudget] = useState(0);
+    const [hersBudget, setHersBudget] = useState(0);
+    const [sharedBudget, setSharedBudget] = useState(0);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
 
-    // Update state when currentBudget changes
     useEffect(() => {
-        if (currentBudget) {
-            setMonthlyTotal(currentBudget.monthly_total);
-            setHisBudget(currentBudget.his_budget);
-            setHersBudget(currentBudget.hers_budget);
-            setSharedBudget(currentBudget.shared_budget);
-        }
-    }, [currentBudget]);
+        if (!open) return;
+
+        setMonthlyTotal(currentBudget?.monthly_total ?? 0);
+        setHisBudget(currentBudget?.his_budget ?? 0);
+        setHersBudget(currentBudget?.hers_budget ?? 0);
+        setSharedBudget(currentBudget?.shared_budget ?? 0);
+        setError("");
+    }, [currentBudget, open]);
 
     // Calculate total allocation
     const totalAllocated = hisBudget + hersBudget + sharedBudget;
     const isBalanced = totalAllocated === monthlyTotal;
     const difference = monthlyTotal - totalAllocated;
+    const monthlyTotalSafe = monthlyTotal > 0 ? monthlyTotal : 1;
+    const formatCurrency = (value: number) => Number.isFinite(value) ? value.toFixed(2) : "0.00";
+    const getPercentage = (value: number) => monthlyTotal > 0 ? Math.round((value / monthlyTotal) * 100) : 0;
 
     const handleSave = async () => {
         if (!isSingle && !isBalanced) {
-            setError(`Budget allocation doesn't match total. ${difference > 0 ? 'Add' : 'Remove'} $${Math.abs(difference)}`);
+            setError(`Budget allocation doesn't match total. ${difference > 0 ? 'Add' : 'Remove'} $${formatCurrency(Math.abs(difference))}`);
             return;
         }
 
@@ -58,6 +61,12 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
         const finalSharedBudget = isSingle ? monthlyTotal : sharedBudget;
         const finalHisBudget = isSingle ? 0 : hisBudget;
         const finalHersBudget = isSingle ? 0 : hersBudget;
+        const finalBudgetGoals = {
+            monthly_total: monthlyTotal,
+            his_budget: finalHisBudget,
+            hers_budget: finalHersBudget,
+            shared_budget: finalSharedBudget,
+        };
 
         if (monthlyTotal <= 0) {
             setError("Monthly budget must be greater than 0");
@@ -75,40 +84,33 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
             if (!old) {
                 // If no summary exists, create minimal structure with new budget
                 return {
-                    budget_goals: {
-                        monthly_total: monthlyTotal,
-                        his_budget: hisBudget,
-                        hers_budget: hersBudget,
-                        shared_budget: sharedBudget,
-                    },
+                    budget_goals: finalBudgetGoals,
                     income: { his: 0, hers: 0, shared: 0, total: 0 },
                     expenses: { his: 0, hers: 0, shared: 0, total: 0 },
-                    balance: { his: hisBudget, hers: hersBudget, shared: sharedBudget, total: monthlyTotal },
+                    balance: {
+                        his: finalHisBudget,
+                        hers: finalHersBudget,
+                        shared: finalSharedBudget,
+                        total: monthlyTotal
+                    },
                     percentage: 0,
                     status: 'healthy',
                     transactions_count: 0,
                 };
             }
 
-            const newBudgetGoals = {
-                monthly_total: monthlyTotal,
-                his_budget: hisBudget,
-                hers_budget: hersBudget,
-                shared_budget: sharedBudget,
-            };
-
             // Recalculate balance with new budget goals
             const newBalance = {
-                his: hisBudget + (old.income?.his || 0) - (old.expenses?.his || 0),
-                hers: hersBudget + (old.income?.hers || 0) - (old.expenses?.hers || 0),
-                shared: sharedBudget + (old.income?.shared || 0) - (old.expenses?.shared || 0),
+                his: finalHisBudget + (old.income?.his || 0) - (old.expenses?.his || 0),
+                hers: finalHersBudget + (old.income?.hers || 0) - (old.expenses?.hers || 0),
+                shared: finalSharedBudget + (old.income?.shared || 0) - (old.expenses?.shared || 0),
                 total: 0,
             };
             newBalance.total = newBalance.his + newBalance.hers + newBalance.shared;
 
             return {
                 ...old,
-                budget_goals: newBudgetGoals,
+                budget_goals: finalBudgetGoals,
                 balance: newBalance,
             };
         });
@@ -150,22 +152,14 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
         }
     };
 
-    const handleAutoBalance = () => {
-        // Auto-distribute remaining budget
-        if (difference !== 0) {
-            const perCategory = Math.floor(difference / 3);
-            const remainder = difference % 3;
-
-            setHisBudget(hisBudget + perCategory);
-            setHersBudget(hersBudget + perCategory);
-            setSharedBudget(sharedBudget + perCategory + remainder);
-        }
-    };
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[420px] border-none shadow-2xl bg-white/95 backdrop-blur-xl rounded-3xl p-6">
-                <DialogHeader>
+            <DialogContent
+                className="top-auto left-0 right-0 bottom-0 max-w-none translate-x-0 translate-y-0 rounded-t-[2rem] rounded-b-none border-none bg-white/95 p-6 shadow-2xl backdrop-blur-xl data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:left-1/2 sm:right-auto sm:bottom-4 sm:w-full sm:max-w-[420px] sm:-translate-x-1/2 sm:rounded-3xl sm:rounded-b-3xl"
+                showCloseButton={false}
+            >
+                <DialogHeader className="text-center">
+                    <div className="mx-auto mb-1 h-1.5 w-14 rounded-full bg-slate-200" />
                     <DialogTitle className="text-center text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
                         <TrendingUp className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={20} />
                         {isSingle ? "Set Starting Balance" : "Set Starting Balance"}
@@ -180,9 +174,10 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                             <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" size={20} />
                             <Input
                                 type="number"
-                                step="100"
-                                placeholder="2000"
-                                value={monthlyTotal}
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                value={monthlyTotal === 0 ? "" : monthlyTotal}
                                 onChange={(e) => setMonthlyTotal(parseFloat(e.target.value) || 0)}
                                 className={cn(
                                     "pl-10 text-2xl font-black h-12 rounded-2xl text-center border-2",
@@ -212,20 +207,20 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Mine</label>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-sm font-black text-slate-800">${hisBudget}</span>
-                                            <span className="text-[10px] text-slate-400 font-medium">{Math.round((hisBudget / monthlyTotal) * 100)}%</span>
+                                            <span className="text-sm font-black text-slate-800">${formatCurrency(hisBudget)}</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">{getPercentage(hisBudget)}%</span>
                                         </div>
                                     </div>
                                     <input
                                         type="range"
                                         min="0"
-                                        max={monthlyTotal}
+                                        max={monthlyTotalSafe}
                                         step="50"
                                         value={hisBudget}
                                         onChange={(e) => setHisBudget(parseFloat(e.target.value))}
                                         className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                         style={{
-                                            background: `linear-gradient(to right, #FFE4E1 0%, #FFE4E1 ${(hisBudget / monthlyTotal) * 100}%, #e5e7eb ${(hisBudget / monthlyTotal) * 100}%, #e5e7eb 100%)`
+                                            background: `linear-gradient(to right, #FFE4E1 0%, #FFE4E1 ${(hisBudget / monthlyTotalSafe) * 100}%, #e5e7eb ${(hisBudget / monthlyTotalSafe) * 100}%, #e5e7eb 100%)`
                                         }}
                                     />
                                 </div>
@@ -235,20 +230,20 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Partner</label>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-sm font-black text-slate-800">${hersBudget}</span>
-                                            <span className="text-[10px] text-slate-400 font-medium">{Math.round((hersBudget / monthlyTotal) * 100)}%</span>
+                                            <span className="text-sm font-black text-slate-800">${formatCurrency(hersBudget)}</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">{getPercentage(hersBudget)}%</span>
                                         </div>
                                     </div>
                                     <input
                                         type="range"
                                         min="0"
-                                        max={monthlyTotal}
+                                        max={monthlyTotalSafe}
                                         step="50"
                                         value={hersBudget}
                                         onChange={(e) => setHersBudget(parseFloat(e.target.value))}
                                         className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                         style={{
-                                            background: `linear-gradient(to right, #E6E6FA 0%, #E6E6FA ${(hersBudget / monthlyTotal) * 100}%, #e5e7eb ${(hersBudget / monthlyTotal) * 100}%, #e5e7eb 100%)`
+                                            background: `linear-gradient(to right, #E6E6FA 0%, #E6E6FA ${(hersBudget / monthlyTotalSafe) * 100}%, #e5e7eb ${(hersBudget / monthlyTotalSafe) * 100}%, #e5e7eb 100%)`
                                         }}
                                     />
                                 </div>
@@ -258,20 +253,20 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Shared</label>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-sm font-black text-slate-800">${sharedBudget}</span>
-                                            <span className="text-[10px] text-slate-400 font-medium">{Math.round((sharedBudget / monthlyTotal) * 100)}%</span>
+                                            <span className="text-sm font-black text-slate-800">${formatCurrency(sharedBudget)}</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">{getPercentage(sharedBudget)}%</span>
                                         </div>
                                     </div>
                                     <input
                                         type="range"
                                         min="0"
-                                        max={monthlyTotal}
+                                        max={monthlyTotalSafe}
                                         step="50"
                                         value={sharedBudget}
                                         onChange={(e) => setSharedBudget(parseFloat(e.target.value))}
                                         className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                         style={{
-                                            background: `linear-gradient(to right, #D4F4DD 0%, #D4F4DD ${(sharedBudget / monthlyTotal) * 100}%, #e5e7eb ${(sharedBudget / monthlyTotal) * 100}%, #e5e7eb 100%)`
+                                            background: `linear-gradient(to right, #D4F4DD 0%, #D4F4DD ${(sharedBudget / monthlyTotalSafe) * 100}%, #e5e7eb ${(sharedBudget / monthlyTotalSafe) * 100}%, #e5e7eb 100%)`
                                         }}
                                     />
                                 </div>
@@ -279,16 +274,10 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
 
                             {/* Balance Check - Compact */}
                             {!isBalanced && (
-                                <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50">
+                                <div className="flex items-center justify-center p-2 rounded-xl bg-amber-50">
                                     <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">
-                                        {difference > 0 ? `$${difference} left` : `$${Math.abs(difference)} over`}
+                                        {difference > 0 ? `$${formatCurrency(difference)} left` : `$${formatCurrency(Math.abs(difference))} over`}
                                     </span>
-                                    <button
-                                        onClick={handleAutoBalance}
-                                        className="text-[10px] font-bold text-romantic-heart hover:underline uppercase tracking-wide"
-                                    >
-                                        Auto Fix
-                                    </button>
                                 </div>
                             )}
                         </>

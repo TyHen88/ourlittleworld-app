@@ -14,6 +14,7 @@ export async function POST() {
 
   const result = await sendPushNotificationToUsers({
     userIds: [user.id],
+    allowSingleUserRecipients: true,
     payload: {
       title: "Test notification",
       body: "Web push is configured and your current browser subscription can receive notifications.",

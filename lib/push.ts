@@ -143,6 +143,7 @@ export async function sendPushNotificationToUsers(params: {
   userIds: string[];
   payload: NotificationPayload;
   options?: RequestOptions;
+  allowSingleUserRecipients?: boolean;
 }) {
   const uniqueUserIds = [...new Set(params.userIds.filter(Boolean))];
   if (uniqueUserIds.length === 0 || !ensureWebPushConfigured()) {
@@ -154,10 +155,40 @@ export async function sendPushNotificationToUsers(params: {
     };
   }
 
+  let recipientUserIds = uniqueUserIds;
+
+  if (!params.allowSingleUserRecipients) {
+    const eligibleUsers = await prisma.user.findMany({
+      where: {
+        id: {
+          in: uniqueUserIds,
+        },
+        is_deleted: false,
+        user_type: {
+          not: "SINGLE",
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    recipientUserIds = eligibleUsers.map((user) => user.id);
+  }
+
+  if (recipientUserIds.length === 0) {
+    return {
+      attempted: 0,
+      delivered: 0,
+      removed: 0,
+      failed: 0,
+    };
+  }
+
   const subscriptions = await prisma.pushSubscription.findMany({
     where: {
       user_id: {
-        in: uniqueUserIds,
+        in: recipientUserIds,
       },
     },
     select: {

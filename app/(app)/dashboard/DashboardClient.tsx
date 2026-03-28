@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, Bell, Upload, ArrowRight, Zap, Clock, Gift, Settings } from "lucide-react";
+import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, Bell, ArrowRight, Zap, Gift, Settings } from "lucide-react";
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
@@ -62,6 +62,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
             "/budget",
             "/calendar",
             "/create-post",
+            "/reminders",
             "/trips",
             "/settings",
         ];
@@ -402,7 +403,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                 )
             )}
 
-            {/* Coming Soon Features */}
+            {/* New Features */}
             <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -411,24 +412,24 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
             >
                 <div className="flex items-center gap-2">
                     <Gift className="text-romantic-heart" size={20} />
-                    <h3 className="text-lg font-bold text-slate-800">Coming Soon</h3>
+                    <h3 className="text-lg font-bold text-slate-800">New Feature</h3>
                     <span className="text-xs font-bold text-amber-600 uppercase tracking-widest px-2 py-0.5 bg-amber-50 rounded-full">New</span>
                 </div>
                 <Card className="p-5 border-none bg-gradient-to-br from-slate-50 to-white shadow-sm rounded-3xl">
                     <div className="space-y-4">
-                        <div className="flex items-start gap-3 group">
+                        <Link href="/reminders" prefetch className="flex items-start gap-3 group">
                             <div className="p-2 bg-amber-50 rounded-xl group-hover:bg-amber-100 transition-colors">
                                 <Bell className="text-amber-600" size={18} />
                             </div>
                             <div className="flex-1">
                                 <h4 className="font-bold text-slate-800 text-sm">Smart Reminders</h4>
-                                <p className="text-xs text-slate-500 mt-1">Budget alerts & daily expense tracking</p>
+                                <p className="text-xs text-slate-500 mt-1">To-do reminders, trip alerts, and push notifications</p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <Clock className="text-slate-400" size={12} />
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 2</span>
+                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
                                 </div>
                             </div>
-                        </div>
+                            <ArrowRight className="text-slate-300 group-hover:text-amber-400 transition-colors mt-1" size={16} />
+                        </Link>
 
                         <div className="h-px bg-slate-100" />
 
@@ -445,23 +446,6 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                             </div>
                             <ArrowRight className="text-slate-300 group-hover:text-blue-400 transition-colors mt-1" size={16} />
                         </Link>
-
-                        <div className="h-px bg-slate-100" />
-
-                        <div className="flex items-start gap-3 group">
-                            <div className="p-2 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
-                                <Upload className="text-green-600" size={18} />
-                            </div>
-                            <div className="flex-1">
-                                <h4 className="font-bold text-slate-800 text-sm">Receipt Upload</h4>
-                                <p className="text-xs text-slate-500 mt-1">CSV import & bulk transactions</p>
-                                <div className="flex items-center gap-1.5 mt-2">
-                                    <Clock className="text-slate-400" size={12} />
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phase 4</span>
-                                </div>
-                            </div>
-                        </div>
-
                         {!isSingle && (
                             <>
                                 <div className="h-px bg-slate-100" />

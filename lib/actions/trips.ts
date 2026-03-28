@@ -6,6 +6,7 @@ import { getCachedUser } from "@/lib/auth-cache";
 import { revalidatePath } from "next/cache";
 import { sendPushNotificationToUsers } from "@/lib/push";
 import { formatTripDateLabel, getTripNotificationRecipientIds } from "@/lib/push-events";
+import { syncTripReminder } from "@/lib/reminder-service";
 
 const TRIP_TIME_ZONE = "Asia/Phnom_Penh";
 const tripDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -24,6 +25,7 @@ type TripMutationInput = {
     endDate: Date;
     isSolo?: boolean;
     notes?: string;
+    remindDayBefore?: boolean;
     startDate: Date;
     title: string;
 };
@@ -88,14 +90,23 @@ function getTripAccessWhere(user: { id: string; couple_id: string | null }) {
     };
 }
 
-function sanitizeTrip<T extends { budget: Prisma.Decimal | number | null; transactions?: Array<{ amount: Prisma.Decimal | number | null }> }>(trip: T) {
+function sanitizeTrip<
+    T extends {
+        budget: Prisma.Decimal | number | null;
+        transactions?: Array<{ amount: Prisma.Decimal | number | null }>;
+        reminder?: { id: string; is_deleted?: boolean } | null;
+    }
+>(trip: T) {
+    const { reminder, ...rest } = trip;
+
     return {
-        ...trip,
+        ...rest,
         budget: trip.budget ? Number(trip.budget.toString()) : 0,
         transactions: (trip.transactions || []).map((transaction) => ({
             ...transaction,
             amount: transaction.amount ? Number(transaction.amount.toString()) : 0,
         })),
+        trip_reminder_enabled: Boolean(reminder && !reminder.is_deleted),
     };
 }
 
@@ -154,9 +165,23 @@ export async function createTrip(data: TripMutationInput) {
         }
     });
 
+    await syncTripReminder({
+        actorId: user.id,
+        enabled: Boolean(data.remindDayBefore),
+        trip: {
+            id: trip.id,
+            couple_id: trip.couple_id,
+            user_id: trip.user_id,
+            title: trip.title,
+            destination: trip.destination,
+            start_date: trip.start_date,
+        },
+    });
+
     const sanitizedTrip = sanitizeTrip({
         ...trip,
         transactions: [],
+        reminder: data.remindDayBefore ? { id: "enabled" } : null,
     });
 
     const recipientIds = await getTripNotificationRecipientIds({
@@ -187,6 +212,7 @@ export async function createTrip(data: TripMutationInput) {
 
     revalidatePath('/trips');
     revalidatePath('/dashboard');
+    revalidatePath('/reminders');
     return { success: true, data: sanitizedTrip };
 }
 
@@ -222,13 +248,28 @@ export async function updateTrip(id: string, data: TripMutationInput) {
         },
     });
 
+    await syncTripReminder({
+        actorId: user.id,
+        enabled: Boolean(data.remindDayBefore),
+        trip: {
+            id: trip.id,
+            couple_id: trip.couple_id,
+            user_id: trip.user_id,
+            title: trip.title,
+            destination: trip.destination,
+            start_date: trip.start_date,
+        },
+    });
+
     const sanitizedTrip = sanitizeTrip({
         ...trip,
         transactions: [],
+        reminder: data.remindDayBefore ? { id: "enabled" } : null,
     });
 
     revalidatePath('/trips');
     revalidatePath('/dashboard');
+    revalidatePath('/reminders');
     return { success: true, data: sanitizedTrip };
 }
 
@@ -252,5 +293,6 @@ export async function deleteTrip(id: string) {
 
     revalidatePath('/trips');
     revalidatePath('/dashboard');
+    revalidatePath('/reminders');
     return { success: true };
 }

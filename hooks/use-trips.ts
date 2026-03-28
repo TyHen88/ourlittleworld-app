@@ -16,6 +16,7 @@ export interface TripRecord {
     start_date: string | Date;
     status?: string | null;
     title: string;
+    trip_reminder_enabled?: boolean;
 }
 
 type TripPageResponse = CursorPaginatedResponse<TripRecord>;

@@ -6,8 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCouple } from "@/hooks/use-couple";
+import { type ReminderRecord, useReminderSummary } from "@/hooks/use-reminders";
 import { useTransactions } from "@/hooks/use-transactions";
 import { FullPageLoader } from "@/components/FullPageLoader";
+import { ReminderDetailSheet } from "@/components/reminders/ReminderDetailSheet";
 import { cn } from "@/lib/utils";
 import {
     Calendar as CalendarIcon,
@@ -26,6 +28,9 @@ import {
     Coffee,
     Home,
     Download,
+    Bell,
+    Clock3,
+    Plane,
     type LucideIcon,
 } from "lucide-react";
 import {
@@ -98,6 +103,7 @@ export default function CalendarPage() {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [showWeeklyChart, setShowWeeklyChart] = useState(true);
+    const [detailReminder, setDetailReminder] = useState<ReminderRecord | null>(null);
 
     useEffect(() => {
         if (!coupleLoading && !user) {
@@ -108,6 +114,7 @@ export default function CalendarPage() {
     const monthStr = format(currentMonth, "yyyy-MM");
     const id = couple?.id || user?.id;
     const { data: transactions, isLoading: txLoading } = useTransactions(id, { month: monthStr });
+    const { data: reminderSummary } = useReminderSummary(monthStr, Boolean(user?.id));
 
     // Group transactions by date
     const txByDate = useMemo(() => {
@@ -237,6 +244,11 @@ export default function CalendarPage() {
     // Selected date transactions
     const selectedDateTx = selectedDate
         ? txByDate[format(selectedDate, "yyyy-MM-dd")] || []
+        : [];
+    const selectedDateKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
+    const reminderDateCounts = reminderSummary?.calendarDateCounts ?? {};
+    const selectedDateReminders = selectedDateKey
+        ? (reminderSummary?.calendarReminders ?? []).filter((reminder) => reminder.reminder_date_key === selectedDateKey)
         : [];
 
     const selectedDateTotal = selectedDateTx.reduce((sum, tx) => {
@@ -386,6 +398,7 @@ export default function CalendarPage() {
                             const heatColor = getHeatColor(dateKey);
                             const dots = getPayerDots(dateKey);
                             const dayTotal = dailyTotals[dateKey];
+                            const reminderCount = reminderDateCounts[dateKey] ?? 0;
 
                             return (
                                 <motion.button
@@ -417,6 +430,17 @@ export default function CalendarPage() {
                                         <span className="text-[8px] font-bold leading-none mt-0.5 opacity-70">
                                             ${dayTotal.expense.toFixed(0)}
                                         </span>
+                                    )}
+
+                                    {reminderCount > 0 && inMonth && (
+                                        <div
+                                            className={cn(
+                                                "absolute bottom-1 right-1 inline-flex min-w-4 items-center justify-center rounded-full px-1 py-0.5 text-[8px] font-black leading-none",
+                                                isSelected ? "bg-white/90 text-amber-600" : "bg-amber-500 text-white"
+                                            )}
+                                        >
+                                            {reminderCount}
+                                        </div>
                                     )}
 
                                     {/* Payer dots */}
@@ -457,6 +481,12 @@ export default function CalendarPage() {
                             <div className="w-2 h-2 rounded-full bg-emerald-400" />
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Shared</span>
                         </div>
+                        <div className="flex items-center gap-1">
+                            <div className="flex min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 py-0.5 text-[8px] font-black text-white">
+                                1
+                            </div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Reminder</span>
+                        </div>
                         <div className="h-3 w-px bg-slate-200" />
                         <div className="flex items-center gap-1">
                             <div className="w-3 h-2 rounded-sm bg-blue-50 border border-blue-200" />
@@ -487,7 +517,7 @@ export default function CalendarPage() {
                                         {format(selectedDate, "EEEE, MMM d")}
                                     </h3>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-                                        {selectedDateTx.length} transaction{selectedDateTx.length !== 1 ? "s" : ""}
+                                        {selectedDateTx.length} transaction{selectedDateTx.length !== 1 ? "s" : ""} • {selectedDateReminders.length} reminder{selectedDateReminders.length !== 1 ? "s" : ""}
                                     </p>
                                 </div>
                                 {selectedDateTx.length > 0 && (
@@ -502,73 +532,141 @@ export default function CalendarPage() {
                                 )}
                             </div>
 
-                            {selectedDateTx.length === 0 ? (
+                            {selectedDateTx.length === 0 && selectedDateReminders.length === 0 ? (
                                 <div className="text-center py-6">
                                     <Sparkles className="text-slate-300 mx-auto mb-2" size={24} />
-                                    <p className="text-sm text-slate-400 font-medium">No transactions this day</p>
-                                    <p className="text-[10px] text-slate-300 mt-1">A peaceful day for your wallet!</p>
+                                    <p className="text-sm text-slate-400 font-medium">No activity this day</p>
+                                    <p className="text-[10px] text-slate-300 mt-1">No transactions or reminders yet.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-1">
-                                    {selectedDateTx.map((tx) => {
-                                        const Icon = CATEGORY_ICONS[tx.category] || Heart;
-                                        const isIncome = tx.type === "INCOME";
-                                        const amount = parseFloat(String(tx.amount));
-
-                                        return (
-                                            <motion.div
-                                                key={tx.id}
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-colors"
-                                            >
-                                                <div className="relative">
-                                                    <div className={cn("p-2 rounded-xl", PAYER_COLORS[tx.payer])}>
-                                                        <Icon size={14} />
+                                <div className="space-y-4">
+                                    {selectedDateReminders.length > 0 && (
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between px-1">
+                                                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                                                    Reminders
+                                                </p>
+                                                <Bell size={14} className="text-amber-500" />
+                                            </div>
+                                            {selectedDateReminders.map((reminder) => (
+                                                <motion.button
+                                                    key={reminder.id}
+                                                    type="button"
+                                                    initial={{ opacity: 0, x: -10 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    onClick={() => setDetailReminder(reminder)}
+                                                    className="flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors hover:bg-white/60"
+                                                >
+                                                    <div className="relative">
+                                                        <div className={cn(
+                                                            "p-2 rounded-xl",
+                                                            reminder.source === "TRIP"
+                                                                ? "bg-amber-100 text-amber-700"
+                                                                : "bg-blue-100 text-blue-700"
+                                                        )}>
+                                                            {reminder.source === "TRIP" ? <Plane size={14} /> : <Bell size={14} />}
+                                                        </div>
                                                     </div>
-                                                    <div
-                                                        className={cn(
-                                                            "absolute -bottom-0.5 -right-0.5 rounded-full p-0.5",
-                                                            isIncome ? "bg-green-500" : "bg-red-500",
-                                                        )}
-                                                    >
-                                                        {isIncome ? (
-                                                            <TrendingUp size={7} className="text-white" />
-                                                        ) : (
-                                                            <TrendingDown size={7} className="text-white" />
-                                                        )}
-                                                    </div>
-                                                </div>
 
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-bold text-slate-800 truncate">
-                                                        {tx.note || tx.category}
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate text-sm font-bold text-slate-800">
+                                                            {reminder.name}
+                                                        </p>
+                                                        <div className="mt-0.5 flex items-center gap-1.5">
+                                                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                                                                <Clock3 size={10} />
+                                                                {reminder.schedule_label}
+                                                            </span>
+                                                            {reminder.trip ? (
+                                                                <>
+                                                                    <span className="text-[10px] text-slate-300">•</span>
+                                                                    <span className="text-[10px] font-bold text-amber-700">
+                                                                        {reminder.trip.destination}
+                                                                    </span>
+                                                                </>
+                                                            ) : null}
+                                                        </div>
+                                                        {reminder.note ? (
+                                                            <p className="mt-1 line-clamp-1 text-[11px] text-slate-500">
+                                                                {reminder.note}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {selectedDateTx.length > 0 && (
+                                        <div className="space-y-1">
+                                            {selectedDateReminders.length > 0 && (
+                                                <div className="flex items-center justify-between px-1">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                                                        Transactions
                                                     </p>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className="text-[10px] text-slate-400">{tx.category}</span>
-                                                        <span className="text-[10px] text-slate-300">•</span>
+                                                </div>
+                                            )}
+                                            {selectedDateTx.map((tx) => {
+                                                const Icon = CATEGORY_ICONS[tx.category] || Heart;
+                                                const isIncome = tx.type === "INCOME";
+                                                const amount = parseFloat(String(tx.amount));
+
+                                                return (
+                                                    <motion.div
+                                                        key={tx.id}
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-colors"
+                                                    >
+                                                        <div className="relative">
+                                                            <div className={cn("p-2 rounded-xl", PAYER_COLORS[tx.payer])}>
+                                                                <Icon size={14} />
+                                                            </div>
+                                                            <div
+                                                                className={cn(
+                                                                    "absolute -bottom-0.5 -right-0.5 rounded-full p-0.5",
+                                                                    isIncome ? "bg-green-500" : "bg-red-500",
+                                                                )}
+                                                            >
+                                                                {isIncome ? (
+                                                                    <TrendingUp size={7} className="text-white" />
+                                                                ) : (
+                                                                    <TrendingDown size={7} className="text-white" />
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-bold text-slate-800 truncate">
+                                                                {tx.note || tx.category}
+                                                            </p>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="text-[10px] text-slate-400">{tx.category}</span>
+                                                                <span className="text-[10px] text-slate-300">•</span>
+                                                                <span
+                                                                    className={cn(
+                                                                        "text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase",
+                                                                        PAYER_COLORS[tx.payer],
+                                                                    )}
+                                                                >
+                                                                    {tx.payer === "SHARED" ? "Us" : tx.payer === "HIS" ? "His" : "Hers"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
                                                         <span
                                                             className={cn(
-                                                                "text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase",
-                                                                PAYER_COLORS[tx.payer],
+                                                                "text-sm font-black whitespace-nowrap",
+                                                                isIncome ? "text-green-600" : "text-slate-900",
                                                             )}
                                                         >
-                                                            {tx.payer === "SHARED" ? "Us" : tx.payer === "HIS" ? "His" : "Hers"}
+                                                            {isIncome ? "+" : "-"}${amount.toFixed(0)}
                                                         </span>
-                                                    </div>
-                                                </div>
-
-                                                <span
-                                                    className={cn(
-                                                        "text-sm font-black whitespace-nowrap",
-                                                        isIncome ? "text-green-600" : "text-slate-900",
-                                                    )}
-                                                >
-                                                    {isIncome ? "+" : "-"}${amount.toFixed(0)}
-                                                </span>
-                                            </motion.div>
-                                        );
-                                    })}
+                                                    </motion.div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </Card>
@@ -746,6 +844,20 @@ export default function CalendarPage() {
                     </Card>
                 </motion.div>
             )}
+
+            <ReminderDetailSheet
+                open={Boolean(detailReminder)}
+                reminder={detailReminder}
+                onClose={() => setDetailReminder(null)}
+                onOpenTrip={
+                    detailReminder?.trip
+                        ? () => {
+                            router.push("/trips");
+                            setDetailReminder(null);
+                        }
+                        : null
+                }
+            />
         </div>
     );
 }
