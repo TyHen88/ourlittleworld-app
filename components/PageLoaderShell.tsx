@@ -10,6 +10,7 @@ interface PageLoaderShellProps {
   children?: React.ReactNode;
   label?: string;
   fullScreen?: boolean;
+  centerContent?: boolean;
   className?: string;
   contentClassName?: string;
 }
@@ -18,6 +19,7 @@ export function PageLoaderShell({
   children,
   label = "Preparing your world",
   fullScreen = true,
+  centerContent = false,
   className,
   contentClassName,
 }: PageLoaderShellProps) {
@@ -41,12 +43,17 @@ export function PageLoaderShell({
       <div
         className={cn(
           "relative z-10 mx-auto w-full max-w-2xl px-6",
-          fullScreen && !hasChildren
+          fullScreen && (!hasChildren || centerContent)
             ? "flex min-h-[100dvh] flex-col items-center justify-center py-10"
             : "py-8"
         )}
       >
-        <div className={cn("flex flex-col items-center text-center", hasChildren && "pt-6")}>
+        <div
+          className={cn(
+            "flex flex-col items-center text-center",
+            hasChildren && !centerContent && "pt-6"
+          )}
+        >
           <div className="relative mb-5">
             <Heart
               className="fill-current text-romantic-heart/20 animate-spin-slow"

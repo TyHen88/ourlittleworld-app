@@ -10,6 +10,21 @@ import { signUp } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
 
+function validateSignUpForm(fullName: string, email: string) {
+    const normalizedFullName = fullName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedFullName.length < 2) {
+        return "Please enter your full name.";
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return "Please enter a valid email address.";
+    }
+
+    return null;
+}
+
 export default function RegisterPage() {
     const router = useRouter();
     const [formData, setFormData] = useState({
@@ -23,18 +38,26 @@ export default function RegisterPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+
+        const validationError = validateSignUpForm(formData.fullName, formData.email);
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+
         setLoading(true);
 
         try {
             const success = await signUp(formData.email, formData.fullName);
+            const normalizedEmail = formData.email.trim().toLowerCase();
 
             if (success) {
                 setRedirecting(true);
-                router.push(`/confirm-email?email=${encodeURIComponent(formData.email)}`);
+                router.push(`/confirm-email?email=${encodeURIComponent(normalizedEmail)}`);
                 return;
             }
-        } catch (err: any) {
-            setError(err.message || "Registration failed");
+        } catch (error: unknown) {
+            setError(error instanceof Error ? error.message : "Registration failed");
         } finally {
             setLoading(false);
         }
@@ -70,7 +93,10 @@ export default function RegisterPage() {
                                     type="text"
                                     placeholder="Your name"
                                     value={formData.fullName}
-                                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, fullName: e.target.value });
+                                        if (error) setError("");
+                                    }}
                                     className="h-14 pl-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
                                     required
                                 />
@@ -88,7 +114,10 @@ export default function RegisterPage() {
                                     type="email"
                                     placeholder="you@example.com"
                                     value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, email: e.target.value });
+                                        if (error) setError("");
+                                    }}
                                     className="h-14 pl-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
                                     required
                                 />

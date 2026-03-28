@@ -1,6 +1,25 @@
+import { Payer, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { getCachedUser } from "@/lib/auth-cache";
 import prisma from "@/lib/prisma";
+import {
+    createCursorPaginatedResponse,
+    decodePaginationCursor,
+    encodePaginationCursor,
+} from "@/lib/pagination";
+
+type TransactionCursorPayload = {
+    createdAt: string;
+    id: string;
+    transactionDate: string;
+};
+
+function sanitizeTransactions<T extends { amount: Prisma.Decimal | number | null }>(transactions: T[]) {
+    return transactions.map((transaction) => ({
+        ...transaction,
+        amount: transaction.amount ? Number(transaction.amount.toString()) : 0,
+    }));
+}
 
 export async function GET(request: NextRequest) {
     try {
@@ -18,9 +37,18 @@ export async function GET(request: NextRequest) {
         const date = searchParams.get("date");
         const category = searchParams.get("category");
         const payer = searchParams.get("payer");
+        const cursor = decodePaginationCursor<TransactionCursorPayload>(searchParams.get("cursor"));
+        const requestedLimit = searchParams.get("limit") ?? searchParams.get("pageSize");
+        const limit = requestedLimit
+            ? Math.min(Number.parseInt(requestedLimit, 10) || 20, 50)
+            : null;
 
         if (!id) {
             return NextResponse.json({ error: "id or coupleId is required" }, { status: 400 });
+        }
+
+        if (limit !== null && (!Number.isFinite(limit) || limit <= 0 || limit > 50)) {
+            return NextResponse.json({ error: "Invalid limit" }, { status: 400 });
         }
 
         // Verify user belongs to this couple or is the user themselves
@@ -34,7 +62,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Build query filters
-        const where: any = {};
+        const where: Prisma.TransactionWhereInput = {};
         if (dbUser.couple_id === id) {
             where.couple_id = id;
         } else {
@@ -75,12 +103,58 @@ export async function GET(request: NextRequest) {
 
         // Filter by payer if provided
         if (payer) {
-            where.payer = payer.toUpperCase();
+            const normalizedPayer = payer.toUpperCase();
+
+            if (
+                normalizedPayer === "HIS" ||
+                normalizedPayer === "HERS" ||
+                normalizedPayer === "SHARED"
+            ) {
+                where.payer = normalizedPayer as Payer;
+            }
         }
+
+        const cursorTransactionDate = cursor ? new Date(cursor.transactionDate) : null;
+        const cursorCreatedAt = cursor ? new Date(cursor.createdAt) : null;
+        const cursorFilter: Prisma.TransactionWhereInput =
+            cursor &&
+            cursorTransactionDate &&
+            !Number.isNaN(cursorTransactionDate.getTime()) &&
+            cursorCreatedAt &&
+            !Number.isNaN(cursorCreatedAt.getTime())
+                ? {
+                    OR: [
+                        {
+                            transaction_date: {
+                                lt: cursorTransactionDate,
+                            },
+                        },
+                        {
+                            transaction_date: cursorTransactionDate,
+                            OR: [
+                                {
+                                    created_at: {
+                                        lt: cursorCreatedAt,
+                                    },
+                                },
+                                {
+                                    created_at: cursorCreatedAt,
+                                    id: {
+                                        lt: cursor.id,
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                }
+                : {};
 
         // Fetch transactions with creator info
         const transactions = await prisma.transaction.findMany({
-            where,
+            where: {
+                ...where,
+                ...cursorFilter,
+            },
             include: {
                 creator: {
                     select: {
@@ -90,18 +164,27 @@ export async function GET(request: NextRequest) {
                     },
                 },
             },
-            orderBy: {
-                transaction_date: "desc",
-            },
+            orderBy: [{ transaction_date: "desc" }, { created_at: "desc" }, { id: "desc" }],
+            ...(limit ? { take: limit } : {}),
         });
 
-        const sanitizedTransactions = transactions.map((t: any) => ({
-            ...t,
-            amount: t.amount ? Number(t.amount.toString()) : 0,
-        }));
+        const sanitizedTransactions = sanitizeTransactions(transactions);
+        const lastTransaction = transactions[transactions.length - 1];
+        const nextCursor =
+            limit && transactions.length === limit && lastTransaction?.transaction_date
+                ? encodePaginationCursor({
+                    createdAt: lastTransaction.created_at.toISOString(),
+                    id: lastTransaction.id,
+                    transactionDate: lastTransaction.transaction_date.toISOString(),
+                })
+                : null;
 
         return NextResponse.json(
-            { data: sanitizedTransactions },
+            createCursorPaginatedResponse(
+                sanitizedTransactions,
+                limit ?? sanitizedTransactions.length,
+                nextCursor
+            ),
             {
                 status: 200,
                 headers: {
@@ -109,10 +192,10 @@ export async function GET(request: NextRequest) {
                 },
             }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching transactions:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to fetch transactions" },
+            { error: error instanceof Error ? error.message : "Failed to fetch transactions" },
             { status: 500 }
         );
     }
@@ -166,7 +249,10 @@ export async function POST(request: NextRequest) {
                 amount: parseFloat(amount),
                 category,
                 note: note || null,
-                payer: (payer || "SHARED").toUpperCase(),
+                payer:
+                    payer === "HIS" || payer === "HERS" || payer === "SHARED"
+                        ? payer
+                        : "SHARED",
                 type: type || "EXPENSE",
                 created_by: user.id,
                 transaction_date: transactionDate ? new Date(transactionDate) : new Date(),
@@ -191,10 +277,10 @@ export async function POST(request: NextRequest) {
             { success: true, data: sanitizedTransaction },
             { status: 201 }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error creating transaction:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to create transaction" },
+            { error: error instanceof Error ? error.message : "Failed to create transaction" },
             { status: 500 }
         );
     }

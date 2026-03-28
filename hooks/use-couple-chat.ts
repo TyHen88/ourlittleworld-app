@@ -2,11 +2,9 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import type { CoupleChatMessage } from "@/lib/chat";
+import type { CursorPaginatedResponse } from "@/lib/pagination";
 
-interface CoupleChatResponse {
-  data: CoupleChatMessage[];
-  nextCursor: string | null;
-}
+type CoupleChatResponse = CursorPaginatedResponse<CoupleChatMessage>;
 
 async function fetchCoupleChat(coupleId: string, cursor: string | null) {
   const url = new URL("/api/chat/messages", window.location.origin);
@@ -27,7 +25,29 @@ async function fetchCoupleChat(coupleId: string, cursor: string | null) {
 
   return {
     data: Array.isArray(json?.data) ? (json.data as CoupleChatMessage[]) : [],
-    nextCursor: typeof json?.nextCursor === "string" ? json.nextCursor : null,
+    nextCursor:
+      typeof json?.pagination?.nextCursor === "string"
+        ? json.pagination.nextCursor
+        : json?.pagination?.nextCursor === null
+          ? null
+          : typeof json?.nextCursor === "string"
+            ? json.nextCursor
+            : null,
+    pagination: {
+      hasMore: Boolean(json?.pagination?.hasMore),
+      limit:
+        typeof json?.pagination?.limit === "number"
+          ? json.pagination.limit
+          : 80,
+      nextCursor:
+        typeof json?.pagination?.nextCursor === "string"
+          ? json.pagination.nextCursor
+          : json?.pagination?.nextCursor === null
+            ? null
+            : typeof json?.nextCursor === "string"
+              ? json.nextCursor
+              : null,
+    },
   } satisfies CoupleChatResponse;
 }
 

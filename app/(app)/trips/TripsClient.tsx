@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     MapPin,
@@ -27,20 +27,10 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { createTrip, deleteTrip, updateTrip } from "@/lib/actions/trips";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { TRIP_KEYS, TripRecord, TripStatusGroup, useInfiniteTrips } from "@/hooks/use-trips";
 
 type TripBudgetCurrency = "USD" | "KHR";
-
-interface TripRecord {
-    budget?: number | string | null;
-    destination: string;
-    end_date: string | Date;
-    id: string;
-    metadata?: unknown;
-    notes?: string | null;
-    start_date: string | Date;
-    status?: string | null;
-    title: string;
-}
 
 interface TripFormState {
     budget: string;
@@ -58,7 +48,6 @@ interface TripsClientProps {
     profile: {
         user_type?: string | null;
     } | null;
-    initialTrips: TripRecord[];
 }
 
 interface CambodiaDestinationOption {
@@ -231,21 +220,50 @@ function toTripForm(trip: TripRecord, isSolo: boolean): TripFormState {
     };
 }
 
-export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
+export function TripsClient({ user, profile }: TripsClientProps) {
     void user;
 
     const router = useRouter();
-    const [trips, setTrips] = useState(initialTrips);
+    const queryClient = useQueryClient();
+    const [activeTab, setActiveTab] = useState<TripStatusGroup>("upcoming");
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDestinationMenuOpen, setIsDestinationMenuOpen] = useState(false);
     const [editingTripId, setEditingTripId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const {
+        trips,
+        isLoading,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+    } = useInfiniteTrips(activeTab);
 
     const isSingle = profile?.user_type === 'SINGLE';
     const isEditingTrip = editingTripId !== null;
 
     const [newTrip, setNewTrip] = useState<TripFormState>(() => createEmptyTripForm(isSingle));
+
+    useEffect(() => {
+        if (!hasNextPage || isFetchingNextPage) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) {
+                    void fetchNextPage();
+                }
+            },
+            { rootMargin: "320px" }
+        );
+
+        if (sentinelRef.current) {
+            observer.observe(sentinelRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     const filteredDestinations = CAMBODIA_DESTINATIONS.filter((option) =>
         matchesCambodiaDestination(option, newTrip.destination),
@@ -356,13 +374,7 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                 : await createTrip(payload);
 
             if (result.success) {
-                setTrips((prevTrips) =>
-                    editingTripId
-                        ? prevTrips.map((trip) =>
-                            trip.id === editingTripId ? result.data : trip,
-                        )
-                        : [result.data, ...prevTrips],
-                );
+                await queryClient.invalidateQueries({ queryKey: TRIP_KEYS.all });
                 closeTripModal();
                 toast.success(
                     editingTripId ? "Trip updated" : "Trip created",
@@ -370,7 +382,6 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                         ? `${result.data.title} was updated.`
                         : `${result.data.title} is now in your planner.`,
                 );
-                router.refresh();
             }
         } catch (error: unknown) {
             console.error(error);
@@ -388,7 +399,7 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
         try {
             const result = await deleteTrip(tripId);
             if (result.success) {
-                setTrips((prevTrips) => prevTrips.filter((trip) => trip.id !== tripId));
+                await queryClient.invalidateQueries({ queryKey: TRIP_KEYS.all });
                 if (editingTripId === tripId) {
                     closeTripModal();
                 }
@@ -400,9 +411,7 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
         }
     };
 
-    const upcomingTrips = trips.filter((trip) => trip.status !== "COMPLETED");
-    const pastTrips = trips.filter((trip) => trip.status === "COMPLETED");
-    const filteredTrips = activeTab === "upcoming" ? upcomingTrips : pastTrips;
+    const filteredTrips = trips;
 
     return (
         <div className="min-h-screen bg-slate-50/50 pb-20">
@@ -440,7 +449,13 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
 
                 {/* Trip List */}
                 <div className="space-y-4">
-                    {filteredTrips.length === 0 ? (
+                    {isLoading && filteredTrips.length === 0 ? (
+                        <div className="space-y-3">
+                            {Array.from({ length: 4 }).map((_, index) => (
+                                <div key={index} className="h-36 rounded-3xl bg-white animate-pulse shadow-sm" />
+                            ))}
+                        </div>
+                    ) : filteredTrips.length === 0 ? (
                         <div className="text-center py-20 space-y-4">
                             <div className={`w-20 h-20 mx-auto rounded-3xl flex items-center justify-center ${isSingle ? 'bg-emerald-50' : 'bg-romantic-blush/20'}`}>
                                 <Plane size={32} className={isSingle ? 'text-emerald-400' : 'text-romantic-heart/40'} />
@@ -574,6 +589,22 @@ export function TripsClient({ user, profile, initialTrips }: TripsClientProps) {
                             </motion.div>
                         ))
                     )}
+
+                    <div ref={sentinelRef} className="py-2 text-center">
+                        {isFetchingNextPage ? (
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                                Loading more trips...
+                            </p>
+                        ) : hasNextPage ? (
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+                                Scroll for more
+                            </p>
+                        ) : filteredTrips.length > 0 ? (
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+                                End of your planner
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
             </div>
 

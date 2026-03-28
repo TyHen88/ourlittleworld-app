@@ -3,11 +3,15 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mail, Heart, RefreshCw, CheckCircle2, ArrowRight, Loader2, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, RefreshCw, CheckCircle2, Loader2, Lock, Eye, EyeOff } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { validateOtp, finalizeLoginWithPassword, requestLoginCode } from "@/lib/actions/auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
 
 export default function ConfirmEmailClient() {
     const router = useRouter();
@@ -67,8 +71,8 @@ export default function ConfirmEmailClient() {
             const result = await validateOtp(email, code);
             setIsNewUser(result.isNewUser || false);
             setStep("password");
-        } catch (err: any) {
-            setError(err.message || "Invalid code. Please try again.");
+        } catch (error: unknown) {
+            setError(getErrorMessage(error, "Invalid code. Please try again."));
         } finally {
             setVerifying(false);
         }
@@ -92,8 +96,8 @@ export default function ConfirmEmailClient() {
             setTimeout(() => {
                 window.location.href = callbackUrl;
             }, 1500);
-        } catch (err: any) {
-            setError(err.message || "Failed to finalize login");
+        } catch (error: unknown) {
+            setError(getErrorMessage(error, "Failed to finalize login"));
         } finally {
             setVerifying(false);
         }
@@ -105,8 +109,8 @@ export default function ConfirmEmailClient() {
         try {
             await requestLoginCode(email);
             // No feedback needed or just toast
-        } catch (err: any) {
-            setError(err.message || "Failed to resend code");
+        } catch (error: unknown) {
+            setError(getErrorMessage(error, "Failed to resend code"));
         } finally {
             setResending(false);
         }
@@ -139,7 +143,7 @@ export default function ConfirmEmailClient() {
                                     <div className="text-center space-y-3">
                                         <h1 className="text-3xl font-bold text-slate-800">Enter Code</h1>
                                         <p className="text-slate-600 font-medium">
-                                            We've sent a 6-digit code to
+                                            We&apos;ve sent a 6-digit code to
                                         </p>
                                         <p className="text-lg font-bold text-romantic-heart">
                                             {email}

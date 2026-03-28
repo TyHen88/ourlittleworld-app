@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -47,12 +49,31 @@ interface DashboardClientProps {
 export function DashboardClient({ user, profile, couple, daysTogether, daysActive }: DashboardClientProps) {
     const [displayMode, setDisplayMode] = useState<"days" | "months">("days");
     const isSingle = profile?.user_type === "SINGLE";
+    const router = useRouter();
 
     // Derived values for the partner
     const otherPartner = couple?.members?.find((member) => member.id !== user.id);
 
     // Calculate months together
     const monthsTogether = Math.floor(daysTogether / 30);
+
+    useEffect(() => {
+        const routes = [
+            "/budget",
+            "/calendar",
+            "/create-post",
+            "/trips",
+            "/settings",
+        ];
+
+        if (!isSingle) {
+            routes.push("/chat");
+        }
+
+        routes.forEach((route) => {
+            router.prefetch(route);
+        });
+    }, [isSingle, router]);
 
     return (
         <div className="p-6 space-y-8 max-w-2xl mx-auto">
@@ -255,101 +276,107 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                     Quick Actions
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                    <motion.a
-                        href="/budget"
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 hover:border-green-200 transition-all group"
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className="p-2 bg-green-100 rounded-xl group-hover:bg-green-200 transition-colors">
-                                <Wallet className="text-green-600" size={20} />
+                    <Link href="/budget" prefetch className="block">
+                        <motion.div
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 hover:border-green-200 transition-all group"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="p-2 bg-green-100 rounded-xl group-hover:bg-green-200 transition-colors">
+                                    <Wallet className="text-green-600" size={20} />
+                                </div>
+                                <ArrowRight className="text-green-300 group-hover:text-green-400 transition-colors" size={16} />
                             </div>
-                            <ArrowRight className="text-green-300 group-hover:text-green-400 transition-colors" size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Add Transaction</h4>
-                        <p className="text-xs text-slate-500 mt-1">Track your spending</p>
-                    </motion.a>
+                            <h4 className="font-bold text-slate-800 mt-3 text-sm">Add Transaction</h4>
+                            <p className="text-xs text-slate-500 mt-1">Track your spending</p>
+                        </motion.div>
+                    </Link>
 
-                    <motion.a
-                        href="/budget"
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100 hover:border-blue-200 transition-all group"
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className="p-2 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
-                                <TrendingUp className="text-blue-600" size={20} />
+                    <Link href="/budget" prefetch className="block">
+                        <motion.div
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100 hover:border-blue-200 transition-all group"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="p-2 bg-blue-100 rounded-xl group-hover:bg-blue-200 transition-colors">
+                                    <TrendingUp className="text-blue-600" size={20} />
+                                </div>
+                                <ArrowRight className="text-blue-300 group-hover:text-blue-400 transition-colors" size={16} />
                             </div>
-                            <ArrowRight className="text-blue-300 group-hover:text-blue-400 transition-colors" size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">View Budget</h4>
-                        <p className="text-xs text-slate-500 mt-1">Check your progress</p>
-                    </motion.a>
+                            <h4 className="font-bold text-slate-800 mt-3 text-sm">View Budget</h4>
+                            <p className="text-xs text-slate-500 mt-1">Check your progress</p>
+                        </motion.div>
+                    </Link>
 
-                    <motion.a
-                        href="/calendar"
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group"
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className="p-2 bg-sky-100 rounded-xl group-hover:bg-sky-200 transition-colors">
-                                <Calendar className="text-sky-600" size={20} />
+                    <Link href="/calendar" prefetch className="block">
+                        <motion.div
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="p-2 bg-sky-100 rounded-xl group-hover:bg-sky-200 transition-colors">
+                                    <Calendar className="text-sky-600" size={20} />
+                                </div>
+                                <ArrowRight className="text-sky-300 group-hover:text-sky-400 transition-colors" size={16} />
                             </div>
-                            <ArrowRight className="text-sky-300 group-hover:text-sky-400 transition-colors" size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Calendar View</h4>
-                        <p className="text-xs text-slate-500 mt-1">Spending by date</p>
-                    </motion.a>
+                            <h4 className="font-bold text-slate-800 mt-3 text-sm">Calendar View</h4>
+                            <p className="text-xs text-slate-500 mt-1">Spending by date</p>
+                        </motion.div>
+                    </Link>
 
-                    <motion.a
-                        href="/create-post"
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        className={`p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group ${isSingle ? 'from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200' : ''}`}
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className={`p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors ${isSingle ? 'bg-emerald-100 group-hover:bg-emerald-200' : ''}`}>
-                                {isSingle ? <Pencil className="text-emerald-600" size={20} /> : <Heart className="text-pink-600" size={20} />}
+                    <Link href="/create-post" prefetch className="block">
+                        <motion.div
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={`p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group ${isSingle ? 'from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200' : ''}`}
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className={`p-2 bg-pink-100 rounded-xl group-hover:bg-pink-200 transition-colors ${isSingle ? 'bg-emerald-100 group-hover:bg-emerald-200' : ''}`}>
+                                    {isSingle ? <Pencil className="text-emerald-600" size={20} /> : <Heart className="text-pink-600" size={20} />}
+                                </div>
+                                <ArrowRight className={`${isSingle ? 'text-emerald-300 group-hover:text-emerald-400' : 'text-pink-300 group-hover:text-pink-400'} transition-colors`} size={16} />
                             </div>
-                            <ArrowRight className={`${isSingle ? 'text-emerald-300 group-hover:text-emerald-400' : 'text-pink-300 group-hover:text-pink-400'} transition-colors`} size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">{isSingle ? 'Personal Journal' : 'Our Memories'}</h4>
-                        <p className="text-xs text-slate-500 mt-1">{isSingle ? 'Write your thoughts' : 'Share a moment'}</p>
-                    </motion.a>
+                            <h4 className="font-bold text-slate-800 mt-3 text-sm">{isSingle ? 'Personal Journal' : 'Our Memories'}</h4>
+                            <p className="text-xs text-slate-500 mt-1">{isSingle ? 'Write your thoughts' : 'Share a moment'}</p>
+                        </motion.div>
+                    </Link>
 
-                    <motion.a
-                        href="/trips"
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        className={`p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group ${isSingle ? 'from-indigo-50 to-blue-50 border-indigo-100 hover:border-indigo-200' : ''}`}
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className={`p-2 bg-sky-100 rounded-xl group-hover:bg-sky-200 transition-colors ${isSingle ? 'bg-indigo-100 group-hover:bg-indigo-200' : ''}`}>
-                                <MapPin className={isSingle ? "text-indigo-600" : "text-sky-600"} size={20} />
+                    <Link href="/trips" prefetch className="block">
+                        <motion.div
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={`p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group ${isSingle ? 'from-indigo-50 to-blue-50 border-indigo-100 hover:border-indigo-200' : ''}`}
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className={`p-2 bg-sky-100 rounded-xl group-hover:bg-sky-200 transition-colors ${isSingle ? 'bg-indigo-100 group-hover:bg-indigo-200' : ''}`}>
+                                    <MapPin className={isSingle ? "text-indigo-600" : "text-sky-600"} size={20} />
+                                </div>
+                                <ArrowRight className={`${isSingle ? 'text-indigo-300 group-hover:text-indigo-400' : 'text-sky-300 group-hover:text-sky-400'} transition-colors`} size={16} />
                             </div>
-                            <ArrowRight className={`${isSingle ? 'text-indigo-300 group-hover:text-indigo-400' : 'text-sky-300 group-hover:text-sky-400'} transition-colors`} size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Trip Planner</h4>
-                        <p className="text-xs text-slate-500 mt-1">Plan your next adventure</p>
-                    </motion.a>
+                            <h4 className="font-bold text-slate-800 mt-3 text-sm">Trip Planner</h4>
+                            <p className="text-xs text-slate-500 mt-1">Plan your next adventure</p>
+                        </motion.div>
+                    </Link>
 
-                    <motion.a
-                        href="/settings"
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="p-4 bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all group"
-                    >
-                        <div className="flex items-start justify-between">
-                            <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
-                                <Settings className="text-slate-600" size={20} />
+                    <Link href="/settings" prefetch className="block">
+                        <motion.div
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="p-4 bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all group"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="p-2 bg-slate-100 rounded-xl group-hover:bg-slate-200 transition-colors">
+                                    <Settings className="text-slate-600" size={20} />
+                                </div>
+                                <ArrowRight className="text-slate-300 group-hover:text-slate-400 transition-colors" size={16} />
                             </div>
-                            <ArrowRight className="text-slate-300 group-hover:text-slate-400 transition-colors" size={16} />
-                        </div>
-                        <h4 className="font-bold text-slate-800 mt-3 text-sm">Settings</h4>
-                        <p className="text-xs text-slate-500 mt-1">Manage your account</p>
-                    </motion.a>
+                            <h4 className="font-bold text-slate-800 mt-3 text-sm">Settings</h4>
+                            <p className="text-xs text-slate-500 mt-1">Manage your account</p>
+                        </motion.div>
+                    </Link>
                 </div>
             </motion.section>
 
@@ -405,7 +432,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
 
                         <div className="h-px bg-slate-100" />
 
-                        <a href="/calendar" className="flex items-start gap-3 group">
+                        <Link href="/calendar" prefetch className="flex items-start gap-3 group">
                             <div className="p-2 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
                                 <Calendar className="text-blue-600" size={18} />
                             </div>
@@ -417,7 +444,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                 </div>
                             </div>
                             <ArrowRight className="text-slate-300 group-hover:text-blue-400 transition-colors mt-1" size={16} />
-                        </a>
+                        </Link>
 
                         <div className="h-px bg-slate-100" />
 
@@ -439,7 +466,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                             <>
                                 <div className="h-px bg-slate-100" />
 
-                                <a href="/chat" className="flex items-start gap-3 group">
+                                <Link href="/chat" prefetch className="flex items-start gap-3 group">
                                     <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
                                         <Heart className="text-indigo-600 fill-indigo-600" size={18} />
                                     </div>
@@ -455,7 +482,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                         </div>
                                     </div>
                                     <ArrowRight className="text-slate-300 group-hover:text-indigo-400 transition-colors mt-1" size={16} />
-                                </a>
+                                </Link>
                             </>
                         )}
                     </div>

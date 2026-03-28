@@ -1,6 +1,16 @@
 "use client";
 
-import { QueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { InfiniteData, QueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import type { CursorPaginatedResponse } from "@/lib/pagination";
+
+export const POST_PAGE_SIZE = 10;
+export const POST_QUERY_STALE_TIME = 60 * 1000;
+export const POST_QUERY_GC_TIME = 10 * 60 * 1000;
+
+export type PostPageResponse<T = unknown> = CursorPaginatedResponse<T>;
+
+type CachePost = { id?: string | null };
+type FeedCacheData<T extends CachePost> = InfiniteData<PostPageResponse<T>>;
 
 function dedupePosts<T extends { id?: string | null }>(posts: T[]): T[] {
   const seen = new Set<string>();
@@ -13,16 +23,16 @@ function dedupePosts<T extends { id?: string | null }>(posts: T[]): T[] {
   });
 }
 
-async function fetchPostsPage(params: {
+export async function fetchPostsPage<T = unknown>(params: {
   id: string;
-  page: number;
+  cursor?: string | null;
   pageSize: number;
   query?: string;
-}) {
+}): Promise<PostPageResponse<T>> {
   const url = new URL("/api/posts", window.location.origin);
   url.searchParams.set("id", params.id);
-  url.searchParams.set("page", String(params.page));
-  url.searchParams.set("pageSize", String(params.pageSize));
+  url.searchParams.set("limit", String(params.pageSize));
+  if (params.cursor) url.searchParams.set("cursor", params.cursor);
   if (params.query) url.searchParams.set("q", params.query);
 
   const res = await fetch(url.toString(), {
@@ -33,20 +43,67 @@ async function fetchPostsPage(params: {
   if (!res.ok) {
     throw new Error(json?.error || "Failed to fetch posts");
   }
-  return json as { data: any[]; nextCursor: number | null };
+  return {
+    data: Array.isArray(json?.data) ? json.data : [],
+    nextCursor:
+      typeof json?.pagination?.nextCursor === "string"
+        ? json.pagination.nextCursor
+        : json?.pagination?.nextCursor === null
+          ? null
+          : typeof json?.nextCursor === "string"
+            ? json.nextCursor
+            : null,
+    pagination: {
+      hasMore: Boolean(json?.pagination?.hasMore),
+      limit:
+        typeof json?.pagination?.limit === "number"
+          ? json.pagination.limit
+          : params.pageSize,
+      nextCursor:
+        typeof json?.pagination?.nextCursor === "string"
+          ? json.pagination.nextCursor
+          : json?.pagination?.nextCursor === null
+            ? null
+            : typeof json?.nextCursor === "string"
+              ? json.nextCursor
+              : null,
+    },
+  };
+}
+
+export function getRecentPostsFromFeedCache<T>(
+  queryClient: QueryClient,
+  id: string | undefined,
+  limit = 3
+) {
+  if (!id) return undefined;
+
+  const cachedFeed = queryClient.getQueryData<InfiniteData<PostPageResponse<T>>>(POST_KEYS.feed(id, undefined));
+  const firstPagePosts = cachedFeed?.pages?.[0]?.data;
+
+  return Array.isArray(firstPagePosts) ? firstPagePosts.slice(0, limit) : undefined;
 }
 
 export function usePosts(id: string | undefined, queryStr?: string) {
   const query = useInfiniteQuery({
     queryKey: POST_KEYS.feed(id, queryStr),
-    queryFn: async ({ pageParam = 0 }) => {
-      if (!id) return { data: [], nextCursor: null };
+    queryFn: async ({ pageParam }) => {
+      if (!id) {
+        return {
+          data: [],
+          nextCursor: null,
+          pagination: {
+            hasMore: false,
+            limit: POST_PAGE_SIZE,
+            nextCursor: null,
+          },
+        } satisfies PostPageResponse;
+      }
 
-      const pageSize = 10;
       const result = await fetchPostsPage({
         id,
-        page: Number(pageParam) || 0,
-        pageSize,
+        cursor: typeof pageParam === "string" ? pageParam : null,
+        pageSize: POST_PAGE_SIZE,
         query: queryStr,
       });
 
@@ -56,14 +113,16 @@ export function usePosts(id: string | undefined, queryStr?: string) {
       };
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    initialPageParam: 0,
+    initialPageParam: null as string | null,
     enabled: !!id,
-    staleTime: 5 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: POST_QUERY_STALE_TIME,
+    gcTime: POST_QUERY_GC_TIME,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
-    refetchInterval: queryStr ? false : 8 * 1000,
-    refetchIntervalInBackground: false,
+    refetchOnReconnect: false,
+    refetchInterval: false,
+    placeholderData: (previousData) => previousData,
+    retry: 1,
   });
 
   return {
@@ -83,44 +142,54 @@ export function updatePostInCaches(
   queryClient: QueryClient,
   id: string | undefined,
   postId: string,
-  updater: (post: any) => any
+  updater: (post: CachePost) => CachePost
 ) {
   if (!id) return;
 
-  queryClient.setQueriesData({ queryKey: POST_KEYS.all }, (old: any) => {
+  queryClient.setQueriesData<FeedCacheData<CachePost>>({ queryKey: POST_KEYS.all }, (old) => {
     if (!old?.pages) return old;
 
     return {
       ...old,
-      pages: old.pages.map((page: any) => ({
+      pages: old.pages.map((page) => ({
         ...page,
         data: Array.isArray(page.data)
-          ? page.data.map((post: any) => (post?.id === postId ? updater(post) : post))
+          ? page.data.map((post) => (post?.id === postId ? updater(post) : post))
           : page.data,
       })),
     };
   });
 
-  queryClient.setQueryData(POST_KEYS.recent(id), (old: any) => {
+  queryClient.setQueryData<CachePost[]>(POST_KEYS.recent(id), (old) => {
     if (!Array.isArray(old)) return old;
-    return old.map((post: any) => (post?.id === postId ? updater(post) : post));
+    return old.map((post) => (post?.id === postId ? updater(post) : post));
   });
 }
 
-export function prependPostToCaches(queryClient: QueryClient, id: string | undefined, post: any) {
+export function prependPostToCaches<T extends CachePost>(queryClient: QueryClient, id: string | undefined, post: T) {
   if (!id) return;
 
-  queryClient.setQueryData(POST_KEYS.feed(id, undefined), (old: any) => {
+  queryClient.setQueryData<FeedCacheData<T>>(POST_KEYS.feed(id, undefined), (old) => {
     if (!old?.pages?.length) {
       return {
-        pages: [{ data: [post], nextCursor: null }],
-        pageParams: [0],
+        pages: [
+          {
+            data: [post],
+            nextCursor: null,
+            pagination: {
+              hasMore: false,
+              limit: POST_PAGE_SIZE,
+              nextCursor: null,
+            },
+          },
+        ],
+        pageParams: [null],
       };
     }
 
     return {
       ...old,
-      pages: old.pages.map((page: any, index: number) =>
+      pages: old.pages.map((page, index) =>
         index === 0
           ? {
               ...page,
@@ -131,7 +200,7 @@ export function prependPostToCaches(queryClient: QueryClient, id: string | undef
     };
   });
 
-  queryClient.setQueryData(POST_KEYS.recent(id), (old: any) => {
+  queryClient.setQueryData<T[]>(POST_KEYS.recent(id), (old) => {
     if (!Array.isArray(old)) return [post];
     return dedupePosts([post, ...old]).slice(0, 3);
   });
@@ -140,20 +209,20 @@ export function prependPostToCaches(queryClient: QueryClient, id: string | undef
 export function removePostFromCaches(queryClient: QueryClient, id: string | undefined, postId: string) {
   if (!id) return;
 
-  queryClient.setQueriesData({ queryKey: POST_KEYS.all }, (old: any) => {
+  queryClient.setQueriesData<FeedCacheData<CachePost>>({ queryKey: POST_KEYS.all }, (old) => {
     if (!old?.pages) return old;
 
     return {
       ...old,
-      pages: old.pages.map((page: any) => ({
+      pages: old.pages.map((page) => ({
         ...page,
-        data: Array.isArray(page.data) ? page.data.filter((post: any) => post?.id !== postId) : page.data,
+        data: Array.isArray(page.data) ? page.data.filter((post) => post?.id !== postId) : page.data,
       })),
     };
   });
 
-  queryClient.setQueryData(POST_KEYS.recent(id), (old: any) => {
+  queryClient.setQueryData<CachePost[]>(POST_KEYS.recent(id), (old) => {
     if (!Array.isArray(old)) return old;
-    return old.filter((post: any) => post?.id !== postId);
+    return old.filter((post) => post?.id !== postId);
   });
 }

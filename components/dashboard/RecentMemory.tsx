@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { motion } from "framer-motion";
-import { POST_KEYS } from "@/hooks/use-posts";
+import { fetchPostsPage, getRecentPostsFromFeedCache, POST_KEYS, POST_QUERY_GC_TIME, POST_QUERY_STALE_TIME } from "@/hooks/use-posts";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
 
@@ -13,33 +13,51 @@ interface RecentMemoryProps {
     currentUserId?: string;
 }
 
+interface RecentMemoryPost {
+    id: string;
+    content: string | null;
+    created_at: string;
+    image_url: string | null;
+    metadata?: {
+        images?: string[];
+        likes?: string[];
+        likes_count?: number;
+        comments?: Array<Record<string, unknown>>;
+        comments_count?: number;
+    };
+    author?: {
+        full_name?: string | null;
+        avatar_url?: string | null;
+    } | null;
+}
+
 export function RecentMemory({ coupleId, currentUserId }: RecentMemoryProps) {
-    // Fetch latest 3 posts
-    const { data: posts, isLoading } = useQuery({
+    const queryClient = useQueryClient();
+    const initialPosts = getRecentPostsFromFeedCache<RecentMemoryPost>(queryClient, coupleId, 3);
+    const initialDataUpdatedAt = queryClient.getQueryState(POST_KEYS.feed(coupleId, undefined))?.dataUpdatedAt;
+
+    const { data: posts = [], isLoading } = useQuery<RecentMemoryPost[]>({
         queryKey: POST_KEYS.recent(coupleId),
         queryFn: async () => {
-            const url = new URL("/api/posts", window.location.origin);
-            url.searchParams.set("id", coupleId);
-            url.searchParams.set("page", "0");
-            url.searchParams.set("pageSize", "3");
-
-            const res = await fetch(url.toString(), {
-                method: "GET",
-                cache: "no-store",
+            const result = await fetchPostsPage<RecentMemoryPost>({
+                id: coupleId,
+                cursor: null,
+                pageSize: 3,
             });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                throw new Error(json?.error || "Failed to fetch posts");
-            }
-            return json.data || [];
+
+            return result.data;
         },
-        staleTime: 5 * 1000,
         enabled: !!coupleId,
-        refetchInterval: 8 * 1000,
-        refetchIntervalInBackground: false,
+        staleTime: POST_QUERY_STALE_TIME,
+        gcTime: POST_QUERY_GC_TIME,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        initialData: initialPosts,
+        initialDataUpdatedAt,
     });
 
-    const formatTimestamp = (value: any) => {
+    const formatTimestamp = (value: string) => {
         try {
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return "Just now";
@@ -86,7 +104,7 @@ export function RecentMemory({ coupleId, currentUserId }: RecentMemoryProps) {
 
     return (
         <div className="space-y-4">
-            {posts.slice(0, 3).map((post: any, index: number) => (
+            {posts.map((post, index) => (
                 <motion.div
                     key={post.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -102,7 +120,7 @@ export function RecentMemory({ coupleId, currentUserId }: RecentMemoryProps) {
                         comments={post.metadata?.comments_count || 0}
                         imageUrl={post.image_url}
                         avatarUrl={post.author?.avatar_url}
-                        metadata={post.metadata}
+                        metadata={post.metadata ?? undefined}
                         currentUserId={currentUserId}
                         coupleId={coupleId}
                     />

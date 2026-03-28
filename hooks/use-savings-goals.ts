@@ -17,7 +17,7 @@ interface SavingsGoal {
     priority: string;
     is_completed: boolean;
     completed_at: string | null;
-    metadata: any;
+    metadata: Record<string, unknown> | null;
     created_at: string;
     updated_at: string;
 }
@@ -26,8 +26,10 @@ export function useSavingsGoals(id: string | undefined) {
     return useQuery({
         queryKey: ['savings-goals', id],
         queryFn: async () => {
+            if (!id) return [];
+
             const url = new URL("/api/savings-goals", window.location.origin);
-            if (id) url.searchParams.set("id", id);
+            url.searchParams.set("id", id);
 
             const res = await fetch(url.toString());
             const json = await res.json();
@@ -39,8 +41,7 @@ export function useSavingsGoals(id: string | undefined) {
             return json.data as SavingsGoal[];
         },
         staleTime: 30 * 1000,
-        // Always enabled for singles, or enabled if coupleId exists
-        enabled: true,
+        enabled: !!id,
     });
 }
 
@@ -105,7 +106,10 @@ export function useUpdateSavingsGoal() {
             priority?: string;
             isCompleted?: boolean;
         }) => {
-            const { id, coupleId, ...updateData } = data;
+            const { id, coupleId, userId, isCompleted, ...updateData } = data;
+            void coupleId;
+            void userId;
+            void isCompleted;
 
             const res = await fetch(`/api/savings-goals/${id}`, {
                 method: "PUT",

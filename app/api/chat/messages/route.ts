@@ -13,6 +13,7 @@ import {
   getCoupleChatChannelName,
 } from "@/lib/chat";
 import { getAblyRestClient } from "@/lib/ably-server";
+import { createCursorPaginatedResponse } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -109,11 +110,11 @@ export async function GET(request: NextRequest) {
         serializeCoupleChatMessage(message as CoupleChatMessageRecord)
       );
 
+    const nextCursor =
+      messages.length === limit ? messages[messages.length - 1]?.id ?? null : null;
+
     return NextResponse.json(
-      {
-        data: serializedMessages,
-        nextCursor: messages.length === limit ? messages[messages.length - 1]?.id ?? null : null,
-      },
+      createCursorPaginatedResponse(serializedMessages, limit, nextCursor),
       {
         headers: {
           "Cache-Control": "private, no-cache, no-store, max-age=0, must-revalidate",

@@ -1,9 +1,11 @@
 "use client";
 
-import { getErrorMessage, toast } from "@/lib/toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-interface Transaction {
+import type { CursorPaginatedResponse } from "@/lib/pagination";
+import { getErrorMessage, toast } from "@/lib/toast";
+
+export interface Transaction {
     id: string;
     couple_id: string;
     amount: number;
@@ -22,7 +24,7 @@ interface Transaction {
     };
 }
 
-interface TransactionFilters {
+export interface TransactionFilters {
     month?: string;
     category?: string;
     payer?: string;
@@ -30,33 +32,139 @@ interface TransactionFilters {
     date?: string;
 }
 
+type TransactionPageResponse = CursorPaginatedResponse<Transaction>;
+
+const TRANSACTION_PAGE_SIZE = 20;
+
+export const TRANSACTION_KEYS = {
+    all: ["transactions"] as const,
+    owner: (id: string | undefined) => [...TRANSACTION_KEYS.all, id] as const,
+    list: (id: string | undefined, filters?: TransactionFilters) =>
+        [...TRANSACTION_KEYS.owner(id), filters] as const,
+    infinite: (id: string | undefined, filters?: TransactionFilters) =>
+        [...TRANSACTION_KEYS.owner(id), "infinite", filters] as const,
+    summary: (
+        id: string | undefined,
+        filters?: { month?: string; period?: "day" | "month" | "year"; date?: string }
+    ) => ["budget-summary", id, filters] as const,
+};
+
+function appendTransactionFilters(url: URL, filters?: TransactionFilters) {
+    if (filters?.period) url.searchParams.set("period", filters.period);
+    if (filters?.date) url.searchParams.set("date", filters.date);
+    if (filters?.month) url.searchParams.set("month", filters.month);
+    if (filters?.category) url.searchParams.set("category", filters.category);
+    if (filters?.payer) url.searchParams.set("payer", filters.payer);
+}
+
+async function fetchTransactionPage(params: {
+    cursor?: string | null;
+    filters?: TransactionFilters;
+    id: string;
+    limit?: number;
+}): Promise<TransactionPageResponse> {
+    const url = new URL("/api/transactions", window.location.origin);
+    url.searchParams.set("id", params.id);
+    appendTransactionFilters(url, params.filters);
+
+    if (params.cursor) {
+        url.searchParams.set("cursor", params.cursor);
+    }
+
+    if (params.limit) {
+        url.searchParams.set("limit", String(params.limit));
+    }
+
+    const res = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store",
+    });
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+        throw new Error(json?.error || "Failed to fetch transactions");
+    }
+
+    const nextCursor =
+        typeof json?.pagination?.nextCursor === "string"
+            ? json.pagination.nextCursor
+            : json?.pagination?.nextCursor === null
+                ? null
+                : typeof json?.nextCursor === "string"
+                    ? json.nextCursor
+                    : null;
+
+    return {
+        data: Array.isArray(json?.data) ? (json.data as Transaction[]) : [],
+        nextCursor,
+        pagination: {
+            hasMore: Boolean(json?.pagination?.hasMore),
+            limit:
+                typeof json?.pagination?.limit === "number"
+                    ? json.pagination.limit
+                    : params.limit ?? TRANSACTION_PAGE_SIZE,
+            nextCursor,
+        },
+    };
+}
+
 export function useTransactions(id: string | undefined, filters?: TransactionFilters) {
     return useQuery({
-        queryKey: ['transactions', id, filters],
+        queryKey: TRANSACTION_KEYS.list(id, filters),
         queryFn: async () => {
             if (!id) return [];
 
-            const url = new URL("/api/transactions", window.location.origin);
-            url.searchParams.set("id", id);
+            const result = await fetchTransactionPage({
+                id,
+                filters,
+            });
 
-            if (filters?.period) url.searchParams.set("period", filters.period);
-            if (filters?.date) url.searchParams.set("date", filters.date);
-            if (filters?.month) url.searchParams.set("month", filters.month);
-            if (filters?.category) url.searchParams.set("category", filters.category);
-            if (filters?.payer) url.searchParams.set("payer", filters.payer);
-
-            const res = await fetch(url.toString());
-            const json = await res.json();
-
-            if (!res.ok) {
-                throw new Error(json.error || "Failed to fetch transactions");
-            }
-
-            return json.data as Transaction[];
+            return result.data;
         },
         staleTime: 30 * 1000,
         enabled: !!id,
     });
+}
+
+export function useInfiniteTransactions(id: string | undefined, filters?: TransactionFilters) {
+    const query = useInfiniteQuery({
+        queryKey: TRANSACTION_KEYS.infinite(id, filters),
+        queryFn: async ({ pageParam }) => {
+            if (!id) {
+                return {
+                    data: [],
+                    nextCursor: null,
+                    pagination: {
+                        hasMore: false,
+                        limit: TRANSACTION_PAGE_SIZE,
+                        nextCursor: null,
+                    },
+                } satisfies TransactionPageResponse;
+            }
+
+            return fetchTransactionPage({
+                id,
+                cursor: typeof pageParam === "string" ? pageParam : null,
+                filters,
+                limit: TRANSACTION_PAGE_SIZE,
+            });
+        },
+        initialPageParam: null as string | null,
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+        enabled: !!id,
+        staleTime: 60 * 1000,
+        gcTime: 10 * 60 * 1000,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        placeholderData: (previousData) => previousData,
+        retry: 1,
+    });
+
+    return {
+        ...query,
+        transactions: query.data?.pages.flatMap((page) => page.data) ?? [],
+    };
 }
 
 export function useCreateTransaction() {
@@ -88,11 +196,10 @@ export function useCreateTransaction() {
             return json.data as Transaction;
         },
         onSuccess: (data, variables) => {
-            // Invalidate queries to trigger refetch
             const id = variables.coupleId || variables.userId;
             if (id) {
-                queryClient.invalidateQueries({ queryKey: ['transactions', id] });
-                queryClient.invalidateQueries({ queryKey: ['budget-summary', id] });
+                queryClient.invalidateQueries({ queryKey: TRANSACTION_KEYS.owner(id) });
+                queryClient.invalidateQueries({ queryKey: ["budget-summary", id] });
             }
             toast.success(
                 data.type === "INCOME" ? "Income added" : "Transaction added",
@@ -140,8 +247,8 @@ export function useUpdateTransaction() {
         onSuccess: (data, variables) => {
             const ownerId = variables.coupleId || variables.userId;
             if (ownerId) {
-                queryClient.invalidateQueries({ queryKey: ['transactions', ownerId] });
-                queryClient.invalidateQueries({ queryKey: ['budget-summary', ownerId] });
+                queryClient.invalidateQueries({ queryKey: TRANSACTION_KEYS.owner(ownerId) });
+                queryClient.invalidateQueries({ queryKey: ["budget-summary", ownerId] });
             }
             toast.success("Transaction updated", `${data.category} was updated.`);
         },
@@ -168,11 +275,11 @@ export function useDeleteTransaction() {
 
             return json;
         },
-        onSuccess: (data, variables) => {
+        onSuccess: (_data, variables) => {
             const ownerId = variables.coupleId || variables.userId;
             if (ownerId) {
-                queryClient.invalidateQueries({ queryKey: ['transactions', ownerId] });
-                queryClient.invalidateQueries({ queryKey: ['budget-summary', ownerId] });
+                queryClient.invalidateQueries({ queryKey: TRANSACTION_KEYS.owner(ownerId) });
+                queryClient.invalidateQueries({ queryKey: ["budget-summary", ownerId] });
             }
             toast.success("Transaction deleted", "The transaction was removed.");
         },
@@ -187,7 +294,7 @@ export function useBudgetSummary(
     filters?: { month?: string; period?: "day" | "month" | "year"; date?: string }
 ) {
     return useQuery({
-        queryKey: ['budget-summary', id, filters],
+        queryKey: TRANSACTION_KEYS.summary(id, filters),
         queryFn: async () => {
             if (!id) return null;
 

@@ -383,7 +383,12 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       <div
         ref={scrollRef}
         onScroll={(event) => {
-          autoScrollRef.current = isNearBottom(event.currentTarget);
+          const container = event.currentTarget;
+          autoScrollRef.current = isNearBottom(container);
+
+          if (container.scrollTop <= 120 && hasNextPage && !isFetchingNextPage) {
+            void handleLoadOlder();
+          }
         }}
         className={cn(
           "flex min-h-0 flex-1 basis-0 flex-col gap-4 overflow-y-scroll touch-pan-y bg-slate-50/70 px-3 sm:px-4",
@@ -391,16 +396,11 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
         )}
         style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}
       >
-        {hasNextPage && (
+        {(hasNextPage || isFetchingNextPage) && (
           <div className="sticky top-0 z-10 flex justify-center">
-            <button
-              type="button"
-              onClick={() => void handleLoadOlder()}
-              disabled={isFetchingNextPage}
-              className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm transition hover:border-romantic-blush/60 hover:text-romantic-heart disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isFetchingNextPage ? "Loading..." : "Load Older Messages"}
-            </button>
+            <div className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-500 shadow-sm">
+              {isFetchingNextPage ? "Loading older messages..." : "Scroll up for older messages"}
+            </div>
           </div>
         )}
 

@@ -4,7 +4,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Loading() {
   return (
-    <PageLoaderShell label="Preparing your world" contentClassName="space-y-6 pb-32">
+    <PageLoaderShell
+      label="Preparing your world"
+      centerContent
+      contentClassName="w-full space-y-6 pb-8"
+    >
       <div className="space-y-4">
         <Skeleton className="h-10 w-48 rounded-lg" />
         <Skeleton className="h-4 w-64 rounded-lg" />

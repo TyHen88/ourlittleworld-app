@@ -8,24 +8,64 @@ import { getCachedUser } from "@/lib/auth-cache";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
+function normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+}
+
+function isValidEmail(email: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export async function signUp(email: string, fullName: string) {
-    const existingUser = await prisma.user.findFirst({
-        where: { email, is_deleted: false }
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedFullName = fullName.trim();
+
+    if (normalizedFullName.length < 2) {
+        throw new Error("Please enter your full name.");
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+        throw new Error("Please enter a valid email address.");
+    }
+
+    const existingUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail }
     });
 
-    if (existingUser) {
-        return await requestLoginCode(email);
+    if (existingUser && !existingUser.is_deleted) {
+        return await requestLoginCode(normalizedEmail);
     }
 
     try {
-        await prisma.user.create({
-            data: {
-                email,
-                full_name: fullName,
-                name: fullName,
-            }
-        });
-        return await requestLoginCode(email);
+        if (existingUser?.is_deleted) {
+            await prisma.user.update({
+                where: { id: existingUser.id },
+                data: {
+                    email: normalizedEmail,
+                    full_name: normalizedFullName,
+                    name: normalizedFullName,
+                    password: null,
+                    emailVerified: null,
+                    image: null,
+                    avatar_url: null,
+                    bio: null,
+                    is_deleted: false,
+                    onboarding_completed: false,
+                    user_type: "COUPLE",
+                    couple_id: null,
+                }
+            });
+        } else {
+            await prisma.user.create({
+                data: {
+                    email: normalizedEmail,
+                    full_name: normalizedFullName,
+                    name: normalizedFullName,
+                }
+            });
+        }
+
+        return await requestLoginCode(normalizedEmail);
     } catch (error: unknown) {
         console.error('[SIGNUP_ERROR]', error);
         const message = error instanceof Error ? error.message : 'Failed to create account';
@@ -34,9 +74,11 @@ export async function signUp(email: string, fullName: string) {
 }
 
 export async function requestLoginCode(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+
     try {
         await nextAuthSignIn("email", {
-            email,
+            email: normalizedEmail,
             redirect: false,
         });
         return true;
@@ -72,6 +114,7 @@ export async function loginWithPassword(data: { email?: string; password?: strin
  * Validates the OTP token before proceeding to password input
  */
 export async function validateOtp(email: string, token: string) {
+    const normalizedEmail = normalizeEmail(email);
     const hashedToken = crypto
         .createHash("sha256")
         .update(`${token}${process.env.AUTH_SECRET}`)
@@ -79,18 +122,18 @@ export async function validateOtp(email: string, token: string) {
 
     const vt = await prisma.verificationToken.findFirst({
         where: { 
-            identifier: email, 
+            identifier: normalizedEmail, 
             token: hashedToken, 
             expires: { gt: new Date() } 
         }
     });
     
     if (!vt) {
-        console.error('[OTP_VALIDATION_ERROR] Token invalid or expired', { email });
+        console.error('[OTP_VALIDATION_ERROR] Token invalid or expired', { email: normalizedEmail });
         throw new Error("Invalid or expired verification code");
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     
     return { 
         isNewUser: !user?.password,
@@ -102,6 +145,7 @@ export async function validateOtp(email: string, token: string) {
  * Completes the login/signup by verifying or setting the password
  */
 export async function finalizeLoginWithPassword(email: string, token: string, password: string) {
+    const normalizedEmail = normalizeEmail(email);
     // 1. One last verification of the token
     const hashedToken = crypto
         .createHash("sha256")
@@ -109,27 +153,27 @@ export async function finalizeLoginWithPassword(email: string, token: string, pa
         .digest("hex");
 
     const vt = await prisma.verificationToken.findFirst({
-        where: { identifier: email, token: hashedToken, expires: { gt: new Date() } }
+        where: { identifier: normalizedEmail, token: hashedToken, expires: { gt: new Date() } }
     });
     
     if (!vt) {
-        console.error('[FINALIZE_AUTH_ERROR] Verification session expired', { email });
+        console.error('[FINALIZE_AUTH_ERROR] Verification session expired', { email: normalizedEmail });
         throw new Error("Verification session expired. Please restart.");
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     
     // 2. If user already has a password, check it. If not, set it (signup).
     if (user?.password) {
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
-            console.error('[FINALIZE_AUTH_ERROR] Incorrect password', { email });
+            console.error('[FINALIZE_AUTH_ERROR] Incorrect password', { email: normalizedEmail });
             throw new Error("Incorrect password");
         }
     } else {
         const hashedPassword = await bcrypt.hash(password, 10);
         await prisma.user.update({
-            where: { email },
+            where: { email: normalizedEmail },
             data: { 
                 password: hashedPassword,
                 emailVerified: new Date()
@@ -138,7 +182,7 @@ export async function finalizeLoginWithPassword(email: string, token: string, pa
     }
 
     // 3. Construct the NextAuth callback URL
-    return `/api/auth/callback/email?email=${encodeURIComponent(email)}&token=${token}&callbackUrl=/onboarding`;
+    return `/api/auth/callback/email?email=${encodeURIComponent(normalizedEmail)}&token=${token}&callbackUrl=/onboarding`;
 }
 
 export async function signOut() {

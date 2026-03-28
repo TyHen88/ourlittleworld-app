@@ -1,15 +1,15 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { TransactionCard } from "@/components/love/TransactionCard";
 import { TransactionDetailModal } from "@/components/love/TransactionDetailModal";
 import { AddTransactionModal } from "@/components/finance/AddTransactionModal";
 import { BudgetSetupModal } from "@/components/finance/BudgetSetupModal";
 import { useCouple } from "@/hooks/use-couple";
-import { useTransactions, useBudgetSummary } from "@/hooks/use-transactions";
+import { Transaction, useBudgetSummary, useInfiniteTransactions } from "@/hooks/use-transactions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Plus, Sparkles, TrendingUp, Heart, Wallet, Smile, AlertTriangle, AlertCircle, DollarSign, Stars, CalendarDays } from "lucide-react";
+import { Plus, Sparkles, TrendingUp, Heart, Wallet, DollarSign, Stars, CalendarDays } from "lucide-react";
 import { motion } from "framer-motion";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { cn } from "@/lib/utils";
@@ -24,9 +24,24 @@ export default function BudgetPage() {
     const currentDate = format(new Date(), "yyyy-MM-dd");
     const [transactionModalOpen, setTransactionModalOpen] = useState(false);
     const [budgetModalOpen, setBudgetModalOpen] = useState(false);
-    const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+    const [selectedTransaction, setSelectedTransaction] = useState<{
+        amount: number;
+        category: string;
+        date: string;
+        id: string;
+        note: string;
+        payer: "His" | "Hers" | "Shared";
+        type: "INCOME" | "EXPENSE";
+    } | null>(null);
     const [detailModalOpen, setDetailModalOpen] = useState(false);
-    const { data: transactions, isLoading } = useTransactions(id, { period, date: currentDate });
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const {
+        transactions,
+        isLoading,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+    } = useInfiniteTransactions(id, { period, date: currentDate });
     const { data: summary, isLoading: summaryLoading } = useBudgetSummary(id, { period, date: currentDate });
 
     // Check if budget is setup (budget_goals exists and has valid data)
@@ -35,49 +50,32 @@ export default function BudgetPage() {
         summary?.budget_goals?.monthly_total > 0;
 
     // Show full page loader while initial data is loading
-    const isLoadingInitial = (isLoading || summaryLoading) && !transactions && !summary;
+    const isLoadingInitial = (isLoading || summaryLoading) && transactions.length === 0 && !summary;
+
+    useEffect(() => {
+        if (!hasNextPage || isFetchingNextPage) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) {
+                    void fetchNextPage();
+                }
+            },
+            { rootMargin: "320px" }
+        );
+
+        if (sentinelRef.current) {
+            observer.observe(sentinelRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     if (isLoadingInitial) {
         return <FullPageLoader />;
     }
-
-    const getStatusMessage = () => {
-        if (!summary) return null;
-        const { status } = summary;
-        const totalBalance = summary?.balance?.total ?? 0;
-        const netFlow = (summary?.income?.total ?? 0) - (summary?.expenses?.total ?? 0);
-        const periodLabel = "this month";
-
-        if (status === "healthy") {
-            return {
-                icon: Smile,
-                title: "Balance Looks Healthy",
-                message: isSingle
-                    ? `Your current balance trend is positive ${periodLabel}. Net change: $${netFlow.toFixed(0)}.`
-                    : `Your shared balance is stable ${periodLabel}. Current balance: $${totalBalance.toFixed(0)}.`,
-                color: "text-green-600",
-                bg: "bg-green-50"
-            };
-        } else if (status === "warning") {
-            return {
-                icon: AlertTriangle,
-                title: "Watch Your Balance",
-                message: `Money out is starting to catch up ${periodLabel}. Current balance: $${totalBalance.toFixed(0)}.`,
-                color: "text-amber-600",
-                bg: "bg-amber-50"
-            };
-        } else {
-            return {
-                icon: AlertCircle,
-                title: "Balance Running Low",
-                message: `You need to review money in and money out ${periodLabel}. Current balance: $${totalBalance.toFixed(0)}.`,
-                color: "text-red-600",
-                bg: "bg-red-50"
-            };
-        }
-    };
-
-    const statusInfo = getStatusMessage();
 
     return (
         <div className="p-6 space-y-6 max-w-2xl mx-auto pb-32">
@@ -217,9 +215,7 @@ export default function BudgetPage() {
                         </div>
                         <div className="text-right">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">This Month</p>
-                            {transactions && (
-                                <p className="text-xs text-slate-300">{transactions.length} entries</p>
-                            )}
+                            <p className="text-xs text-slate-300">{transactions.length} entries</p>
                         </div>
                     </div>
 
@@ -229,14 +225,14 @@ export default function BudgetPage() {
                                 <div key={i} className="h-16 bg-white/50 rounded-xl animate-pulse" />
                             ))}
                         </div>
-                    ) : transactions && transactions.length > 0 ? (
+                    ) : transactions.length > 0 ? (
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden pb-20">
-                            {transactions.map((transaction: any) => (
+                            {transactions.map((transaction: Transaction) => (
                                 <TransactionCard
                                     key={transaction.id}
                                     id={transaction.id}
                                     category={transaction.category}
-                                    amount={parseFloat(transaction.amount)}
+                                    amount={Number(transaction.amount)}
                                     note={transaction.note || transaction.category}
                                     payer={transaction.payer === "HIS" ? "His" : transaction.payer === "HERS" ? "Hers" : "Shared"}
                                     date={new Date(transaction.transaction_date).toLocaleDateString()}
@@ -245,7 +241,7 @@ export default function BudgetPage() {
                                         setSelectedTransaction({
                                             id: transaction.id,
                                             category: transaction.category,
-                                            amount: parseFloat(transaction.amount),
+                                            amount: Number(transaction.amount),
                                             note: transaction.note || transaction.category,
                                             payer: transaction.payer === "HIS" ? "His" : transaction.payer === "HERS" ? "Hers" : "Shared",
                                             date: new Date(transaction.transaction_date).toLocaleDateString(),
@@ -255,6 +251,22 @@ export default function BudgetPage() {
                                     }}
                                 />
                             ))}
+
+                            <div ref={sentinelRef} className="px-4 pb-4 pt-2 text-center">
+                                {isFetchingNextPage ? (
+                                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                                        Loading more entries...
+                                    </p>
+                                ) : hasNextPage ? (
+                                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+                                        Scroll for more
+                                    </p>
+                                ) : (
+                                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
+                                        You&apos;re all caught up
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <motion.div
@@ -312,7 +324,7 @@ export default function BudgetPage() {
                 </>
             )}
 
-            {hasBudget && transactions && transactions.length > 0 && !detailModalOpen && !transactionModalOpen && (
+            {hasBudget && transactions.length > 0 && !detailModalOpen && !transactionModalOpen && (
                 <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
