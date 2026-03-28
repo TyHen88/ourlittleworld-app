@@ -69,9 +69,10 @@ export async function GET(request: NextRequest) {
       where: {
         ...accessScope,
         is_deleted: false,
-        NOT: {
-          category: COUPLE_CHAT_CATEGORY,
-        },
+        OR: [
+          { category: null },
+          { category: { not: COUPLE_CHAT_CATEGORY } },
+        ],
         ...searchFilter,
       } satisfies Prisma.PostWhereInput,
       orderBy: { created_at: "desc" },

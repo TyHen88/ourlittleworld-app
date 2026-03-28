@@ -1,12 +1,10 @@
-const CACHE_NAME = "ourlittleworld-static-v4";
+const CACHE_NAME = "ourlittleworld-static-v5";
 const OFFLINE_FALLBACK_URL = "/landing";
 const PRECACHE_URLS = [
   OFFLINE_FALLBACK_URL,
   "/manifest.json",
   "/pwa-192x192.png",
   "/pwa-512x512.png",
-  "/screenshot-mobile.png",
-  "/screenshot-desktop.png",
 ];
 
 const CACHEABLE_PUBLIC_ASSET = /\.(?:png|jpg|jpeg|webp|gif|svg|ico|woff2?|ttf)$/i;
