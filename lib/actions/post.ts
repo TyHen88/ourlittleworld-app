@@ -1,12 +1,55 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import fs from "fs/promises";
-import path from "path";
 import { revalidatePath } from "next/cache";
 import { getCachedUserOrThrow, getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
 import { Prisma } from "@prisma/client";
+import { uploadFileToCloudinary } from "@/lib/cloudinary-upload";
+
+type PostProfile = NonNullable<Awaited<ReturnType<typeof getCachedProfile>>>;
+type PostAccessContext = {
+    user: { id: string };
+    profile: PostProfile;
+    isSingle: boolean;
+};
+
+type CreatePostMetadata = Record<string, unknown> & {
+    category?: string;
+};
+
+type StoredPostReply = {
+    id: string;
+    author_id: string;
+    author_name: string;
+    author_avatar: string | null;
+    content: string;
+    created_at: string;
+};
+
+type StoredPostComment = StoredPostReply & {
+    replies: StoredPostReply[];
+};
+
+type StoredPostMetadata = Record<string, unknown> & {
+    images?: string[];
+    likes?: string[];
+    likes_count?: number;
+    comments?: StoredPostComment[];
+    comments_count?: number;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getMetadataObject(value: Prisma.JsonValue | CreatePostMetadata | undefined | null): StoredPostMetadata {
+    if (!isRecord(value)) {
+        return {};
+    }
+
+    return { ...value } as StoredPostMetadata;
+}
 
 async function getPostAccessContext() {
     const user = await getCachedUserOrThrow();
@@ -14,7 +57,7 @@ async function getPostAccessContext() {
     const actorUser = { ...user, id: user.id };
 
     const profile = await getCachedProfile(user.id);
-    const isSingle = (profile as any)?.user_type === "SINGLE";
+    const isSingle = profile?.user_type === "SINGLE";
 
     if (!profile) {
         throw new Error("Profile not found");
@@ -24,10 +67,10 @@ async function getPostAccessContext() {
         throw new Error("No couple found");
     }
 
-    return { user: actorUser, profile, isSingle };
+    return { user: actorUser, profile, isSingle } satisfies PostAccessContext;
 }
 
-async function getAuthorizedPost(postId: string, actor: { user: { id: string }; profile: { couple_id?: string | null }; isSingle: boolean }) {
+async function getAuthorizedPost(postId: string, actor: Pick<PostAccessContext, "user" | "profile" | "isSingle">) {
     const post = await prisma.post.findUnique({
         where: { id: postId },
         select: {
@@ -57,7 +100,7 @@ async function getAuthorizedPost(postId: string, actor: { user: { id: string }; 
 export async function createPost(input: {
     content: string;
     imageUrls?: string[];
-    metadata?: any;
+    metadata?: CreatePostMetadata;
 }) {
     try {
         const { user, profile, isSingle } = await getPostAccessContext();
@@ -68,8 +111,8 @@ export async function createPost(input: {
             return { success: false, error: "Content or image is required" };
         }
 
-        const baseMetadata = input.metadata && typeof input.metadata === 'object' ? input.metadata : undefined;
-        const nextMetadata: any =
+        const baseMetadata = isRecord(input.metadata) ? input.metadata : undefined;
+        const nextMetadata: StoredPostMetadata | undefined =
             baseMetadata || imageUrls.length > 0
                 ? {
                     ...(baseMetadata ?? {}),
@@ -82,15 +125,17 @@ export async function createPost(input: {
             if (typeof nextMetadata.comments_count !== 'number') nextMetadata.comments_count = 0;
         }
 
+        const postData: Prisma.PostUncheckedCreateInput = {
+            couple_id: isSingle ? null : (profile.couple_id ?? null),
+            author_id: user.id,
+            content,
+            image_url: imageUrls[0] ?? null,
+            category: typeof input.metadata?.category === "string" ? input.metadata.category : null,
+            ...(nextMetadata ? { metadata: nextMetadata as Prisma.InputJsonValue } : {}),
+        };
+
         const data = await prisma.post.create({
-            data: {
-                couple_id: isSingle ? null : (profile?.couple_id ?? null),
-                author_id: user.id,
-                content,
-                image_url: imageUrls[0] ?? null,
-                category: input.metadata?.category || null,
-                ...(nextMetadata ? { metadata: nextMetadata } : {}),
-            } as any,
+            data: postData,
             include: {
                 author: {
                     select: {
@@ -118,21 +163,27 @@ export async function uploadPostImage(formData: FormData) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const file = formData.get("file") as File;
-        if (!file) return { success: false, error: "No file provided" };
+        const file = formData.get("file");
+        if (!(file instanceof File)) {
+            return { success: false, error: "No file provided" };
+        }
 
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `post-${user.id}-${Date.now()}-${Math.random().toString(16).slice(2)}.${fileExt}`;
-        
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const relativePath = `/uploads/${fileName}`;
-        const absolutePath = path.join(process.cwd(), "public", "uploads", fileName);
+        const uploadResult = await uploadFileToCloudinary(file, {
+            folder: "ourlittleworld/posts",
+            public_id: `post-${user.id}-${Date.now()}-${crypto.randomUUID()}`,
+            resource_type: "image",
+            overwrite: false,
+            transformation: [
+                {
+                    quality: "auto",
+                    fetch_format: "auto",
+                },
+            ],
+        });
 
-        await fs.writeFile(absolutePath, buffer);
-
-        return { success: true, url: relativePath };
+        return { success: true, url: uploadResult.secure_url };
     } catch (error: unknown) {
-        console.error("Local post image upload error:", error);
+        console.error("Post image upload error:", error);
         const message = error instanceof Error ? error.message : "An unknown error occurred";
         return { success: false, error: message };
     }
@@ -169,8 +220,10 @@ export async function toggleLikePost(postId: string) {
         const { user } = actor;
         const post = await getAuthorizedPost(postId, actor);
 
-        const metadata = (post.metadata as any) || {};
-        const likes = Array.isArray(metadata.likes) ? metadata.likes : [];
+        const metadata = getMetadataObject(post.metadata);
+        const likes = Array.isArray(metadata.likes)
+            ? metadata.likes.filter((like): like is string => typeof like === "string")
+            : [];
         const userIndex = likes.indexOf(user.id);
 
         if (userIndex > -1) {
@@ -185,12 +238,12 @@ export async function toggleLikePost(postId: string) {
             likes_count: likes.length
         };
 
-        const updated = await prisma.post.update({
+        await prisma.post.update({
             where: { id: postId },
-            data: { metadata: nextMetadata }
+            data: { metadata: nextMetadata as Prisma.InputJsonValue }
         });
 
-        return { success: true, metadata: updated?.metadata ?? nextMetadata };
+        return { success: true, metadata: nextMetadata };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "An unknown error occurred";
         return { success: false, error: message };
@@ -208,7 +261,7 @@ export async function addComment(postId: string, content: string) {
             return { success: false, error: "Comment is required" };
         }
 
-        const metadata = (post.metadata as any) || {};
+        const metadata = getMetadataObject(post.metadata);
         const comments = Array.isArray(metadata.comments) ? [...metadata.comments] : [];
 
         const newComment = {
@@ -223,7 +276,7 @@ export async function addComment(postId: string, content: string) {
 
         comments.push(newComment);
 
-        const totalComments = comments.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0);
+        const totalComments = comments.reduce((acc, comment) => acc + 1 + comment.replies.length, 0);
 
         const nextMetadata = {
             ...metadata,
@@ -231,12 +284,12 @@ export async function addComment(postId: string, content: string) {
             comments_count: totalComments
         };
 
-        const updated = await prisma.post.update({
+        await prisma.post.update({
             where: { id: postId },
-            data: { metadata: nextMetadata }
+            data: { metadata: nextMetadata as Prisma.InputJsonValue }
         });
 
-        return { success: true, comment: newComment, metadata: updated?.metadata ?? nextMetadata };
+        return { success: true, comment: newComment, metadata: nextMetadata };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "An unknown error occurred";
         return { success: false, error: message };
@@ -254,13 +307,13 @@ export async function addReply(postId: string, commentId: string, content: strin
             return { success: false, error: "Reply is required" };
         }
 
-        const metadata = (post.metadata as any) || {};
+        const metadata = getMetadataObject(post.metadata);
         const comments = Array.isArray(metadata.comments) ? [...metadata.comments] : [];
 
-        const commentIndex = comments.findIndex((c: any) => c.id === commentId);
+        const commentIndex = comments.findIndex((comment) => comment.id === commentId);
         if (commentIndex === -1) return { success: false, error: "Comment not found" };
 
-        const newReply = {
+        const newReply: StoredPostReply = {
             id: crypto.randomUUID(),
             author_id: user.id,
             author_name: profile?.full_name || "Someone",
@@ -274,7 +327,7 @@ export async function addReply(postId: string, commentId: string, content: strin
 
         comments[commentIndex] = targetComment;
 
-        const totalComments = comments.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0);
+        const totalComments = comments.reduce((acc, comment) => acc + 1 + comment.replies.length, 0);
 
         const nextMetadata = {
             ...metadata,
@@ -282,12 +335,12 @@ export async function addReply(postId: string, commentId: string, content: strin
             comments_count: totalComments
         };
 
-        const updated = await prisma.post.update({
+        await prisma.post.update({
             where: { id: postId },
-            data: { metadata: nextMetadata }
+            data: { metadata: nextMetadata as Prisma.InputJsonValue }
         });
 
-        return { success: true, reply: newReply, metadata: updated?.metadata ?? nextMetadata };
+        return { success: true, reply: newReply, metadata: nextMetadata };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "An unknown error occurred";
         return { success: false, error: message };

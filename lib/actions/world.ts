@@ -4,10 +4,8 @@ console.log(">>> World actions file loaded");
 
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import fs from "fs/promises";
-import path from "path";
-import { revalidatePath } from "next/cache";
 import { getCachedUser } from "@/lib/auth-cache";
+import { uploadFileToCloudinary } from "@/lib/cloudinary-upload";
 
 // Romantic world name suggestions 
 const ROMANTIC_NAMES = [
@@ -39,7 +37,7 @@ interface CreateWorldData {
     worldName: string;
     startDate?: string;
     couplePhotoUrl?: string;
-    photoFile?: any; // Added for internal photo handling if needed
+    photoFile?: File;
     partnerNickname?: string;
     theme?: string;
 }
@@ -233,7 +231,7 @@ export async function joinWorld(data: JoinWorldData) {
     }
 }
 
-// Upload couple photo to Local Storage
+// Upload couple photo to Cloudinary
 export async function uploadCouplePhoto(formData: FormData) {
     console.log(">>> uploadCouplePhoto called");
     try {
@@ -245,21 +243,25 @@ export async function uploadCouplePhoto(formData: FormData) {
         }
         // Verification is done via session, no need for client-provided userId
 
-        const file = formData.get("file") as File;
-        if (!file) return { success: false, error: "No file provided" };
+        const file = formData.get("file");
+        if (!(file instanceof File)) return { success: false, error: "No file provided" };
 
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `couple-${user.id}-${Date.now()}.${fileExt}`;
-        
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const relativePath = `/uploads/${fileName}`;
-        const absolutePath = path.join(process.cwd(), "public", "uploads", fileName);
+        const uploadResult = await uploadFileToCloudinary(file, {
+            folder: "ourlittleworld/couples",
+            public_id: `couple-${user.id}-${Date.now()}-${crypto.randomUUID()}`,
+            resource_type: "image",
+            overwrite: false,
+            transformation: [
+                {
+                    quality: "auto",
+                    fetch_format: "auto",
+                },
+            ],
+        });
 
-        await fs.writeFile(absolutePath, buffer);
-
-        return { success: true, url: relativePath };
+        return { success: true, url: uploadResult.secure_url };
     } catch (error: unknown) {
-        console.error('Local couple photo upload error:', error);
+        console.error('Couple photo upload error:', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: message };
     }
