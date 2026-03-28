@@ -3,11 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getCachedUser } from "@/lib/auth-cache";
 import { createCursorPaginatedResponse, decodePaginationCursor, encodePaginationCursor } from "@/lib/pagination";
+import { getTripNotificationRecipientIds } from "@/lib/push-events";
+import { sendPushNotificationToUsers } from "@/lib/push";
 import prisma from "@/lib/prisma";
 import { getReminderAccessWhere, serializeReminder } from "@/lib/reminder-service";
 import {
   DEFAULT_CUSTOM_REMINDER_TIME,
   createReminderSchedule,
+  formatReminderListDate,
+  getReminderTimeLabel,
   getTodayReminderDateKey,
   isValidReminderDateKey,
   isValidReminderTime,
@@ -48,6 +52,41 @@ async function getReminderActor() {
       user_type: true,
     },
   });
+}
+
+function getReminderCreatedPushBody(params: {
+  name: string;
+  note: string | null;
+  hasDate: boolean;
+  hasTime: boolean;
+  reminderDateKey: string;
+  reminderTime: string;
+}) {
+  const note = params.note?.trim();
+
+  if (note) {
+    return `${params.name}: ${note}`;
+  }
+
+  if (params.hasDate && params.hasTime) {
+    return `${params.name} is set for ${formatReminderListDate({
+      dateKey: params.reminderDateKey,
+      time: params.reminderTime,
+    })}.`;
+  }
+
+  if (params.hasDate) {
+    return `${params.name} is set for ${formatReminderListDate({
+      dateKey: params.reminderDateKey,
+      time: null,
+    })}.`;
+  }
+
+  if (params.hasTime) {
+    return `${params.name} is set for today at ${getReminderTimeLabel(params.reminderTime)}.`;
+  }
+
+  return `${params.name} was added to your shared reminder list.`;
 }
 
 export async function GET(request: NextRequest) {
@@ -219,6 +258,42 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    if (!isSoloOwner && actor.couple_id) {
+      const recipientIds = await getTripNotificationRecipientIds({
+        coupleId: actor.couple_id,
+        excludeUserId: actor.id,
+      });
+
+      if (recipientIds.length > 0) {
+        const creatorName = reminder.creator?.full_name?.trim() || "Your partner";
+
+        try {
+          await sendPushNotificationToUsers({
+            userIds: recipientIds,
+            payload: {
+              title: `${creatorName} added a reminder`,
+              body: getReminderCreatedPushBody({
+                name: reminder.name,
+                note: reminder.note,
+                hasDate,
+                hasTime,
+                reminderDateKey,
+                reminderTime,
+              }),
+              url: "/reminders",
+              tag: `reminder-created-${reminder.id}`,
+            },
+            options: {
+              TTL: 10 * 60,
+              urgency: "normal",
+            },
+          });
+        } catch (pushError) {
+          console.error("Reminder create push notification error:", pushError);
+        }
+      }
+    }
 
     return NextResponse.json({ data: serializeReminder(reminder) }, { status: 201 });
   } catch (error: unknown) {
