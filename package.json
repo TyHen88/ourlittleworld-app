@@ -10,6 +10,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
+    "cron:trip-reminders": "node scripts/run-trip-reminders.mjs",
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -24,6 +25,7 @@
     "@tanstack/react-query": "^5.90.21",
     "@types/bcryptjs": "^2.4.6",
     "@types/nodemailer": "^7.0.11",
+    "@types/web-push": "^3.6.4",
     "ably": "^2.21.0",
     "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.4",
@@ -46,6 +48,7 @@
     "remark-gfm": "^4.0.1",
     "streamifier": "^0.1.1",
     "tailwind-merge": "^3.4.1",
+    "web-push": "^3.6.7",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },

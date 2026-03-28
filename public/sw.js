@@ -1,4 +1,4 @@
-const CACHE_NAME = "ourlittleworld-static-v5";
+const CACHE_NAME = "ourlittleworld-static-v6";
 const OFFLINE_FALLBACK_URL = "/landing";
 const PRECACHE_URLS = [
   OFFLINE_FALLBACK_URL,
@@ -129,6 +129,76 @@ self.addEventListener("fetch", (event) => {
       }
 
       return networkResponse;
+    })(),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  const fallbackPayload = {
+    title: "Our Little World",
+    body: "You have a new notification.",
+    tag: "ourlittleworld",
+    icon: "/pwa-192x192.png",
+    badge: "/pwa-192x192.png",
+    data: { url: "/" },
+  };
+
+  const payload = (() => {
+    if (!event.data) {
+      return fallbackPayload;
+    }
+
+    try {
+      const parsed = event.data.json();
+      return {
+        ...fallbackPayload,
+        ...parsed,
+        data: {
+          ...fallbackPayload.data,
+          ...(parsed?.data ?? {}),
+        },
+      };
+    } catch {
+      return {
+        ...fallbackPayload,
+        body: event.data.text(),
+      };
+    }
+  })();
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      tag: payload.tag,
+      icon: payload.icon,
+      badge: payload.badge,
+      data: payload.data,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(event.notification.data?.url || "/", self.location.origin).toString();
+
+  event.waitUntil(
+    (async () => {
+      const windowClients = await clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      for (const client of windowClients) {
+        if ("focus" in client && client.url === targetUrl) {
+          await client.focus();
+          return;
+        }
+      }
+
+      if (clients.openWindow) {
+        await clients.openWindow(targetUrl);
+      }
     })(),
   );
 });

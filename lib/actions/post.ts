@@ -6,6 +6,7 @@ import { getCachedUserOrThrow, getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
 import { Prisma } from "@prisma/client";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload";
+import { sendPushNotificationToUsers } from "@/lib/push";
 
 type PostProfile = NonNullable<Awaited<ReturnType<typeof getCachedProfile>>>;
 type PostAccessContext = {
@@ -151,6 +152,43 @@ export async function createPost(input: {
                 },
             },
         });
+
+        if (!isSingle && profile.couple_id) {
+            try {
+                const recipients = await prisma.user.findMany({
+                    where: {
+                        couple_id: profile.couple_id,
+                        id: {
+                            not: user.id,
+                        },
+                    },
+                    select: {
+                        id: true,
+                    },
+                });
+
+                if (recipients.length > 0) {
+                    const authorName = profile.full_name?.trim() || "Your partner";
+                    const preview = content
+                        ? content.slice(0, 120)
+                        : imageUrls.length > 0
+                            ? `${authorName} shared ${imageUrls.length > 1 ? "new photos" : "a new photo"}.`
+                            : `${authorName} shared a new post.`;
+
+                    await sendPushNotificationToUsers({
+                        userIds: recipients.map((recipient) => recipient.id),
+                        payload: {
+                            title: `${authorName} posted something new`,
+                            body: preview,
+                            url: "/feed",
+                            tag: `post-${data.id}`,
+                        },
+                    });
+                }
+            } catch (pushError) {
+                console.error("Post push notification error:", pushError);
+            }
+        }
 
         revalidatePath("/feed");
         revalidatePath("/dashboard");

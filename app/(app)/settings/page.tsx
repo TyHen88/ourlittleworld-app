@@ -47,6 +47,12 @@ import {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
+import {
+    browserSupportsPushNotifications,
+    getExistingPushSubscription,
+    subscribeBrowserToPush,
+    unsubscribeBrowserFromPush,
+} from "@/lib/push-client";
 
 type SettingsSection = "profile" | "couple" | "preferences" | "notifications" | "privacy" | "help";
 
@@ -69,12 +75,15 @@ export default function SettingsPage() {
     const [darkMode, setDarkMode] = useState(false);
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const [notifications, setNotifications] = useState({
-        push: true,
+        push: false,
         email: true,
         posts: true,
         comments: true,
         likes: true,
     });
+    const [pushSupported, setPushSupported] = useState(false);
+    const [pushLoading, setPushLoading] = useState(true);
+    const [pushSaving, setPushSaving] = useState(false);
 
     const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -102,6 +111,45 @@ export default function SettingsPage() {
             });
         }
     }, [profile, editing]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadPushState = async () => {
+            if (!browserSupportsPushNotifications()) {
+                if (!cancelled) {
+                    setPushSupported(false);
+                    setPushLoading(false);
+                    setNotifications((prev) => ({ ...prev, push: false }));
+                }
+                return;
+            }
+
+            try {
+                const subscription = await getExistingPushSubscription();
+                if (!cancelled) {
+                    setPushSupported(true);
+                    setNotifications((prev) => ({ ...prev, push: Boolean(subscription) }));
+                }
+            } catch (error) {
+                console.error("Failed to load push subscription:", error);
+                if (!cancelled) {
+                    setPushSupported(true);
+                    setNotifications((prev) => ({ ...prev, push: false }));
+                }
+            } finally {
+                if (!cancelled) {
+                    setPushLoading(false);
+                }
+            }
+        };
+
+        void loadPushState();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const syncProfileCache = (updates: Partial<Pick<UserProfile, "full_name" | "avatar_url" | "bio">>) => {
         if (!user?.id) return;
@@ -241,6 +289,70 @@ export default function SettingsPage() {
             console.error("Delete failed:", err);
             toast.error("Couldn't delete account", getErrorMessage(err, "Failed to delete account"));
             setDeletingAccount(false);
+        }
+    };
+
+    const handlePushToggle = async () => {
+        if (pushSaving) return;
+
+        if (!pushSupported) {
+            toast.error("Push not supported", "This browser does not support push notifications.");
+            return;
+        }
+
+        setPushSaving(true);
+
+        try {
+            if (notifications.push) {
+                const endpoint = await unsubscribeBrowserFromPush();
+                if (endpoint) {
+                    await fetch("/api/push/subscriptions", {
+                        method: "DELETE",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ endpoint }),
+                    });
+                }
+
+                setNotifications((prev) => ({ ...prev, push: false }));
+                toast.success("Push disabled", "This device will stop receiving push notifications.");
+                return;
+            }
+
+            const publicKeyResponse = await fetch("/api/push/public-key", {
+                method: "GET",
+                cache: "no-store",
+            });
+            const publicKeyPayload = await publicKeyResponse.json().catch(() => null);
+
+            if (!publicKeyResponse.ok || !publicKeyPayload?.publicKey) {
+                throw new Error(publicKeyPayload?.error || "Push notifications are not configured.");
+            }
+
+            const subscription = await subscribeBrowserToPush(publicKeyPayload.publicKey);
+
+            const subscribeResponse = await fetch("/api/push/subscriptions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    subscription: subscription.toJSON(),
+                }),
+            });
+            const subscribePayload = await subscribeResponse.json().catch(() => null);
+
+            if (!subscribeResponse.ok) {
+                throw new Error(subscribePayload?.error || "Failed to enable push notifications.");
+            }
+
+            setNotifications((prev) => ({ ...prev, push: true }));
+            toast.success("Push enabled", "This device will now receive partner updates.");
+        } catch (error: unknown) {
+            toast.error("Couldn't update push notifications", getErrorMessage(error, "Failed to update push notifications"));
+        } finally {
+            setPushSaving(false);
         }
     };
 
@@ -716,7 +828,14 @@ export default function SettingsPage() {
 
                                 <div className="space-y-4">
                                     {[
-                                        { key: "Telegram", label: "Telegram Notifications", desc: "Get notified on your Telegram", icon: Send },
+                                        {
+                                            key: "push",
+                                            label: "Push Notifications",
+                                            desc: pushSupported
+                                                ? "Get notified on this device when your partner sends a message or creates a post."
+                                                : "Push notifications are not available in this browser.",
+                                            icon: Bell,
+                                        },
                                         { key: "email", label: "Email Notifications", desc: "Receive updates via email", icon: Mail },
                                         { key: "posts", label: "New Posts", desc: "When your partner posts", icon: ImageIcon },
                                         { key: "comments", label: "Comments", desc: "When someone comments", icon: Heart },
@@ -734,9 +853,11 @@ export default function SettingsPage() {
                                                     </div>
                                                 </div>
                                                 <button
-                                                    onClick={() => setNotifications({ ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] })}
+                                                    type="button"
+                                                    onClick={item.key === "push" ? handlePushToggle : () => setNotifications({ ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] })}
+                                                    disabled={item.key === "push" && (pushLoading || pushSaving || !pushSupported)}
                                                     className={cn(
-                                                        "w-14 h-8 rounded-full transition-colors relative",
+                                                        "w-14 h-8 rounded-full transition-colors relative disabled:cursor-not-allowed disabled:opacity-60",
                                                         notifications[item.key as keyof typeof notifications] ? "bg-amber-600" : "bg-slate-300"
                                                     )}
                                                 >

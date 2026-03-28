@@ -14,6 +14,7 @@ import {
 } from "@/lib/chat";
 import { getAblyRestClient } from "@/lib/ably-server";
 import { createCursorPaginatedResponse } from "@/lib/pagination";
+import { sendPushNotificationToUsers } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -201,6 +202,36 @@ export async function POST(request: NextRequest) {
       } catch (publishError) {
         console.error("Error publishing couple chat message to Ably:", publishError);
       }
+    }
+
+    const recipientIds =
+      profile.couple?.members
+        ?.map((member) => member.id)
+        .filter((memberId) => memberId !== user.id) ?? [];
+
+    if (recipientIds.length > 0) {
+      const senderName = profile.full_name?.trim() || "Your partner";
+      const pushBody = content
+        ? content.slice(0, 120)
+        : sticker
+          ? `${senderName} sent you a ${sticker.label.toLowerCase()}.`
+          : imageUrls.length > 0
+            ? `${senderName} sent you ${imageUrls.length > 1 ? "photos" : "a photo"}.`
+            : `${senderName} sent you a new message.`;
+
+      await sendPushNotificationToUsers({
+        userIds: recipientIds,
+        payload: {
+          title: `${senderName} sent a message`,
+          body: pushBody,
+          url: "/chat",
+          tag: `chat-${profile.couple_id}`,
+        },
+        options: {
+          TTL: 60,
+          urgency: "high",
+        },
+      });
     }
 
     return NextResponse.json({ success: true, data: serializedMessage }, { status: 201 });

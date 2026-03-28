@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { revalidatePath } from "next/cache";
+import { sendPushNotificationToUsers } from "@/lib/push";
+import { formatTripDateLabel, getTripNotificationRecipientIds } from "@/lib/push-events";
 
 const TRIP_TIME_ZONE = "Asia/Phnom_Penh";
 const tripDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -156,6 +158,32 @@ export async function createTrip(data: TripMutationInput) {
         ...trip,
         transactions: [],
     });
+
+    const recipientIds = await getTripNotificationRecipientIds({
+        coupleId: trip.couple_id,
+        userId: trip.user_id,
+        excludeUserId: user.id,
+    });
+
+    if (recipientIds.length > 0) {
+        const creatorName = user.full_name?.trim() || "Your partner";
+        const tripDate = formatTripDateLabel(trip.start_date);
+        const tripLabel = trip.title?.trim() || trip.destination;
+
+        await sendPushNotificationToUsers({
+            userIds: recipientIds,
+            payload: {
+                title: `${creatorName} added a new trip`,
+                body: `${tripLabel} starts on ${tripDate} in ${trip.destination}.`,
+                url: "/trips",
+                tag: `trip-created-${trip.id}`,
+            },
+            options: {
+                TTL: 10 * 60,
+                urgency: "normal",
+            },
+        });
+    }
 
     revalidatePath('/trips');
     revalidatePath('/dashboard');

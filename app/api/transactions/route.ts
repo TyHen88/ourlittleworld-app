@@ -7,6 +7,8 @@ import {
     decodePaginationCursor,
     encodePaginationCursor,
 } from "@/lib/pagination";
+import { sendPushNotificationToUsers } from "@/lib/push";
+import { getCoupleMemberIds } from "@/lib/push-events";
 
 type TransactionCursorPayload = {
     createdAt: string;
@@ -267,6 +269,33 @@ export async function POST(request: NextRequest) {
                 },
             },
         });
+
+        if (isCouple && transaction.couple_id) {
+            const recipientIds = await getCoupleMemberIds({
+                coupleId: transaction.couple_id,
+                excludeUserId: user.id,
+            });
+
+            if (recipientIds.length > 0) {
+                const actorName = transaction.creator.full_name?.trim() || "Your partner";
+                const amountLabel = transaction.amount ? Number(transaction.amount.toString()).toFixed(2) : "0.00";
+                const entryLabel = `${transaction.type === "INCOME" ? "income" : "expense"} item`;
+
+                await sendPushNotificationToUsers({
+                    userIds: recipientIds,
+                    payload: {
+                        title: `${actorName} added a budget item`,
+                        body: `${entryLabel} "${transaction.category}" for $${amountLabel}.`,
+                        url: "/budget",
+                        tag: `budget-item-${transaction.id}`,
+                    },
+                    options: {
+                        TTL: 10 * 60,
+                        urgency: "normal",
+                    },
+                });
+            }
+        }
 
         const sanitizedTransaction = {
             ...transaction,
