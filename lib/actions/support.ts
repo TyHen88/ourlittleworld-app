@@ -1,7 +1,7 @@
 "use server";
 
-import nodemailer from "nodemailer";
 import { auth } from "@/auth";
+import { sendEmail } from "@/lib/email";
 
 export async function sendSupportEmail(formData: { subject: string; message: string }) {
     const session = await auth();
@@ -13,18 +13,8 @@ export async function sendSupportEmail(formData: { subject: string; message: str
         return { success: false, error: "SMTP configuration is missing on server" };
     }
 
-    const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: false, 
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASSWORD,
-        },
-    });
-
     try {
-        await transporter.sendMail({
+        await sendEmail({
             from: `"${userName}" <${process.env.SMTP_USER}>`,
             to: process.env.SMTP_USER, // Send to the support email configured
             replyTo: userEmail !== "Anonymous" ? userEmail : undefined,
@@ -55,11 +45,14 @@ export async function sendSupportEmail(formData: { subject: string; message: str
                     </div>
                 </div>
             `,
-        });
+        }, "support-request");
 
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Failed to send support email:", error);
-        return { success: false, error: error.message || "Failed to send email" };
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Failed to send email"
+        };
     }
 }

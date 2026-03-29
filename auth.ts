@@ -4,7 +4,20 @@ import prisma from "@/lib/prisma"
 import Credentials from "next-auth/providers/credentials"
 import Email from "next-auth/providers/email"
 import bcrypt from "bcryptjs"
-import nodemailer from "nodemailer"
+import { sendEmailWithDefaultFrom } from "@/lib/email"
+
+type AuthUserClaims = {
+  full_name?: string | null
+  avatar_url?: string | null
+  user_type?: string
+  onboarding_completed?: boolean
+}
+
+type SessionUserClaims = {
+  id?: string
+  user_type?: string
+  onboarding_completed?: boolean
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -24,10 +37,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       generateVerificationToken() {
         return Math.floor(100000 + Math.random() * 900000).toString()
       },
-      async sendVerificationRequest({ identifier: email, url, token, provider }) {
-        const { host } = new URL(url)
-        const transporter = nodemailer.createTransport(provider.server)
-        await transporter.sendMail({
+      async sendVerificationRequest({ identifier: email, token, provider }) {
+        await sendEmailWithDefaultFrom({
           to: email,
           from: provider.from,
           subject: `Your OurLittleWorld Login Code: ${token}`,
@@ -46,7 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               <p style="font-size: 12px; color: #999; text-align: center;">Made with love by OurLittleWorld</p>
             </div>
           `,
-        })
+        }, "auth-verification")
       },
     }),
     Credentials({
@@ -62,7 +73,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email: credentials.email as string }
         })
 
-        // @ts-ignore
         if (!user || !user.password || user.is_deleted) return null
 
         const isValid = await bcrypt.compare(
@@ -77,9 +87,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.full_name,
           image: user.avatar_url,
-          // @ts-ignore
           user_type: user.user_type,
-          // @ts-ignore
           onboarding_completed: user.onboarding_completed,
         }
       }
@@ -88,16 +96,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
+        const authUser = user as typeof user & AuthUserClaims
         token.id = user.id
         token.email = user.email
-        // @ts-ignore
-        token.name = user.full_name || user.name
-        // @ts-ignore
-        token.picture = user.avatar_url || user.image
-        // @ts-ignore
-        token.user_type = user.user_type
-        // @ts-ignore
-        token.onboarding_completed = user.onboarding_completed
+        token.name = authUser.full_name || user.name
+        token.picture = authUser.avatar_url || user.image
+        token.user_type = authUser.user_type
+        token.onboarding_completed = authUser.onboarding_completed
       }
       if (trigger === "update" && session) {
         return { ...token, ...session.user }
@@ -106,11 +111,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       if (token.id) {
-        session.user.id = token.id as string
-        // @ts-ignore
-        session.user.user_type = token.user_type
-        // @ts-ignore
-        session.user.onboarding_completed = token.onboarding_completed
+        const sessionUser = session.user as typeof session.user & SessionUserClaims
+        const authToken = token as typeof token & SessionUserClaims
+        sessionUser.id = token.id as string
+        sessionUser.user_type = authToken.user_type
+        sessionUser.onboarding_completed = authToken.onboarding_completed
       }
       return session
     }

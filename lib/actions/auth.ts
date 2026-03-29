@@ -7,6 +7,7 @@ import { AuthError } from "next-auth";
 import { getCachedUser } from "@/lib/auth-cache";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { sendEmailWithDefaultFrom } from "@/lib/email";
 
 function normalizeEmail(email: string) {
     return email.trim().toLowerCase();
@@ -325,23 +326,8 @@ export async function requestCodeForPasswordChange() {
             }
         });
 
-        // Send the email (mocking transporter for now as it's typically in the root auth.ts)
-        // For production, we'd import and use a transporter here or call an API but for this setup 
-        // we'll log it and assume the existence of a sender is configured. 
-        // Since we're in a server action, we'll re-use the SMTP configuration logic from root auth.ts
-        const nodemailer = await import("nodemailer");
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
-            },
-        });
-
-        await transporter.sendMail({
+        await sendEmailWithDefaultFrom({
             to: user.email,
-            from: process.env.SMTP_FROM,
             subject: `Verification Code: ${otp}`,
             html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 12px;">
@@ -355,7 +341,7 @@ export async function requestCodeForPasswordChange() {
                     <p>If you didn't request this change, you can safely ignore this email.</p>
                 </div>
             `
-        });
+        }, "password-change-otp");
 
         return { success: true };
     } catch (error: unknown) {
