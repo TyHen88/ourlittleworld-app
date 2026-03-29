@@ -605,7 +605,10 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     duration: 0.22,
                     ease: [0.22, 1, 0.36, 1],
                   }}
-                  className={cn("flex flex-col", isMine ? "items-end" : "items-start")}
+                  className={cn(
+                    "flex w-fit max-w-[84%] flex-col",
+                    isMine ? "self-end items-end" : "self-start items-start"
+                  )}
                   onMouseEnter={() => setHoveredReactionMessageId(message.id)}
                   onMouseLeave={() =>
                     setHoveredReactionMessageId((current) =>
@@ -617,7 +620,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     onClick={(event) => handleMessageSelect(event, message.id)}
                     onDoubleClick={(event) => handleMessageDoubleClick(event, message.id)}
                     className={cn(
-                      "max-w-[78%] cursor-pointer overflow-hidden shadow-sm ring-1 ring-transparent transition-shadow duration-300",
+                      "max-w-full cursor-pointer overflow-hidden shadow-sm ring-1 ring-transparent transition-shadow duration-300",
                       stickerOnly
                         ? cn(
                             "rounded-[1.45rem] border px-3.5 py-2.5",
@@ -736,7 +739,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                   {(reactions.length > 0 || showReactionPicker) && (
                     <div
                       className={cn(
-                        "mt-1.5 flex max-w-[84%] flex-wrap items-center gap-1.5",
+                        "mt-1.5 flex max-w-full flex-wrap items-center gap-1.5",
                         isMine ? "justify-end" : "justify-start"
                       )}
                     >
@@ -772,7 +775,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 6 }}
                         className={cn(
-                          "mt-1.5 flex max-w-[84%] flex-wrap items-center gap-2 rounded-[1.25rem] border border-slate-200 bg-white px-3 py-2 shadow-sm",
+                          "mt-1.5 flex max-w-full flex-wrap items-center gap-2 rounded-[1.25rem] border border-slate-200 bg-white px-3 py-2 shadow-sm",
                           isMine ? "justify-end" : "justify-start"
                         )}
                       >
