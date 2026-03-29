@@ -12,6 +12,7 @@ import {
   type CoupleChatMessageRecord,
 } from "@/lib/chat";
 import { getAblyRestClient } from "@/lib/ably-server";
+import { sendPushNotificationToUsers } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -91,6 +92,7 @@ export async function POST(
       reaction.user_ids.includes(user.id)
     );
     const existingEmoji = existingReaction?.emoji ?? null;
+    const nextReactionEmoji = existingEmoji === emoji ? null : emoji;
 
     for (let index = nextReactions.length - 1; index >= 0; index -= 1) {
       nextReactions[index].user_ids = nextReactions[index].user_ids.filter(
@@ -152,6 +154,36 @@ export async function POST(
       } catch (publishError) {
         console.error("Error publishing couple chat reaction update to Ably:", publishError);
       }
+    }
+
+    if (nextReactionEmoji && message.author_id !== user.id) {
+      const actorName = profile.full_name?.trim() || "Your partner";
+      const messagePreview = message.content.trim()
+        ? message.content.trim().slice(0, 80)
+        : metadata.sticker
+          ? `${metadata.sticker.label} sticker`
+          : metadata.images.length > 0
+            ? metadata.images.length > 1
+              ? "photos"
+              : "a photo"
+            : "your message";
+
+      await sendPushNotificationToUsers({
+        userIds: [message.author_id],
+        payload: {
+          title: `${actorName} reacted to your message`,
+          body:
+            message.content.trim().length > 0
+              ? `${nextReactionEmoji} ${messagePreview}`
+              : `${nextReactionEmoji} ${actorName} reacted to ${messagePreview}.`,
+          url: "/chat",
+          tag: `chat-reaction-${message.id}`,
+        },
+        options: {
+          TTL: 60,
+          urgency: "high",
+        },
+      });
     }
 
     return NextResponse.json({ success: true, data: serializedMessage });
