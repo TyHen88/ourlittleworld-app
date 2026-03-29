@@ -2,17 +2,8 @@ import NextAuth from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import prisma from "@/lib/prisma"
 import Credentials from "next-auth/providers/credentials"
-import Email from "next-auth/providers/email"
-import type { EmailProviderSendVerificationRequestParams } from "next-auth/providers/email"
-import Resend from "next-auth/providers/resend"
+import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
-import {
-  getDefaultFromAddress,
-  getResendApiKey,
-  getSmtpConfig,
-  hasResendEmailProvider,
-  sendEmailWithDefaultFrom,
-} from "@/lib/email"
 
 type AuthUserClaims = {
   full_name?: string | null
@@ -27,61 +18,24 @@ type SessionUserClaims = {
   onboarding_completed?: boolean
 }
 
-function buildOtpProvider() {
-  const baseProvider = hasResendEmailProvider()
-    ? Resend({
-        apiKey: getResendApiKey(),
-        from: getDefaultFromAddress(),
-      })
-    : (() => {
-        const smtp = getSmtpConfig()
-        return Email({
-          server: {
-            host: smtp.host,
-            port: smtp.port,
-            auth: smtp.auth,
-          },
-          from: getDefaultFromAddress(),
-        })
-      })()
-
-  return {
-    ...baseProvider,
-    from: getDefaultFromAddress(),
-    generateVerificationToken() {
-      return Math.floor(100000 + Math.random() * 900000).toString()
-    },
-    async sendVerificationRequest({ identifier: email, token, provider }: EmailProviderSendVerificationRequestParams) {
-      await sendEmailWithDefaultFrom({
-        to: email,
-        from: provider.from,
-        subject: `Your OurLittleWorld Login Code: ${token}`,
-        text: `Your login code is: ${token}\n\nThis code will expire in 24 hours.`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-            <h2 style="color: #FF6B9D; text-align: center;">OurLittleWorld</h2>
-            <p>Hi there!</p>
-            <p>Someone (hopefully you!) requested a login code for OurLittleWorld.</p>
-            <div style="background-color: #FDF2F5; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #FF6B9D;">${token}</span>
-            </div>
-            <p>Enter this code in the app to sign in. This code is valid for 24 hours.</p>
-            <p>If you didn't request this, you can safely ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="font-size: 12px; color: #999; text-align: center;">Made with love by OurLittleWorld</p>
-          </div>
-        `,
-      }, "auth-verification")
-    },
-  }
-}
+const googleOAuthConfigured = Boolean(
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+)
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   trustHost: true,
   providers: [
-    buildOtpProvider(),
+    ...(googleOAuthConfigured
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
     Credentials({
       name: "Credentials",
       credentials: {
@@ -116,15 +70,100 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     })
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google") {
+        if (profile && "email_verified" in profile && profile.email_verified === false) {
+          return false
+        }
+      }
+
+      if (!user?.id) return true
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: {
+          id: true,
+          is_deleted: true,
+          emailVerified: true,
+          full_name: true,
+          name: true,
+          avatar_url: true,
+          image: true,
+        },
+      })
+
+      if (dbUser?.is_deleted) {
+        return false
+      }
+
+      if (account?.provider === "google" && dbUser) {
+
+        const googleName = typeof user.name === "string" ? user.name.trim() : ""
+        const googleImage = typeof user.image === "string" ? user.image : ""
+        const updates: {
+          emailVerified?: Date
+          full_name?: string
+          name?: string
+          avatar_url?: string
+          image?: string
+        } = {}
+
+        if (!dbUser.emailVerified) {
+          updates.emailVerified = new Date()
+        }
+        if (!dbUser.full_name && googleName) {
+          updates.full_name = googleName
+        }
+        if (!dbUser.name && googleName) {
+          updates.name = googleName
+        }
+        if (!dbUser.avatar_url && googleImage) {
+          updates.avatar_url = googleImage
+        }
+        if (!dbUser.image && googleImage) {
+          updates.image = googleImage
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: updates,
+          })
+        }
+      }
+
+      return true
+    },
     async jwt({ token, user, trigger, session }) {
       if (user) {
         const authUser = user as typeof user & AuthUserClaims
+        const needsDbClaims =
+          authUser.full_name === undefined ||
+          authUser.avatar_url === undefined ||
+          authUser.user_type === undefined ||
+          authUser.onboarding_completed === undefined
+
+        const dbUser =
+          user.id && needsDbClaims
+            ? await prisma.user.findUnique({
+                where: { id: user.id },
+                select: {
+                  email: true,
+                  full_name: true,
+                  avatar_url: true,
+                  user_type: true,
+                  onboarding_completed: true,
+                },
+              })
+            : null
+
         token.id = user.id
-        token.email = user.email
-        token.name = authUser.full_name || user.name
-        token.picture = authUser.avatar_url || user.image
-        token.user_type = authUser.user_type
-        token.onboarding_completed = authUser.onboarding_completed
+        token.email = user.email ?? dbUser?.email
+        token.name = authUser.full_name ?? dbUser?.full_name ?? user.name
+        token.picture = authUser.avatar_url ?? dbUser?.avatar_url ?? user.image
+        token.user_type = authUser.user_type ?? dbUser?.user_type ?? "COUPLE"
+        token.onboarding_completed =
+          authUser.onboarding_completed ?? dbUser?.onboarding_completed ?? false
       }
       if (trigger === "update" && session) {
         return { ...token, ...session.user }
@@ -144,6 +183,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/login",
-    verifyRequest: "/confirm-email", // Redirect to confirm-email after sending OTP
   }
 })

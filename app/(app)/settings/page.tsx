@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChangePasswordModal } from "@/components/settings/ChangePasswordModal";
 import { AnimatePresence, motion } from "framer-motion";
+import { updateCoupleAnniversary } from "@/lib/actions/world";
 import {
     AlertTriangle,
     ArrowLeft,
@@ -32,8 +33,8 @@ import {
     Mail,
     Moon,
     Palette,
+    Calendar,
     Save,
-    Send,
     Settings as SettingsIcon,
     Shield,
     Share2,
@@ -44,7 +45,7 @@ import {
     UserCheck2,
     X
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import {
@@ -63,8 +64,16 @@ const THEMES = [
     { id: "sunset", name: "Sunset", colors: "from-orange-100 to-amber-100", accent: "#f59e0b" },
 ];
 
+function toDateInputValue(date: string | Date | null | undefined) {
+    if (!date) return "";
+    const normalized = typeof date === "string" ? new Date(date) : date;
+    if (Number.isNaN(normalized.getTime())) return "";
+    return normalized.toISOString().slice(0, 10);
+}
+
 export default function SettingsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const { user, profile, couple, daysTogether, isLoading } = useCouple();
 
@@ -84,6 +93,8 @@ export default function SettingsPage() {
     const [pushSupported, setPushSupported] = useState(false);
     const [pushLoading, setPushLoading] = useState(true);
     const [pushSaving, setPushSaving] = useState(false);
+    const [anniversaryDate, setAnniversaryDate] = useState("");
+    const [savingAnniversary, setSavingAnniversary] = useState(false);
 
     const avatarInputRef = React.useRef<HTMLInputElement | null>(null);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -111,6 +122,24 @@ export default function SettingsPage() {
             });
         }
     }, [profile, editing]);
+
+    useEffect(() => {
+        setAnniversaryDate(toDateInputValue(couple?.start_date));
+    }, [couple?.start_date]);
+
+    useEffect(() => {
+        const requestedSection = searchParams.get("section");
+        if (
+            requestedSection === "profile" ||
+            requestedSection === "preferences" ||
+            requestedSection === "notifications" ||
+            requestedSection === "privacy" ||
+            requestedSection === "help" ||
+            (requestedSection === "couple" && profile?.user_type !== "SINGLE")
+        ) {
+            setActiveSection(requestedSection);
+        }
+    }, [profile?.user_type, searchParams]);
 
     useEffect(() => {
         let cancelled = false;
@@ -178,6 +207,22 @@ export default function SettingsPage() {
         });
     };
 
+    const syncCoupleCache = (updates: Partial<NonNullable<UserProfile["couple"]>>) => {
+        if (!user?.id) return;
+
+        queryClient.setQueryData<UserProfile | null>(['couple', user.id], (old) => {
+            if (!old?.couple) return old;
+
+            return {
+                ...old,
+                couple: {
+                    ...old.couple,
+                    ...updates,
+                },
+            };
+        });
+    };
+
     const handleSave = async () => {
         if (!user) return;
 
@@ -202,6 +247,25 @@ export default function SettingsPage() {
             queryClient.setQueryData(['couple', user.id], previousData);
             setEditing(true);
             toast.error("Couldn't update profile", getErrorMessage(error, "Failed to update profile"));
+        }
+    };
+
+    const handleSaveAnniversary = async () => {
+        if (!user?.id || !anniversaryDate) return;
+
+        const previousProfile = queryClient.getQueryData<UserProfile | null>(['couple', user.id]);
+        syncCoupleCache({ start_date: anniversaryDate });
+        setSavingAnniversary(true);
+
+        try {
+            await updateCoupleAnniversary(anniversaryDate);
+            await queryClient.invalidateQueries({ queryKey: ['couple', user.id] });
+            toast.success("Special day saved", "Your dashboard anniversary card is updated.");
+        } catch (error: unknown) {
+            queryClient.setQueryData(['couple', user.id], previousProfile);
+            toast.error("Couldn't save special day", getErrorMessage(error, "Failed to update anniversary"));
+        } finally {
+            setSavingAnniversary(false);
         }
     };
 
@@ -672,17 +736,41 @@ export default function SettingsPage() {
                                         </div>
 
                                         {/* Anniversary */}
-                                        {couple.start_date && (
-                                            <div>
-                                                <Label className="text-xs font-bold text-slate-600 uppercase">Anniversary</Label>
-                                                <p className="text-lg font-bold text-slate-800 mt-1">
-                                                    {new Date(couple.start_date).toLocaleDateString()}
-                                                </p>
-                                                <p className="text-sm text-pink-600 font-medium mt-1">
-                                                    {daysTogether} days together ✨
+                                        <div className="rounded-3xl border border-pink-100 bg-pink-50/40 p-4 space-y-3">
+                                            <div className="space-y-1">
+                                                <Label className="text-xs font-bold text-slate-600 uppercase flex items-center gap-2">
+                                                    <Calendar size={14} className="text-pink-500" />
+                                                    Special Day
+                                                </Label>
+                                                <p className="text-sm text-slate-500">
+                                                    {couple.start_date
+                                                        ? `${daysTogether} days together. Update it anytime here.`
+                                                        : "You skipped it during onboarding. Add it now and it will appear on your dashboard."}
                                                 </p>
                                             </div>
-                                        )}
+
+                                            <div className="flex flex-col gap-3 sm:flex-row">
+                                                <Input
+                                                    type="date"
+                                                    value={anniversaryDate}
+                                                    onChange={(e) => setAnniversaryDate(e.target.value)}
+                                                    className="h-12 rounded-2xl border-pink-100 bg-white"
+                                                />
+                                                <Button
+                                                    onClick={handleSaveAnniversary}
+                                                    disabled={savingAnniversary || !anniversaryDate}
+                                                    className="h-12 rounded-2xl bg-pink-600 hover:bg-pink-700"
+                                                >
+                                                    {savingAnniversary ? "Saving..." : couple.start_date ? "Update Date" : "Save Date"}
+                                                </Button>
+                                            </div>
+
+                                            {couple.start_date && anniversaryDate && (
+                                                <p className="text-sm font-medium text-pink-600">
+                                                    Current: {new Date(couple.start_date).toLocaleDateString()}
+                                                </p>
+                                            )}
+                                        </div>
 
                                         {/* Invite Code */}
                                         {couple.members && couple.members.length < 2 && (

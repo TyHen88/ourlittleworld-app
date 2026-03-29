@@ -53,9 +53,21 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
 
     // Derived values for the partner
     const otherPartner = couple?.members?.find((member) => member.id !== user.id);
+    const hasAnniversary = Boolean(couple?.start_date);
+    const coupleName = couple?.couple_name?.trim() || "Our Little World";
+    const primaryPartnerName = couple?.partner_1_nickname?.trim() || profile?.full_name?.split(" ")[0] || "You";
+    const secondaryPartnerName = couple?.partner_2_nickname?.trim() || otherPartner?.full_name?.split(" ")[0] || "Partner";
+    const anniversaryLabel = hasAnniversary
+        ? formatAnniversaryDate(couple?.start_date)
+        : "Open Couple Settings";
 
     // Calculate months together
     const monthsTogether = Math.floor(daysTogether / 30);
+    const relationshipCounterLabel = hasAnniversary
+        ? displayMode === "days"
+            ? `Day ${daysTogether.toLocaleString()} Together`
+            : `${monthsTogether} Months Together`
+        : "Set your special day";
 
     useEffect(() => {
         const routes = [
@@ -176,7 +188,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                     </Card>
                 </motion.div>
             ) : (
-                couple?.couple_name && daysTogether > 0 && (
+                couple && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -225,31 +237,46 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
 
                                     <div className="space-y-1">
                                         <h3 className="text-lg font-bold text-slate-800">
-                                            {couple.partner_1_nickname || "Partner 1"} & {couple.partner_2_nickname || "Partner 2"}
+                                            {primaryPartnerName} & {secondaryPartnerName}
                                         </h3>
                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white/50 px-2.5 py-0.5 rounded-full">
-                                            {couple.couple_name}
+                                            {coupleName}
                                         </span>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2 flex flex-col items-center">
                                     <button
-                                        onClick={() => setDisplayMode(displayMode === "days" ? "months" : "days")}
-                                        className="text-lg font-bold text-slate-800 hover:text-romantic-heart transition-colors cursor-pointer"
+                                        onClick={() => {
+                                            if (!hasAnniversary) {
+                                                router.push("/settings?section=couple");
+                                                return;
+                                            }
+                                            setDisplayMode(displayMode === "days" ? "months" : "days");
+                                        }}
+                                        className={`text-lg font-bold text-slate-800 transition-colors ${hasAnniversary ? "hover:text-romantic-heart cursor-pointer" : "hover:text-romantic-heart cursor-pointer"}`}
                                     >
-                                        {displayMode === "days"
-                                            ? `Day ${daysTogether.toLocaleString()} Together`
-                                            : `${monthsTogether} Months Together`
-                                        }
+                                        {relationshipCounterLabel}
                                     </button>
 
-                                    <div className="flex items-center justify-center gap-1.5 bg-slate-50/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/50 shadow-sm w-fit mx-auto">
-                                        <Calendar className="text-romantic-heart w-3 h-3" />
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                                            {formatAnniversaryDate(couple.start_date) || "Special Day"}
-                                        </p>
-                                    </div>
+                                    {hasAnniversary ? (
+                                        <div className="flex items-center justify-center gap-1.5 bg-slate-50/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/50 shadow-sm w-fit mx-auto">
+                                            <Calendar className="text-romantic-heart w-3 h-3" />
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                                {anniversaryLabel}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => router.push("/settings?section=couple")}
+                                            className="flex items-center justify-center gap-1.5 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-romantic-blush/60 shadow-sm w-fit mx-auto hover:border-romantic-heart hover:bg-white transition-colors"
+                                        >
+                                            <Calendar className="text-romantic-heart w-3 h-3" />
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                                {anniversaryLabel}
+                                            </p>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 

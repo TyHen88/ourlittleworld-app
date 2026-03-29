@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getCachedUser } from "@/lib/auth-cache";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload";
+import { revalidatePath } from "next/cache";
 
 // Romantic world name suggestions 
 const ROMANTIC_NAMES = [
@@ -282,4 +283,43 @@ export async function getUserCouple(userId: string) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: message };
     }
+}
+
+export async function updateCoupleAnniversary(startDate: string | null) {
+    const user = await getCachedUser();
+
+    if (!user?.id) {
+        throw new Error("Not authenticated");
+    }
+
+    const currentUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { couple_id: true },
+    });
+
+    if (!currentUser?.couple_id) {
+        throw new Error("No couple found");
+    }
+
+    let parsedDate: Date | null = null;
+    if (startDate) {
+        parsedDate = new Date(`${startDate}T00:00:00`);
+        if (Number.isNaN(parsedDate.getTime())) {
+            throw new Error("Please choose a valid date.");
+        }
+    }
+
+    const updatedCouple = await prisma.couple.update({
+        where: { id: currentUser.couple_id },
+        data: { start_date: parsedDate },
+        select: { start_date: true },
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/settings");
+
+    return {
+        success: true,
+        start_date: updatedCouple.start_date?.toISOString() ?? null,
+    };
 }

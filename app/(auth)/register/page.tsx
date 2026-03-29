@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Mail, User, ArrowRight, Loader2 } from "lucide-react";
+import { Heart, Mail, User, ArrowRight, Loader2, Lock, Eye, EyeOff } from "lucide-react";
 import { signUp } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
+import { signIn } from "next-auth/react";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
-function validateSignUpForm(fullName: string, email: string) {
+function validateSignUpForm(fullName: string, email: string, password: string, confirmPassword: string) {
     const normalizedFullName = fullName.trim();
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -22,6 +24,14 @@ function validateSignUpForm(fullName: string, email: string) {
         return "Please enter a valid email address.";
     }
 
+    if (password.length < 8) {
+        return "Password must be at least 8 characters.";
+    }
+
+    if (password !== confirmPassword) {
+        return "Passwords do not match.";
+    }
+
     return null;
 }
 
@@ -30,16 +40,25 @@ export default function RegisterPage() {
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
+        password: "",
+        confirmPassword: "",
     });
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
 
-        const validationError = validateSignUpForm(formData.fullName, formData.email);
+        const validationError = validateSignUpForm(
+            formData.fullName,
+            formData.email,
+            formData.password,
+            formData.confirmPassword,
+        );
         if (validationError) {
             setError(validationError);
             return;
@@ -48,12 +67,23 @@ export default function RegisterPage() {
         setLoading(true);
 
         try {
-            const success = await signUp(formData.email, formData.fullName);
+            const success = await signUp(formData.email, formData.fullName, formData.password);
             const normalizedEmail = formData.email.trim().toLowerCase();
 
             if (success) {
+                const result = await signIn("credentials", {
+                    email: normalizedEmail,
+                    password: formData.password,
+                    redirect: false,
+                });
+
+                if (result?.error) {
+                    throw new Error("Account created, but automatic sign-in failed. Please sign in manually.");
+                }
+
                 setRedirecting(true);
-                router.push(`/confirm-email?email=${encodeURIComponent(normalizedEmail)}`);
+                router.push("/onboarding");
+                router.refresh();
                 return;
             }
         } catch (error: unknown) {
@@ -81,6 +111,18 @@ export default function RegisterPage() {
                 </div>
 
                 <Card className="p-8 space-y-6 border-none shadow-2xl bg-white/70 backdrop-blur-xl rounded-4xl">
+                    <div className="space-y-4">
+                        <GoogleAuthButton label="Sign up with Google" />
+
+                        <div className="flex items-center gap-3">
+                            <div className="h-px flex-1 bg-slate-200" />
+                            <span className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                                Or create with email
+                            </span>
+                            <div className="h-px flex-1 bg-slate-200" />
+                        </div>
+                    </div>
+
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-2">
                             <Label htmlFor="fullName" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
@@ -124,6 +166,62 @@ export default function RegisterPage() {
                             </div>
                         </div>
 
+                        <div className="space-y-2">
+                            <Label htmlFor="password" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
+                                Password
+                            </Label>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                <Input
+                                    id="password"
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="At least 8 characters"
+                                    value={formData.password}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, password: e.target.value });
+                                        if (error) setError("");
+                                    }}
+                                    className="h-14 pl-12 pr-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 p-1 hover:text-romantic-heart transition-colors"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="confirmPassword" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
+                                Confirm Password
+                            </Label>
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                <Input
+                                    id="confirmPassword"
+                                    type={showConfirmPassword ? "text" : "password"}
+                                    placeholder="Repeat your password"
+                                    value={formData.confirmPassword}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, confirmPassword: e.target.value });
+                                        if (error) setError("");
+                                    }}
+                                    className="h-14 pl-12 pr-12 rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 p-1 hover:text-romantic-heart transition-colors"
+                                >
+                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
+                        </div>
+
                         {error && (
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
@@ -142,7 +240,7 @@ export default function RegisterPage() {
                             {loading ? (
                                 <>
                                     <Loader2 className="mr-2 animate-spin" size={20} />
-                                    <span>Sending Code...</span>
+                                    <span>Creating Account...</span>
                                 </>
                             ) : (
                                 <>

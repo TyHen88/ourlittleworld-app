@@ -21,6 +21,31 @@ interface BudgetSetupModalProps {
     };
 }
 
+type AllocationField = "his" | "hers" | "shared";
+type BudgetSummaryCache = {
+    budget_goals?: BudgetSetupModalProps["currentBudget"] | null;
+    income?: { his: number; hers: number; shared: number; total: number };
+    expenses?: { his: number; hers: number; shared: number; total: number };
+    balance?: { his: number; hers: number; shared: number; total: number };
+    percentage?: number;
+    status?: string;
+    transactions_count?: number;
+    [key: string]: unknown;
+};
+
+function normalizeMoney(value: number) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Number(value.toFixed(2)));
+}
+
+function toCents(value: number) {
+    return Math.round(normalizeMoney(value) * 100);
+}
+
+function fromCents(value: number) {
+    return normalizeMoney(value / 100);
+}
+
 export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }: BudgetSetupModalProps) {
     const { profile } = useCouple();
     const isSingle = profile?.user_type === 'SINGLE';
@@ -44,12 +69,128 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
     }, [currentBudget, open]);
 
     // Calculate total allocation
-    const totalAllocated = hisBudget + hersBudget + sharedBudget;
-    const isBalanced = totalAllocated === monthlyTotal;
-    const difference = monthlyTotal - totalAllocated;
+    const totalAllocated = normalizeMoney(hisBudget + hersBudget + sharedBudget);
+    const isBalanced = toCents(totalAllocated) === toCents(monthlyTotal);
+    const difference = fromCents(toCents(monthlyTotal) - toCents(totalAllocated));
     const monthlyTotalSafe = monthlyTotal > 0 ? monthlyTotal : 1;
     const formatCurrency = (value: number) => Number.isFinite(value) ? value.toFixed(2) : "0.00";
     const getPercentage = (value: number) => monthlyTotal > 0 ? Math.round((value / monthlyTotal) * 100) : 0;
+
+    const applyBudgetState = (nextState: {
+        monthlyTotal?: number;
+        hisBudget?: number;
+        hersBudget?: number;
+        sharedBudget?: number;
+    }) => {
+        if (typeof nextState.monthlyTotal === "number") {
+            setMonthlyTotal(normalizeMoney(nextState.monthlyTotal));
+        }
+        if (typeof nextState.hisBudget === "number") {
+            setHisBudget(normalizeMoney(nextState.hisBudget));
+        }
+        if (typeof nextState.hersBudget === "number") {
+            setHersBudget(normalizeMoney(nextState.hersBudget));
+        }
+        if (typeof nextState.sharedBudget === "number") {
+            setSharedBudget(normalizeMoney(nextState.sharedBudget));
+        }
+    };
+
+    const handleMonthlyTotalChange = (rawValue: string) => {
+        const nextTotalCents = Math.max(0, Math.round((parseFloat(rawValue) || 0) * 100));
+
+        if (isSingle) {
+            applyBudgetState({
+                monthlyTotal: fromCents(nextTotalCents),
+                sharedBudget: fromCents(nextTotalCents),
+            });
+            return;
+        }
+
+        const currentHisCents = toCents(hisBudget);
+        const currentHersCents = toCents(hersBudget);
+        const currentSharedCents = toCents(sharedBudget);
+        const currentAllocatedCents = currentHisCents + currentHersCents + currentSharedCents;
+
+        if (nextTotalCents === 0) {
+            applyBudgetState({
+                monthlyTotal: 0,
+                hisBudget: 0,
+                hersBudget: 0,
+                sharedBudget: 0,
+            });
+            return;
+        }
+
+        if (currentAllocatedCents <= 0) {
+            applyBudgetState({
+                monthlyTotal: fromCents(nextTotalCents),
+                hisBudget: 0,
+                hersBudget: 0,
+                sharedBudget: fromCents(nextTotalCents),
+            });
+            return;
+        }
+
+        if (currentAllocatedCents <= nextTotalCents) {
+            const nextHisCents = Math.min(currentHisCents, nextTotalCents);
+            const nextHersCents = Math.min(currentHersCents, Math.max(0, nextTotalCents - nextHisCents));
+            const nextSharedCents = Math.max(0, nextTotalCents - nextHisCents - nextHersCents);
+
+            applyBudgetState({
+                monthlyTotal: fromCents(nextTotalCents),
+                hisBudget: fromCents(nextHisCents),
+                hersBudget: fromCents(nextHersCents),
+                sharedBudget: fromCents(nextSharedCents),
+            });
+            return;
+        }
+
+        const scaledHisCents = Math.round((currentHisCents / currentAllocatedCents) * nextTotalCents);
+        const scaledHersCents = Math.round((currentHersCents / currentAllocatedCents) * nextTotalCents);
+        const scaledSharedCents = Math.max(0, nextTotalCents - scaledHisCents - scaledHersCents);
+
+        applyBudgetState({
+            monthlyTotal: fromCents(nextTotalCents),
+            hisBudget: fromCents(scaledHisCents),
+            hersBudget: fromCents(scaledHersCents),
+            sharedBudget: fromCents(scaledSharedCents),
+        });
+    };
+
+    const handleAllocationChange = (field: AllocationField, rawValue: string) => {
+        const totalCents = toCents(monthlyTotal);
+        const nextValueCents = Math.min(
+            totalCents,
+            Math.max(0, Math.round((parseFloat(rawValue) || 0) * 100)),
+        );
+        let nextHisCents = toCents(hisBudget);
+        let nextHersCents = toCents(hersBudget);
+        let nextSharedCents = toCents(sharedBudget);
+
+        if (field === "his") {
+            nextHisCents = nextValueCents;
+            const remainingCents = Math.max(0, totalCents - nextHisCents);
+            nextHersCents = Math.min(nextHersCents, remainingCents);
+            nextSharedCents = Math.max(0, remainingCents - nextHersCents);
+        } else if (field === "hers") {
+            nextHersCents = nextValueCents;
+            const remainingCents = Math.max(0, totalCents - nextHersCents);
+            nextHisCents = Math.min(nextHisCents, remainingCents);
+            nextSharedCents = Math.max(0, remainingCents - nextHisCents);
+        } else {
+            nextSharedCents = nextValueCents;
+            const remainingCents = Math.max(0, totalCents - nextSharedCents);
+            nextHisCents = Math.min(nextHisCents, remainingCents);
+            nextHersCents = Math.max(0, remainingCents - nextHisCents);
+        }
+
+        applyBudgetState({
+            hisBudget: fromCents(nextHisCents),
+            hersBudget: fromCents(nextHersCents),
+            sharedBudget: fromCents(nextSharedCents),
+        });
+    };
 
     const handleSave = async () => {
         if (!isSingle && !isBalanced) {
@@ -80,7 +221,7 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
         const summaryQueryKey = ['budget-summary', coupleId];
         const previousSummaryEntries = queryClient.getQueriesData({ queryKey: summaryQueryKey });
 
-        queryClient.setQueriesData({ queryKey: summaryQueryKey }, (old: any) => {
+        queryClient.setQueriesData<BudgetSummaryCache | null>({ queryKey: summaryQueryKey }, (old) => {
             if (!old) {
                 // If no summary exists, create minimal structure with new budget
                 return {
@@ -140,12 +281,12 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
 
             // Confirm with server data
             queryClient.invalidateQueries({ queryKey: summaryQueryKey });
-        } catch (err: any) {
+        } catch (err: unknown) {
             // Rollback on error
             for (const [key, value] of previousSummaryEntries) {
                 queryClient.setQueryData(key, value);
             }
-            setError(err.message || "Failed to update budget");
+            setError(err instanceof Error ? err.message : "Failed to update budget");
             onOpenChange(true);
         } finally {
             setSaving(false);
@@ -178,7 +319,7 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                 min="0"
                                 placeholder="0.00"
                                 value={monthlyTotal === 0 ? "" : monthlyTotal}
-                                onChange={(e) => setMonthlyTotal(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => handleMonthlyTotalChange(e.target.value)}
                                 className={cn(
                                     "pl-10 text-2xl font-black h-12 rounded-2xl text-center border-2",
                                     isSingle ? "border-emerald-100 focus:border-emerald-500" : "border-romantic-blush/30 focus:border-romantic-heart"
@@ -207,7 +348,19 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Mine</label>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-sm font-black text-slate-800">${formatCurrency(hisBudget)}</span>
+                                            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1">
+                                                <span className="text-xs font-black text-slate-400">$</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max={monthlyTotalSafe}
+                                                    step="0.01"
+                                                    value={hisBudget === 0 ? "" : hisBudget}
+                                                    onChange={(e) => handleAllocationChange("his", e.target.value)}
+                                                    className="w-20 border-0 bg-transparent text-right text-sm font-black text-slate-800 outline-none"
+                                                    placeholder="0"
+                                                />
+                                            </div>
                                             <span className="text-[10px] text-slate-400 font-medium">{getPercentage(hisBudget)}%</span>
                                         </div>
                                     </div>
@@ -217,7 +370,7 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                         max={monthlyTotalSafe}
                                         step="50"
                                         value={hisBudget}
-                                        onChange={(e) => setHisBudget(parseFloat(e.target.value))}
+                                        onChange={(e) => handleAllocationChange("his", e.target.value)}
                                         className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                         style={{
                                             background: `linear-gradient(to right, #FFE4E1 0%, #FFE4E1 ${(hisBudget / monthlyTotalSafe) * 100}%, #e5e7eb ${(hisBudget / monthlyTotalSafe) * 100}%, #e5e7eb 100%)`
@@ -230,7 +383,19 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Partner</label>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-sm font-black text-slate-800">${formatCurrency(hersBudget)}</span>
+                                            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1">
+                                                <span className="text-xs font-black text-slate-400">$</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max={monthlyTotalSafe}
+                                                    step="0.01"
+                                                    value={hersBudget === 0 ? "" : hersBudget}
+                                                    onChange={(e) => handleAllocationChange("hers", e.target.value)}
+                                                    className="w-20 border-0 bg-transparent text-right text-sm font-black text-slate-800 outline-none"
+                                                    placeholder="0"
+                                                />
+                                            </div>
                                             <span className="text-[10px] text-slate-400 font-medium">{getPercentage(hersBudget)}%</span>
                                         </div>
                                     </div>
@@ -240,7 +405,7 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                         max={monthlyTotalSafe}
                                         step="50"
                                         value={hersBudget}
-                                        onChange={(e) => setHersBudget(parseFloat(e.target.value))}
+                                        onChange={(e) => handleAllocationChange("hers", e.target.value)}
                                         className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                         style={{
                                             background: `linear-gradient(to right, #E6E6FA 0%, #E6E6FA ${(hersBudget / monthlyTotalSafe) * 100}%, #e5e7eb ${(hersBudget / monthlyTotalSafe) * 100}%, #e5e7eb 100%)`
@@ -253,7 +418,19 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                     <div className="flex items-center justify-between mb-1.5">
                                         <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Shared</label>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-sm font-black text-slate-800">${formatCurrency(sharedBudget)}</span>
+                                            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1">
+                                                <span className="text-xs font-black text-slate-400">$</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max={monthlyTotalSafe}
+                                                    step="0.01"
+                                                    value={sharedBudget === 0 ? "" : sharedBudget}
+                                                    onChange={(e) => handleAllocationChange("shared", e.target.value)}
+                                                    className="w-20 border-0 bg-transparent text-right text-sm font-black text-slate-800 outline-none"
+                                                    placeholder="0"
+                                                />
+                                            </div>
                                             <span className="text-[10px] text-slate-400 font-medium">{getPercentage(sharedBudget)}%</span>
                                         </div>
                                     </div>
@@ -263,7 +440,7 @@ export function BudgetSetupModal({ open, onOpenChange, coupleId, currentBudget }
                                         max={monthlyTotalSafe}
                                         step="50"
                                         value={sharedBudget}
-                                        onChange={(e) => setSharedBudget(parseFloat(e.target.value))}
+                                        onChange={(e) => handleAllocationChange("shared", e.target.value)}
                                         className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                         style={{
                                             background: `linear-gradient(to right, #D4F4DD 0%, #D4F4DD ${(sharedBudget / monthlyTotalSafe) * 100}%, #e5e7eb ${(sharedBudget / monthlyTotalSafe) * 100}%, #e5e7eb 100%)`

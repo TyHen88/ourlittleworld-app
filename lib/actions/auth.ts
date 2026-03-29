@@ -6,8 +6,6 @@ import { revalidatePath } from "next/cache";
 import { AuthError } from "next-auth";
 import { getCachedUser } from "@/lib/auth-cache";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
-import { sendEmailWithDefaultFrom } from "@/lib/email";
 
 function normalizeEmail(email: string) {
     return email.trim().toLowerCase();
@@ -17,7 +15,11 @@ function isValidEmail(email: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export async function signUp(email: string, fullName: string) {
+function isValidPassword(password: string) {
+    return password.length >= 8;
+}
+
+export async function signUp(email: string, fullName: string, password: string) {
     const normalizedEmail = normalizeEmail(email);
     const normalizedFullName = fullName.trim();
 
@@ -29,15 +31,21 @@ export async function signUp(email: string, fullName: string) {
         throw new Error("Please enter a valid email address.");
     }
 
+    if (!isValidPassword(password)) {
+        throw new Error("Password must be at least 8 characters.");
+    }
+
     const existingUser = await prisma.user.findUnique({
         where: { email: normalizedEmail }
     });
 
     if (existingUser && !existingUser.is_deleted) {
-        return await requestLoginCode(normalizedEmail);
+        throw new Error("An account with this email already exists. Please sign in.");
     }
 
     try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         if (existingUser?.is_deleted) {
             await prisma.user.update({
                 where: { id: existingUser.id },
@@ -45,8 +53,8 @@ export async function signUp(email: string, fullName: string) {
                     email: normalizedEmail,
                     full_name: normalizedFullName,
                     name: normalizedFullName,
-                    password: null,
-                    emailVerified: null,
+                    password: hashedPassword,
+                    emailVerified: new Date(),
                     image: null,
                     avatar_url: null,
                     bio: null,
@@ -62,11 +70,13 @@ export async function signUp(email: string, fullName: string) {
                     email: normalizedEmail,
                     full_name: normalizedFullName,
                     name: normalizedFullName,
+                    password: hashedPassword,
+                    emailVerified: new Date(),
                 }
             });
         }
 
-        return await requestLoginCode(normalizedEmail);
+        return true;
     } catch (error: unknown) {
         console.error('[SIGNUP_ERROR]', error);
         const message = error instanceof Error ? error.message : 'Failed to create account';
@@ -75,28 +85,33 @@ export async function signUp(email: string, fullName: string) {
 }
 
 export async function requestLoginCode(email: string) {
-    const normalizedEmail = normalizeEmail(email);
-
-    try {
-        await nextAuthSignIn("email", {
-            email: normalizedEmail,
-            redirect: false,
-        });
-        return true;
-    } catch (error: unknown) {
-        console.error('[LOGIN_CODE_ERROR]', error);
-        throw new Error("Failed to send code. Please check your email.");
-    }
+    void email;
+    throw new Error("Email code sign-in is disabled. Please sign in with your password.");
 }
 
 export async function loginWithPassword(data: { email?: string; password?: string }) {
+    const normalizedEmail = typeof data.email === "string" ? normalizeEmail(data.email) : undefined;
+
     try {
         await nextAuthSignIn("credentials", {
-            email: data.email,
+            email: normalizedEmail,
             password: data.password,
             redirect: false,
         });
-        return true;
+
+        if (!normalizedEmail) {
+            throw new Error("Please enter your email address.");
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { email: normalizedEmail },
+            select: { onboarding_completed: true }
+        });
+
+        return {
+            success: true,
+            onboardingCompleted: Boolean(user?.onboarding_completed),
+        };
     } catch (error: unknown) {
         if (error instanceof AuthError) {
             console.error('[LOGIN_PASSWORD_ERROR]', error.type);
@@ -115,75 +130,19 @@ export async function loginWithPassword(data: { email?: string; password?: strin
  * Validates the OTP token before proceeding to password input
  */
 export async function validateOtp(email: string, token: string) {
-    const normalizedEmail = normalizeEmail(email);
-    const hashedToken = crypto
-        .createHash("sha256")
-        .update(`${token}${process.env.AUTH_SECRET}`)
-        .digest("hex");
-
-    const vt = await prisma.verificationToken.findFirst({
-        where: { 
-            identifier: normalizedEmail, 
-            token: hashedToken, 
-            expires: { gt: new Date() } 
-        }
-    });
-    
-    if (!vt) {
-        console.error('[OTP_VALIDATION_ERROR] Token invalid or expired', { email: normalizedEmail });
-        throw new Error("Invalid or expired verification code");
-    }
-
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    
-    return { 
-        isNewUser: !user?.password,
-        fullName: user?.full_name || user?.name
-    };
+    void email;
+    void token;
+    throw new Error("Email verification codes are disabled. Please sign in with your password.");
 }
 
 /**
  * Completes the login/signup by verifying or setting the password
  */
 export async function finalizeLoginWithPassword(email: string, token: string, password: string) {
-    const normalizedEmail = normalizeEmail(email);
-    // 1. One last verification of the token
-    const hashedToken = crypto
-        .createHash("sha256")
-        .update(`${token}${process.env.AUTH_SECRET}`)
-        .digest("hex");
-
-    const vt = await prisma.verificationToken.findFirst({
-        where: { identifier: normalizedEmail, token: hashedToken, expires: { gt: new Date() } }
-    });
-    
-    if (!vt) {
-        console.error('[FINALIZE_AUTH_ERROR] Verification session expired', { email: normalizedEmail });
-        throw new Error("Verification session expired. Please restart.");
-    }
-
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    
-    // 2. If user already has a password, check it. If not, set it (signup).
-    if (user?.password) {
-        const isValid = await bcrypt.compare(password, user.password);
-        if (!isValid) {
-            console.error('[FINALIZE_AUTH_ERROR] Incorrect password', { email: normalizedEmail });
-            throw new Error("Incorrect password");
-        }
-    } else {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await prisma.user.update({
-            where: { email: normalizedEmail },
-            data: { 
-                password: hashedPassword,
-                emailVerified: new Date()
-            }
-        });
-    }
-
-    // 3. Construct the NextAuth callback URL
-    return `/api/auth/callback/email?email=${encodeURIComponent(normalizedEmail)}&token=${token}&callbackUrl=/onboarding`;
+    void email;
+    void token;
+    void password;
+    throw new Error("Email verification codes are disabled. Please sign in with your password.");
 }
 
 export async function signOut() {
@@ -304,96 +263,54 @@ export async function completeOnboarding(userType: 'SINGLE' | 'COUPLE') {
  * Sends an OTP code to the current user's email for password change verification
  */
 export async function requestCodeForPasswordChange() {
-    const user = await getCachedUser();
-    if (!user || !user.email) throw new Error('Not authenticated');
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
-
-    // We use a custom hash for the token to store in the DB
-    const hashedToken = crypto
-        .createHash("sha256")
-        .update(`${otp}${process.env.AUTH_SECRET}`)
-        .digest("hex");
-
-    try {
-        // Store the token
-        await prisma.verificationToken.create({
-            data: {
-                identifier: user.email,
-                token: hashedToken,
-                expires
-            }
-        });
-
-        await sendEmailWithDefaultFrom({
-            to: user.email,
-            subject: `Verification Code: ${otp}`,
-            html: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 12px;">
-                    <h2 style="color: #FF6B9D; text-align: center;">Change Your Password</h2>
-                    <p>Hello,</p>
-                    <p>You requested to change your password for your OurLittleWorld account. Please use the verification code below:</p>
-                    <div style="background: #FDF2F5; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #FF6B9D;">${otp}</span>
-                    </div>
-                    <p>This code will expire in 10 minutes.</p>
-                    <p>If you didn't request this change, you can safely ignore this email.</p>
-                </div>
-            `
-        }, "password-change-otp");
-
-        return { success: true };
-    } catch (error: unknown) {
-        console.error('[PASSWORD_CHANGE_REQUEST_ERROR]', error);
-        throw new Error("Failed to send verification code. Please try again later.");
-    }
+    throw new Error("Password reset by email code is disabled. Change your password from settings using your current password.");
 }
 
 /**
  * Final step: verify OTP and set new password
  */
 export async function updatePasswordWithOtp(otp: string, newPassword: string) {
-    const user = await getCachedUser();
-    if (!user || !user.email) throw new Error('Not authenticated');
+    void otp;
+    void newPassword;
+    throw new Error("Password reset by email code is disabled. Change your password from settings using your current password.");
+}
 
-    const hashedToken = crypto
-        .createHash("sha256")
-        .update(`${otp}${process.env.AUTH_SECRET}`)
-        .digest("hex");
+export async function changePassword(currentPassword: string, newPassword: string) {
+    const sessionUser = await getCachedUser();
+    if (!sessionUser?.email) throw new Error("Not authenticated");
 
-    // 1. Verify token
-    const vt = await prisma.verificationToken.findFirst({
-        where: { 
-            identifier: user.email, 
-            token: hashedToken, 
-            expires: { gt: new Date() } 
+    if (!isValidPassword(newPassword)) {
+        throw new Error("New password must be at least 8 characters.");
+    }
+
+    const user = await prisma.user.findUnique({
+        where: { email: sessionUser.email }
+    });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    if (user.password) {
+        if (!currentPassword) {
+            throw new Error("Please enter your current password.");
+        }
+
+        const isValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isValid) {
+            throw new Error("Current password is incorrect.");
+        }
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+        where: { email: sessionUser.email },
+        data: {
+            password: hashedPassword,
+            emailVerified: user.emailVerified ?? new Date(),
         }
     });
 
-    if (!vt) {
-        throw new Error("Invalid or expired verification code.");
-    }
-
-    try {
-        // 2. Hash and update password
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await prisma.user.update({
-            where: { email: user.email },
-            data: { 
-                password: hashedPassword,
-                emailVerified: new Date()
-            }
-        });
-
-        // 3. Clean up the token
-        await prisma.verificationToken.delete({
-            where: { identifier_token: { identifier: user.email, token: hashedToken } }
-        });
-
-        return { success: true };
-    } catch (error: unknown) {
-        console.error('[PASSWORD_UPDATE_ERROR]', error);
-        throw new Error("Failed to update password. Please try again.");
-    }
+    return { success: true };
 }

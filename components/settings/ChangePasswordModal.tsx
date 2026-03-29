@@ -14,15 +14,12 @@ import { Label } from "@/components/ui/label";
 import { 
     Lock, 
     KeyRound, 
-    ShieldCheck, 
-    Mail, 
     Loader2, 
     CheckCircle2, 
     AlertCircle,
-    ArrowRight,
-    RefreshCw
+    ShieldCheck
 } from "lucide-react";
-import { requestCodeForPasswordChange, updatePasswordWithOtp } from "@/lib/actions/auth";
+import { changePassword } from "@/lib/actions/auth";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ChangePasswordModalProps {
@@ -31,28 +28,15 @@ interface ChangePasswordModalProps {
     userEmail?: string;
 }
 
-type Step = "request" | "verify" | "success";
+type Step = "form" | "success";
 
 export function ChangePasswordModal({ isOpen, onClose, userEmail }: ChangePasswordModalProps) {
-    const [step, setStep] = useState<Step>("request");
+    const [step, setStep] = useState<Step>("form");
     const [isLoading, setIsLoading] = useState(false);
-    const [otp, setOtp] = useState("");
+    const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
-
-    const handleRequestOtp = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            await requestCodeForPasswordChange();
-            setStep("verify");
-        } catch (err: any) {
-            setError(err.message || "Failed to send code. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,21 +53,21 @@ export function ChangePasswordModal({ isOpen, onClose, userEmail }: ChangePasswo
 
         setIsLoading(true);
         try {
-            await updatePasswordWithOtp(otp, newPassword);
+            await changePassword(currentPassword, newPassword);
             setStep("success");
             setTimeout(() => {
                 handleClose();
             }, 3000);
-        } catch (err: any) {
-            setError(err.message || "Invalid code or failed to update password.");
+        } catch (error: unknown) {
+            setError(error instanceof Error ? error.message : "Failed to update password.");
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleClose = () => {
-        setStep("request");
-        setOtp("");
+        setStep("form");
+        setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
         setError(null);
@@ -107,68 +91,35 @@ export function ChangePasswordModal({ isOpen, onClose, userEmail }: ChangePasswo
 
                 <div className="p-6">
                     <AnimatePresence mode="wait">
-                        {step === "request" && (
-                            <motion.div 
-                                key="request"
+                        {step === "form" && (
+                            <motion.form 
+                                key="form"
+                                onSubmit={handleUpdatePassword}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -20 }}
                                 className="space-y-6"
                             >
                                 <div className="bg-slate-50 p-4 rounded-3xl flex items-start gap-3 border border-slate-100">
-                                    <Mail className="text-slate-400 mt-1" size={18} />
+                                    <ShieldCheck className="text-slate-400 mt-1" size={18} />
                                     <div className="space-y-1">
-                                        <p className="text-sm font-bold text-slate-700">Verification Required</p>
+                                        <p className="text-sm font-bold text-slate-700">Password Update</p>
                                         <p className="text-xs text-slate-500 leading-relaxed">
-                                            We'll send a 6-digit security code to <span className="font-bold text-purple-600">{userEmail}</span> to confirm it's really you.
+                                            Change the password for <span className="font-bold text-purple-600">{userEmail || "your account"}</span> using your current password.
                                         </p>
                                     </div>
                                 </div>
 
-                                {error && (
-                                    <div className="bg-red-50 p-3 rounded-xl flex items-center gap-2 text-red-600 text-xs font-bold border border-red-100">
-                                        <AlertCircle size={14} />
-                                        {error}
-                                    </div>
-                                )}
-
-                                <Button 
-                                    onClick={handleRequestOtp} 
-                                    className="w-full h-14 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-purple-200 transition-all flex items-center justify-center gap-2 group"
-                                    disabled={isLoading}
-                                >
-                                    {isLoading ? (
-                                        <Loader2 className="animate-spin" size={20} />
-                                    ) : (
-                                        <>
-                                            Send Security Code
-                                            <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
-                                        </>
-                                    )}
-                                </Button>
-                            </motion.div>
-                        )}
-
-                        {step === "verify" && (
-                            <motion.form 
-                                key="verify"
-                                onSubmit={handleUpdatePassword}
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-5"
-                            >
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Security Code</Label>
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Current Password</Label>
                                     <div className="relative">
                                         <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                         <Input 
-                                            placeholder="XXXXXX" 
-                                            value={otp}
-                                            onChange={(e) => setOtp(e.target.value)}
-                                            className="h-14 pl-12 rounded-2xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-center text-xl font-black tracking-[0.5em] placeholder:tracking-normal placeholder:text-sm placeholder:font-medium shadow-inner"
-                                            maxLength={6}
-                                            required
+                                            type="password"
+                                            placeholder="••••••••" 
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                            className="h-14 pl-12 rounded-2xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all font-medium"
                                         />
                                     </div>
                                 </div>
@@ -220,14 +171,6 @@ export function ChangePasswordModal({ isOpen, onClose, userEmail }: ChangePasswo
                                     >
                                         {isLoading ? <Loader2 className="animate-spin" size={20} /> : "Update Password"}
                                     </Button>
-                                    <button 
-                                        type="button"
-                                        onClick={() => setStep("request")}
-                                        className="text-xs text-slate-500 hover:text-purple-600 font-bold flex items-center justify-center gap-1 transition-colors py-2 underline underline-offset-4"
-                                    >
-                                        <RefreshCw size={12} />
-                                        Request code again
-                                    </button>
                                 </div>
                             </motion.form>
                         )}

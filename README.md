@@ -41,6 +41,8 @@ Optional Railway variables:
 ```bash
 DIRECT_URL=${{Postgres.DATABASE_URL}}
 AUTH_URL=https://your-app-domain.up.railway.app
+GOOGLE_CLIENT_ID=your-google-oauth-web-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-web-client-secret
 NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY=your-public-vapid-key
 WEB_PUSH_PUBLIC_KEY=your-public-vapid-key
 WEB_PUSH_PRIVATE_KEY=your-private-vapid-key
@@ -69,6 +71,10 @@ Notes:
 - Use `prisma migrate dev` locally to create migrations, then commit the generated `prisma/migrations/...` files.
 - Do not use `prisma db push` in production.
 - If you add a custom domain, update `AUTH_URL` to that final public URL and redeploy.
+- Google sign-in uses a Google OAuth `Web application` client, not a Google service account.
+- Add the Auth.js callback URL to Google OAuth:
+  - Local: `http://localhost:3000/api/auth/callback/google`
+  - Production: `https://your-app-domain.up.railway.app/api/auth/callback/google`
 - Railway disables outbound SMTP on Free, Trial, and Hobby plans. `RESEND_API_KEY` over HTTPS is the preferred email setup for Railway.
 - Generate VAPID keys for web push with `npx web-push generate-vapid-keys`.
 - Trip reminders are exposed at `GET/POST /api/push/trips/reminders` and should be called once per day with `Authorization: Bearer $CRON_SECRET` (or `?secret=...`).

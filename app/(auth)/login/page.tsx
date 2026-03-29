@@ -6,11 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Heart, Mail, ArrowRight, Loader2 } from "lucide-react";
-import { requestLoginCode } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { Lock, Eye, EyeOff } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { loginWithPassword } from "@/lib/actions/auth";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -27,22 +27,21 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const result = await signIn("credentials", {
+            const result = await loginWithPassword({
                 email,
                 password,
-                redirect: false,
             });
 
-            if (result && !result.error) {
+            if (result?.success) {
                 setRedirecting(true);
-                router.push("/dashboard");
+                router.push(result.onboardingCompleted ? "/dashboard" : "/onboarding");
                 router.refresh();
                 return;
             }
 
             setError("Invalid email or password");
-        } catch (err: any) {
-            setError("Something went wrong. Please check your credentials.");
+        } catch (error: unknown) {
+            setError(error instanceof Error ? error.message : "Something went wrong. Please check your credentials.");
         } finally {
             setLoading(false);
         }
@@ -66,6 +65,18 @@ export default function LoginPage() {
                 </div>
 
                 <Card className="p-8 space-y-6 border-none shadow-2xl bg-white/70 backdrop-blur-xl rounded-4xl">
+                    <div className="space-y-4">
+                        <GoogleAuthButton label="Continue with Google" redirectTo="/dashboard" />
+
+                        <div className="flex items-center gap-3">
+                            <div className="h-px flex-1 bg-slate-200" />
+                            <span className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                                Or use email
+                            </span>
+                            <div className="h-px flex-1 bg-slate-200" />
+                        </div>
+                    </div>
+
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-sm font-semibold text-slate-600 uppercase tracking-wide ml-2">
@@ -141,7 +152,7 @@ export default function LoginPage() {
 
                     <div className="text-center pt-2">
                         <p className="text-sm text-slate-500">
-                            Don't have an account?{" "}
+                            Don&apos;t have an account?{" "}
                             <button
                                 onClick={() => router.push("/register")}
                                 className="font-bold text-romantic-heart hover:underline"
