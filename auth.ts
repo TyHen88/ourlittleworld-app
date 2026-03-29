@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma"
 import Credentials from "next-auth/providers/credentials"
 import Email from "next-auth/providers/email"
 import bcrypt from "bcryptjs"
-import { sendEmailWithDefaultFrom } from "@/lib/email"
+import { getSmtpConfig, sendEmailWithDefaultFrom } from "@/lib/email"
 
 type AuthUserClaims = {
   full_name?: string | null
@@ -24,42 +24,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
   providers: [
-    Email({
-      server: {
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT),
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASSWORD,
+    (() => {
+      const smtp = getSmtpConfig()
+      return Email({
+        server: {
+          host: smtp.host,
+          port: smtp.port,
+          auth: smtp.auth,
         },
-      },
-      from: process.env.SMTP_FROM,
-      generateVerificationToken() {
-        return Math.floor(100000 + Math.random() * 900000).toString()
-      },
-      async sendVerificationRequest({ identifier: email, token, provider }) {
-        await sendEmailWithDefaultFrom({
-          to: email,
-          from: provider.from,
-          subject: `Your OurLittleWorld Login Code: ${token}`,
-          text: `Your login code is: ${token}\n\nThis code will expire in 24 hours.`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-              <h2 style="color: #FF6B9D; text-align: center;">OurLittleWorld</h2>
-              <p>Hi there!</p>
-              <p>Someone (hopefully you!) requested a login code for OurLittleWorld.</p>
-              <div style="background-color: #FDF2F5; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
-                <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #FF6B9D;">${token}</span>
+        from: smtp.from,
+        generateVerificationToken() {
+          return Math.floor(100000 + Math.random() * 900000).toString()
+        },
+        async sendVerificationRequest({ identifier: email, token, provider }) {
+          await sendEmailWithDefaultFrom({
+            to: email,
+            from: provider.from,
+            subject: `Your OurLittleWorld Login Code: ${token}`,
+            text: `Your login code is: ${token}\n\nThis code will expire in 24 hours.`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                <h2 style="color: #FF6B9D; text-align: center;">OurLittleWorld</h2>
+                <p>Hi there!</p>
+                <p>Someone (hopefully you!) requested a login code for OurLittleWorld.</p>
+                <div style="background-color: #FDF2F5; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
+                  <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #FF6B9D;">${token}</span>
+                </div>
+                <p>Enter this code in the app to sign in. This code is valid for 24 hours.</p>
+                <p>If you didn't request this, you can safely ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="font-size: 12px; color: #999; text-align: center;">Made with love by OurLittleWorld</p>
               </div>
-              <p>Enter this code in the app to sign in. This code is valid for 24 hours.</p>
-              <p>If you didn't request this, you can safely ignore this email.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-              <p style="font-size: 12px; color: #999; text-align: center;">Made with love by OurLittleWorld</p>
-            </div>
-          `,
-        }, "auth-verification")
-      },
-    }),
+            `,
+          }, "auth-verification")
+        },
+      })
+    })(),
     Credentials({
       name: "Credentials",
       credentials: {

@@ -4,22 +4,27 @@ type GlobalEmailState = typeof globalThis & {
     __ourLittleWorldEmailTransporter?: Transporter;
 };
 
+function sanitizeEnvValue(value: string) {
+    return value.trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+}
+
 function getRequiredEnv(name: "SMTP_HOST" | "SMTP_PORT" | "SMTP_USER" | "SMTP_PASSWORD" | "SMTP_FROM") {
     const value = process.env[name];
     if (!value) {
         throw new Error(`${name} is not configured`);
     }
-    return value;
+    return sanitizeEnvValue(value);
 }
 
-function buildSmtpTransporter() {
+export function getSmtpConfig() {
     const host = getRequiredEnv("SMTP_HOST");
     const port = Number(getRequiredEnv("SMTP_PORT"));
 
-    return nodemailer.createTransport({
-        pool: true,
-        maxConnections: 1,
-        maxMessages: 100,
+    if (!Number.isFinite(port)) {
+        throw new Error("SMTP_PORT must be a valid number");
+    }
+
+    return {
         host,
         port,
         secure: port === 465,
@@ -27,11 +32,26 @@ function buildSmtpTransporter() {
             user: getRequiredEnv("SMTP_USER"),
             pass: getRequiredEnv("SMTP_PASSWORD"),
         },
+        from: getRequiredEnv("SMTP_FROM"),
+    };
+}
+
+function buildSmtpTransporter() {
+    const smtp = getSmtpConfig();
+
+    return nodemailer.createTransport({
+        pool: true,
+        maxConnections: 1,
+        maxMessages: 100,
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
+        auth: smtp.auth,
         connectionTimeout: 10_000,
         greetingTimeout: 10_000,
         socketTimeout: 20_000,
         tls: {
-            servername: host,
+            servername: smtp.host,
         },
     });
 }
@@ -63,7 +83,7 @@ export async function sendEmail(mailOptions: SendMailOptions, label: string) {
 }
 
 export function getDefaultFromAddress() {
-    return getRequiredEnv("SMTP_FROM");
+    return getSmtpConfig().from;
 }
 
 export async function sendEmailWithDefaultFrom(
