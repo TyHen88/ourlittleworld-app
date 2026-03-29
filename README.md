@@ -32,14 +32,11 @@ Required Railway variables:
 ```bash
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 AUTH_SECRET=your-auth-secret
-SMTP_HOST=smtp.yourprovider.com
-SMTP_PORT=587
-SMTP_USER=your-email@example.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=OurLittleWorld <noreply@example.com>
+RESEND_API_KEY=re_your_api_key
+RESEND_FROM=OurLittleWorld <onboarding@resend.dev>
 ```
 
-Recommended Railway variables:
+Optional Railway variables:
 
 ```bash
 DIRECT_URL=${{Postgres.DATABASE_URL}}
@@ -56,12 +53,23 @@ CLOUDINARY_API_KEY=your-cloudinary-key
 CLOUDINARY_API_SECRET=your-cloudinary-secret
 ```
 
+Optional SMTP fallback variables:
+
+```bash
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_USER=your-email@example.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=OurLittleWorld <noreply@example.com>
+```
+
 Notes:
 
 - Commit Prisma migrations before deploying. Railway runs `npm run db:deploy` on each release.
 - Use `prisma migrate dev` locally to create migrations, then commit the generated `prisma/migrations/...` files.
 - Do not use `prisma db push` in production.
 - If you add a custom domain, update `AUTH_URL` to that final public URL and redeploy.
+- Railway disables outbound SMTP on Free, Trial, and Hobby plans. `RESEND_API_KEY` over HTTPS is the preferred email setup for Railway.
 - Generate VAPID keys for web push with `npx web-push generate-vapid-keys`.
 - Trip reminders are exposed at `GET/POST /api/push/trips/reminders` and should be called once per day with `Authorization: Bearer $CRON_SECRET` (or `?secret=...`).
 
