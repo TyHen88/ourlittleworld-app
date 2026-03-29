@@ -4,6 +4,13 @@ type GlobalEmailState = typeof globalThis & {
     __ourLittleWorldEmailTransporter?: Transporter;
 };
 
+type SmtpErrorLike = Error & {
+    code?: string;
+    command?: string;
+    response?: string;
+    responseCode?: number;
+};
+
 function sanitizeEnvValue(value: string) {
     return value.trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
 }
@@ -77,7 +84,14 @@ export async function sendEmail(mailOptions: SendMailOptions, label: string) {
     } catch (error) {
         const globalEmailState = globalThis as GlobalEmailState;
         globalEmailState.__ourLittleWorldEmailTransporter = undefined;
-        console.error(`[EMAIL:${label}] failed in ${Date.now() - startedAt}ms`, error);
+        const smtpError = error as SmtpErrorLike;
+        console.error(`[EMAIL:${label}] failed in ${Date.now() - startedAt}ms`, {
+            message: smtpError.message,
+            code: smtpError.code,
+            command: smtpError.command,
+            response: smtpError.response,
+            responseCode: smtpError.responseCode,
+        });
         throw error;
     }
 }
