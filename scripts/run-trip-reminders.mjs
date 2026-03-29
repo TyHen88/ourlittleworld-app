@@ -1,7 +1,20 @@
-const baseUrl = process.env.APP_URL || process.env.AUTH_URL;
+import nextEnv from "@next/env";
+
+const { loadEnvConfig } = nextEnv;
+
+loadEnvConfig(process.cwd());
+
+const baseUrl =
+  process.env.APP_URL ||
+  process.env.AUTH_URL ||
+  process.env.NEXTAUTH_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined);
 
 if (!baseUrl) {
-  throw new Error("APP_URL or AUTH_URL is required for cron:trip-reminders");
+  throw new Error(
+    "APP_URL, AUTH_URL, NEXTAUTH_URL, or NEXT_PUBLIC_APP_URL is required for cron:reminders",
+  );
 }
 
 const url = new URL("/api/push/trips/reminders", baseUrl);

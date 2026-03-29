@@ -37,24 +37,20 @@ export default function RootLayout({
                 window.addEventListener('load', async () => {
                   let didReloadForController = false;
 
-                  if ('${process.env.NODE_ENV}' === 'production') {
-                    try {
+                  try {
+                    if ('${process.env.NODE_ENV}' === 'production') {
                       navigator.serviceWorker.addEventListener('controllerchange', () => {
                         if (didReloadForController) return;
                         didReloadForController = true;
                         window.location.reload();
                       });
-
-                      const registration = await navigator.serviceWorker.register('/sw.js');
-                      await registration.update();
-                    } catch (error) {
-                      console.warn('Service worker registration failed', error);
                     }
-                    return;
-                  }
 
-                  const registrations = await navigator.serviceWorker.getRegistrations();
-                  await Promise.all(registrations.map((registration) => registration.unregister()));
+                    const registration = await navigator.serviceWorker.register('/sw.js');
+                    await registration.update();
+                  } catch (error) {
+                    console.warn('Service worker registration failed', error);
+                  }
                 });
               }
             `,

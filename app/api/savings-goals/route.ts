@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCachedUser } from "@/lib/auth-cache";
+import { getAuthActor, isSingleActor } from "@/lib/auth-guards";
 import prisma from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
     try {
-        const user = await getCachedUser();
+        const actor = await getAuthActor().catch(() => null);
 
-        if (!user || user.id === undefined) {
+        if (!actor) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -17,35 +17,17 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "id or coupleId is required" }, { status: 400 });
         }
 
-        // Verify user belongs to this couple or is solo
-        // @ts-ignore
-        const dbUser = await prisma.user.findUnique({
-            where: { id: user.id },
-            // @ts-ignore
-            select: { couple_id: true, user_type: true },
-        });
+        const actorIsSingle = isSingleActor(actor);
+        const expectedId = actorIsSingle ? actor.id : actor.couple_id;
 
-        if (!dbUser) {
-            return NextResponse.json({ error: "User not found" }, { status: 404 });
-        }
-
-        const isSingle = (dbUser as any).user_type === 'SINGLE';
-
-        // Check ownership
-        if (!isSingle && (dbUser as any).couple_id !== id) {
-             const userOwnsId = user.id === id;
-             if (!userOwnsId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!expectedId || id !== expectedId) {
+             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         // Fetch all savings goals for the couple or user
         const goals = await prisma.savingsGoal.findMany({
-            // @ts-ignore
             where: {
-                OR: [
-                    // @ts-ignore
-                    { user_id: id },
-                    { couple_id: id }
-                ]
+                ...(actorIsSingle ? { user_id: actor.id } : { couple_id: actor.couple_id }),
             },
             orderBy: [
                 { is_completed: 'asc' },
@@ -54,10 +36,10 @@ export async function GET(request: NextRequest) {
             ],
         });
 
-        const sanitizedGoals = goals.map((g: any) => ({
-            ...g,
-            target_amount: g.target_amount ? Number(g.target_amount.toString()) : 0,
-            current_amount: g.current_amount ? Number(g.current_amount.toString()) : 0,
+        const sanitizedGoals = goals.map((goal) => ({
+            ...goal,
+            target_amount: goal.target_amount ? Number(goal.target_amount.toString()) : 0,
+            current_amount: goal.current_amount ? Number(goal.current_amount.toString()) : 0,
         }));
 
         return NextResponse.json(
@@ -69,10 +51,10 @@ export async function GET(request: NextRequest) {
                 },
             }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching savings goals:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to fetch savings goals" },
+            { error: error instanceof Error ? error.message : "Failed to fetch savings goals" },
             { status: 500 }
         );
     }
@@ -80,16 +62,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
-        const user = await getCachedUser();
+        const actor = await getAuthActor().catch(() => null);
 
-        if (!user || user.id === undefined) {
+        if (!actor) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const body = await request.json();
         const {
-            userId, // For personal goals
-            coupleId,
             title,
             description,
             targetAmount,
@@ -100,38 +80,39 @@ export async function POST(request: NextRequest) {
             priority,
         } = body;
 
-        // Verify user belongs to this couple or is solo
-        // @ts-ignore
-        const dbUser = await prisma.user.findUnique({
-            where: { id: user.id },
-            // @ts-ignore
-            select: { couple_id: true, user_type: true },
-        });
+        const normalizedTitle = typeof title === "string" ? title.trim() : "";
+        const parsedTargetAmount = Number.parseFloat(String(targetAmount));
+        const parsedCurrentAmount =
+            currentAmount === undefined || currentAmount === null || currentAmount === ""
+                ? 0
+                : Number.parseFloat(String(currentAmount));
+        const actorIsSingle = isSingleActor(actor);
 
-        if (!dbUser) {
-            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        if (!normalizedTitle) {
+            return NextResponse.json({ error: "Title is required" }, { status: 400 });
         }
 
-        const isSingle = (dbUser as any).user_type === 'SINGLE';
-
-        if (!isSingle && !coupleId) {
-            return NextResponse.json({ error: "coupleId is required for couples" }, { status: 400 });
+        if (!Number.isFinite(parsedTargetAmount) || parsedTargetAmount <= 0) {
+            return NextResponse.json({ error: "Valid targetAmount is required" }, { status: 400 });
         }
 
-        if (!isSingle && (dbUser as any).couple_id !== coupleId) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        if (!Number.isFinite(parsedCurrentAmount) || parsedCurrentAmount < 0) {
+            return NextResponse.json({ error: "currentAmount must be zero or greater" }, { status: 400 });
+        }
+
+        if (!actorIsSingle && !actor.couple_id) {
+            return NextResponse.json({ error: "Couple not found" }, { status: 400 });
         }
 
         // Create savings goal
         const goal = await prisma.savingsGoal.create({
             data: {
-                // @ts-ignore
-                user_id: body.userId || (isSingle ? user.id : null),
-                couple_id: isSingle ? null : (body.userId ? null : coupleId),
-                title,
+                user_id: actorIsSingle ? actor.id : null,
+                couple_id: actorIsSingle ? null : actor.couple_id,
+                title: normalizedTitle,
                 description: description || null,
-                target_amount: parseFloat(targetAmount),
-                current_amount: currentAmount ? parseFloat(currentAmount) : 0,
+                target_amount: parsedTargetAmount,
+                current_amount: parsedCurrentAmount,
                 icon: icon || "Target",
                 color: color || "purple",
                 deadline: deadline ? new Date(deadline) : null,
@@ -149,10 +130,10 @@ export async function POST(request: NextRequest) {
             { success: true, data: sanitizedGoal },
             { status: 201 }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error creating savings goal:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to create savings goal" },
+            { error: error instanceof Error ? error.message : "Failed to create savings goal" },
             { status: 500 }
         );
     }

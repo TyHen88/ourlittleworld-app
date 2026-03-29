@@ -1,7 +1,5 @@
 "use server";
 
-console.log(">>> World actions file loaded");
-
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getCachedUser } from "@/lib/auth-cache";
@@ -34,7 +32,7 @@ function generateInviteCode(): string {
 }
 
 interface CreateWorldData {
-    userId: string;
+    userId?: string;
     worldName: string;
     startDate?: string;
     couplePhotoUrl?: string;
@@ -44,11 +42,8 @@ interface CreateWorldData {
 }
 
 export async function createWorld(data: CreateWorldData) {
-    console.log(">>> createWorld action called with data:", data.worldName);
     try {
-        console.log(">>> createWorld: fetching cached user...");
         const user = await getCachedUser();
-        console.log(">>> createWorld: user fetched:", user?.id);
 
         if (!user || !user.id) {
             return { success: false, error: "Not authenticated" };
@@ -60,14 +55,10 @@ export async function createWorld(data: CreateWorldData) {
             return { success: false, error: "Missing user email" };
         }
 
-        console.log("CreateWorld: authenticated user", user.id, user.email);
-
         const existingUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true }
         });
-
-        console.log("CreateWorld: existing user couple_id", existingUser?.couple_id);
 
         if (existingUser?.couple_id) {
             return { success: false, error: "Already a member of a world" };
@@ -76,16 +67,13 @@ export async function createWorld(data: CreateWorldData) {
         let finalCouplePhotoUrl: string | null = data.couplePhotoUrl || null;
 
         if (data.photoFile) {
-            console.log(">>> createWorld: photoFile provided, attempting upload...");
             const formData = new FormData();
             formData.append("file", data.photoFile);
             const uploadResult = await uploadCouplePhoto(formData);
 
             if (uploadResult.success && uploadResult.url) {
                 finalCouplePhotoUrl = uploadResult.url;
-                console.log(">>> createWorld: photo uploaded successfully:", finalCouplePhotoUrl);
             } else {
-                console.error(">>> createWorld: Photo upload failed:", uploadResult.error);
                 return { success: false, error: uploadResult.error || "Failed to upload couple photo." };
             }
         }
@@ -93,8 +81,6 @@ export async function createWorld(data: CreateWorldData) {
         for (let attempt = 0; attempt < 5; attempt++) {
             const inviteCode = generateInviteCode();
             try {
-                console.log(">>> createWorld: Attempting to create couple with code:", inviteCode);
-                
                 // 1. Create the couple
                 const couple = await prisma.couple.create({
                     data: {
@@ -107,15 +93,11 @@ export async function createWorld(data: CreateWorldData) {
                     }
                 });
 
-                console.log(">>> createWorld: couple created", couple.id);
-
                 // 2. Update user's profile with couple_id
                 await prisma.user.update({
                     where: { id: user.id },
                     data: { couple_id: couple.id }
                 });
-
-                console.log(">>> createWorld: user updated with couple_id");
 
                 return {
                     success: true,
@@ -131,7 +113,6 @@ export async function createWorld(data: CreateWorldData) {
                     (error.meta as Prisma.JsonObject)?.target === "invite_code";
 
                 if (isInviteCodeCollision) {
-                    console.log(">>> createWorld: code collision, retrying...");
                     continue;
                 }
                 throw error;
@@ -147,7 +128,7 @@ export async function createWorld(data: CreateWorldData) {
 }
 
 interface JoinWorldData {
-    userId: string;
+    userId?: string;
     inviteCode: string;
     partnerNickname?: string;
 }
@@ -234,10 +215,8 @@ export async function joinWorld(data: JoinWorldData) {
 
 // Upload couple photo to Cloudinary
 export async function uploadCouplePhoto(formData: FormData) {
-    console.log(">>> uploadCouplePhoto called");
     try {
         const user = await getCachedUser();
-        console.log(">>> uploadCouplePhoto: user fetched:", user?.id);
 
         if (!user || !user.id) {
             return { success: false, error: "Not authenticated" };
@@ -271,9 +250,19 @@ export async function uploadCouplePhoto(formData: FormData) {
 // Get user's couple data
 export async function getUserCouple(userId: string) {
     try {
+        const sessionUser = await getCachedUser();
+
+        if (!sessionUser?.id) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        if (userId !== sessionUser.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         // Find the couple the user belongs to
         const user = await prisma.user.findUnique({
-            where: { id: userId },
+            where: { id: sessionUser.id },
             include: { couple: true }
         });
 

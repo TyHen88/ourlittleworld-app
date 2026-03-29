@@ -6,18 +6,13 @@ import { revalidatePath } from "next/cache";
 import { AuthError } from "next-auth";
 import { getCachedUser } from "@/lib/auth-cache";
 import bcrypt from "bcryptjs";
-
-function normalizeEmail(email: string) {
-    return email.trim().toLowerCase();
-}
-
-function isValidEmail(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isValidPassword(password: string) {
-    return password.length >= 8;
-}
+import {
+    changePasswordForEmail,
+    isValidEmail,
+    isValidPassword,
+    normalizeEmail,
+    verifyPasswordLogin,
+} from "@/lib/password-auth";
 
 export async function signUp(email: string, fullName: string, password: string) {
     const normalizedEmail = normalizeEmail(email);
@@ -54,7 +49,6 @@ export async function signUp(email: string, fullName: string, password: string) 
                     full_name: normalizedFullName,
                     name: normalizedFullName,
                     password: hashedPassword,
-                    emailVerified: new Date(),
                     image: null,
                     avatar_url: null,
                     bio: null,
@@ -71,7 +65,6 @@ export async function signUp(email: string, fullName: string, password: string) 
                     full_name: normalizedFullName,
                     name: normalizedFullName,
                     password: hashedPassword,
-                    emailVerified: new Date(),
                 }
             });
         }
@@ -90,39 +83,47 @@ export async function requestLoginCode(email: string) {
 }
 
 export async function loginWithPassword(data: { email?: string; password?: string }) {
-    const normalizedEmail = typeof data.email === "string" ? normalizeEmail(data.email) : undefined;
+    const verifiedLogin = await verifyPasswordLogin(data);
+
+    if (!verifiedLogin.success) {
+        return verifiedLogin;
+    }
 
     try {
         await nextAuthSignIn("credentials", {
-            email: normalizedEmail,
+            email: verifiedLogin.normalizedEmail,
             password: data.password,
             redirect: false,
         });
 
-        if (!normalizedEmail) {
-            throw new Error("Please enter your email address.");
-        }
-
-        const user = await prisma.user.findUnique({
-            where: { email: normalizedEmail },
-            select: { onboarding_completed: true }
-        });
-
         return {
             success: true,
-            onboardingCompleted: Boolean(user?.onboarding_completed),
+            onboardingCompleted: verifiedLogin.onboardingCompleted,
         };
     } catch (error: unknown) {
         if (error instanceof AuthError) {
             console.error('[LOGIN_PASSWORD_ERROR]', error.type);
             switch (error.type) {
                 case "CredentialsSignin":
-                    throw new Error("Invalid email or password");
+                    return {
+                        success: false,
+                        status: 400,
+                        error: "Invalid email or password",
+                    };
                 default:
-                    throw new Error("Authentication failed");
+                    return {
+                        success: false,
+                        status: 500,
+                        error: "Authentication failed",
+                    };
             }
         }
-        throw error;
+        console.error('[LOGIN_PASSWORD_ERROR]', error);
+        return {
+            success: false,
+            status: 500,
+            error: error instanceof Error ? error.message : "Authentication failed",
+        };
     }
 }
 
@@ -221,14 +222,33 @@ export async function deleteAccount() {
     const deletedEmail = `deleted_${timestamp}_${user.email}`;
 
     try {
-        await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                is_deleted: true,
-                email: deletedEmail,
-                couple_id: null,
-            }
-        });
+        await prisma.$transaction([
+            prisma.account.deleteMany({
+                where: { userId: user.id },
+            }),
+            prisma.session.deleteMany({
+                where: { userId: user.id },
+            }),
+            prisma.pushSubscription.deleteMany({
+                where: { user_id: user.id },
+            }),
+            prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    is_deleted: true,
+                    email: deletedEmail,
+                    emailVerified: null,
+                    password: null,
+                    name: null,
+                    image: null,
+                    full_name: null,
+                    avatar_url: null,
+                    bio: null,
+                    onboarding_completed: false,
+                    couple_id: null,
+                }
+            }),
+        ]);
         await nextAuthSignOut();
         return true;
     } catch (error: unknown) {
@@ -277,40 +297,9 @@ export async function updatePasswordWithOtp(otp: string, newPassword: string) {
 
 export async function changePassword(currentPassword: string, newPassword: string) {
     const sessionUser = await getCachedUser();
-    if (!sessionUser?.email) throw new Error("Not authenticated");
-
-    if (!isValidPassword(newPassword)) {
-        throw new Error("New password must be at least 8 characters.");
-    }
-
-    const user = await prisma.user.findUnique({
-        where: { email: sessionUser.email }
+    return changePasswordForEmail({
+        email: sessionUser?.email,
+        currentPassword,
+        newPassword,
     });
-
-    if (!user) {
-        throw new Error("User not found");
-    }
-
-    if (user.password) {
-        if (!currentPassword) {
-            throw new Error("Please enter your current password.");
-        }
-
-        const isValid = await bcrypt.compare(currentPassword, user.password);
-        if (!isValid) {
-            throw new Error("Current password is incorrect.");
-        }
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    await prisma.user.update({
-        where: { email: sessionUser.email },
-        data: {
-            password: hashedPassword,
-            emailVerified: user.emailVerified ?? new Date(),
-        }
-    });
-
-    return { success: true };
 }

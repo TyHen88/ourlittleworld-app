@@ -1,12 +1,12 @@
 "use server";
 
-import { auth } from "@/auth";
+import { getCachedUser } from "@/lib/auth-cache";
 import { sendEmail } from "@/lib/email";
 
 export async function sendSupportEmail(formData: { subject: string; message: string }) {
-    const session = await auth();
-    const userEmail = session?.user?.email ?? "Anonymous";
-    const userName = session?.user?.name ?? "User";
+    const user = await getCachedUser();
+    const userEmail = user?.email ?? "Anonymous";
+    const userName = user?.name ?? "User";
 
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
         console.error("SMTP configuration is missing");
@@ -40,7 +40,7 @@ export async function sendSupportEmail(formData: { subject: string; message: str
                         <p style="font-size: 12px; color: #94a3b8;">
                             This message was sent from the in-app support form.
                             <br />
-                            User ID: ${session?.user?.id || 'N/A'}
+                            User ID: ${user?.id || 'N/A'}
                         </p>
                     </div>
                 </div>

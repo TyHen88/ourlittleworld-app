@@ -38,10 +38,15 @@ export async function getExistingPushSubscription() {
 async function getPushRegistration() {
   const existingRegistration = await navigator.serviceWorker.getRegistration();
   if (existingRegistration) {
-    return existingRegistration;
+    if (existingRegistration.active) {
+      return existingRegistration;
+    }
+
+    return navigator.serviceWorker.ready;
   }
 
-  return navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.register("/sw.js");
+  return navigator.serviceWorker.ready;
 }
 
 export async function subscribeBrowserToPush(publicKey: string) {

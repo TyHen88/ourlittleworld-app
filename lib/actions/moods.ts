@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { getCachedUser } from "@/lib/auth-cache";
+import { getAuthActor, canAccessCoupleScope, isSingleActor } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 
 export async function submitDailyMood(data: {
@@ -13,23 +13,13 @@ export async function submitDailyMood(data: {
     };
 }) {
     try {
-        const user = await getCachedUser();
-        if (!user || user.id === undefined) {
-          return { success: false, error: "Not authenticated" };
-        }
+        const actor = await getAuthActor();
 
-        const userId = user.id;
-
-        // Get user with Prisma
-        const dbUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { couple_id: true }
-        });
-
-        if (!dbUser?.couple_id) {
+        if (isSingleActor(actor) || !actor.couple_id) {
             return { success: false, error: "No couple found" };
         }
 
+        const userId = actor.id;
         const todayKey = new Date().toISOString().split('T')[0];
         const today = new Date(todayKey);
 
@@ -43,7 +33,7 @@ export async function submitDailyMood(data: {
 
         const createData: Prisma.DailyMoodUncheckedCreateInput = {
             user_id: userId,
-            couple_id: dbUser.couple_id,
+            couple_id: actor.couple_id,
             mood_date: today,
             mood_emoji: data.moodEmoji,
             note: data.note || null,
@@ -72,6 +62,12 @@ export async function submitDailyMood(data: {
 
 export async function getTodayMoods(coupleId: string) {
     try {
+        const actor = await getAuthActor();
+
+        if (!canAccessCoupleScope(actor, coupleId)) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         const todayKey = new Date().toISOString().split('T')[0];
         const today = new Date(todayKey);
 
@@ -91,22 +87,13 @@ export async function getTodayMoods(coupleId: string) {
 
 export async function updateTodayMoodMessage(message: string) {
     try {
-        const user = await getCachedUser();
-        if (!user || user.id === undefined) {
-          return { success: false, error: "Not authenticated" };
-        }
+        const actor = await getAuthActor();
 
-        const userId = user.id;
-
-        const dbUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { couple_id: true }
-        });
-
-        if (!dbUser?.couple_id) {
+        if (isSingleActor(actor) || !actor.couple_id) {
             return { success: false, error: "No couple found" };
         }
 
+        const userId = actor.id;
         const todayKey = new Date().toISOString().split('T')[0];
         const today = new Date(todayKey);
 
@@ -131,7 +118,7 @@ export async function updateTodayMoodMessage(message: string) {
             await prisma.dailyMood.create({
                 data: {
                     user_id: userId,
-                    couple_id: dbUser.couple_id,
+                    couple_id: actor.couple_id,
                     mood_date: today,
                     mood_emoji: "😊",
                     metadata: { message: message } as Prisma.JsonObject
@@ -150,6 +137,12 @@ export async function updateTodayMoodMessage(message: string) {
 
 export async function getHeroMessage(coupleId: string) {
     try {
+        const actor = await getAuthActor();
+
+        if (!canAccessCoupleScope(actor, coupleId)) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         const todayKey = new Date().toISOString().split('T')[0];
         const today = new Date(todayKey);
 
@@ -177,6 +170,19 @@ export async function getHeroMessage(coupleId: string) {
 
 export async function getUserMoodBadgeData(userId: string) {
     try {
+        const actor = await getAuthActor();
+
+        if (actor.id !== userId) {
+            const targetUser = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { couple_id: true },
+            });
+
+            if (!targetUser?.couple_id || targetUser.couple_id !== actor.couple_id) {
+                return { success: false, error: "Unauthorized" };
+            }
+        }
+
         const todayKey = new Date().toISOString().split('T')[0];
         const today = new Date(todayKey);
 

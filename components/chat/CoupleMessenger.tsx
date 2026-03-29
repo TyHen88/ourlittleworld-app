@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Heart,
@@ -16,12 +17,15 @@ import { cn } from "@/lib/utils";
 import { useCoupleChat } from "@/hooks/use-couple-chat";
 import { Button } from "@/components/ui/button";
 import {
+  COUPLE_CHAT_DEFAULT_REACTIONS,
   COUPLE_CHAT_EVENT,
+  COUPLE_CHAT_MESSAGE_UPDATED_EVENT,
   getCoupleChatChannelName,
   type CoupleChatMessage,
   type CoupleChatSticker,
 } from "@/lib/chat";
 import { getAblyRealtimeClient } from "@/lib/ably-client";
+import type { EmojiClickData } from "emoji-picker-react";
 
 interface CoupleMember {
   id: string;
@@ -50,6 +54,7 @@ interface CoupleMessengerProps {
 }
 
 const MAX_PENDING_IMAGES = 4;
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
 export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps) {
   const [draft, setDraft] = useState("");
@@ -58,6 +63,10 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<CoupleChatMessage[]>([]);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [hoveredReactionMessageId, setHoveredReactionMessageId] = useState<string | null>(null);
+  const [selectedReactionMessageId, setSelectedReactionMessageId] = useState<string | null>(null);
+  const [reactionSheetMessageId, setReactionSheetMessageId] = useState<string | null>(null);
+  const [reactionRequests, setReactionRequests] = useState<Record<string, string>>({});
   const [messengerHeight, setMessengerHeight] = useState<number | null>(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -80,6 +89,16 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     !sending &&
     !uploadingImage &&
     (draft.trim().length > 0 || pendingImages.length > 0);
+  const activeReactionMessageId = hoveredReactionMessageId ?? selectedReactionMessageId;
+  const reactionSheetMessage = reactionSheetMessageId
+    ? messages.find((message) => message.id === reactionSheetMessageId) ?? null
+    : null;
+
+  const closeReactionUi = () => {
+    setHoveredReactionMessageId(null);
+    setSelectedReactionMessageId(null);
+    setReactionSheetMessageId(null);
+  };
 
   const scrollToLatestMessage = (behavior: ScrollBehavior = "auto") => {
     if (typeof window === "undefined") {
@@ -173,6 +192,41 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   }, [isKeyboardOpen, messages.length, messengerHeight]);
 
   useEffect(() => {
+    if (!selectedReactionMessageId || reactionSheetMessageId || typeof document === "undefined") {
+      return;
+    }
+
+    const clearInlineReactionUi = () => {
+      setHoveredReactionMessageId(null);
+      setSelectedReactionMessageId(null);
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        clearInlineReactionUi();
+        return;
+      }
+
+      const activeMessage = document.querySelector<HTMLElement>(
+        `[data-reaction-message-id="${selectedReactionMessageId}"]`
+      );
+
+      if (activeMessage?.contains(target)) {
+        return;
+      }
+
+      clearInlineReactionUi();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [reactionSheetMessageId, selectedReactionMessageId]);
+
+  useEffect(() => {
     if (!coupleId || isSingle) {
       return;
     }
@@ -205,7 +259,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       setError(stateChange.reason?.message || "Realtime connection failed");
     };
 
-    const handleMessage = (ablyMessage: { data?: unknown }) => {
+    const handleMessageCreated = (ablyMessage: { data?: unknown }) => {
       const nextMessage = extractRealtimeChatMessage(ablyMessage.data);
 
       if (!nextMessage) {
@@ -221,6 +275,18 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       );
     };
 
+    const handleMessageUpdated = (ablyMessage: { data?: unknown }) => {
+      const nextMessage = extractRealtimeChatMessage(ablyMessage.data);
+
+      if (!nextMessage) {
+        return;
+      }
+
+      setMessages((currentMessages) =>
+        mergeMessages(currentMessages, [nextMessage])
+      );
+    };
+
     updateConnectionState();
     connectionEvents.forEach((event) => {
       client.connection.on(event, updateConnectionState);
@@ -228,7 +294,8 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     client.connection.on("failed", handleConnectionFailure);
     client.connection.on("suspended", handleConnectionFailure);
 
-    void channel.subscribe(COUPLE_CHAT_EVENT, handleMessage);
+    void channel.subscribe(COUPLE_CHAT_EVENT, handleMessageCreated);
+    void channel.subscribe(COUPLE_CHAT_MESSAGE_UPDATED_EVENT, handleMessageUpdated);
 
     void (async () => {
       try {
@@ -247,7 +314,8 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       });
       client.connection.off("failed", handleConnectionFailure);
       client.connection.off("suspended", handleConnectionFailure);
-      channel.unsubscribe(COUPLE_CHAT_EVENT, handleMessage);
+      channel.unsubscribe(COUPLE_CHAT_EVENT, handleMessageCreated);
+      channel.unsubscribe(COUPLE_CHAT_MESSAGE_UPDATED_EVENT, handleMessageUpdated);
       void channel.presence.leave();
     };
   }, [coupleId, isSingle, profile?.full_name, user.id, user.name]);
@@ -345,6 +413,75 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     await fetchNextPage();
   };
 
+  const handleReactionToggle = async (messageId: string, emoji: string) => {
+    if (reactionRequests[messageId]) {
+      return;
+    }
+
+    setReactionRequests((current) => ({
+      ...current,
+      [messageId]: emoji,
+    }));
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/chat/messages/${messageId}/reactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ emoji }),
+      });
+
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to update reaction");
+      }
+
+      if (json?.data) {
+        setMessages((currentMessages) =>
+          mergeMessages(currentMessages, [json.data as CoupleChatMessage])
+        );
+      }
+      closeReactionUi();
+    } catch (reactionError) {
+      setError(
+        reactionError instanceof Error
+          ? reactionError.message
+          : "Failed to update reaction"
+      );
+    } finally {
+      setReactionRequests((current) => {
+        const nextRequests = { ...current };
+        delete nextRequests[messageId];
+        return nextRequests;
+      });
+    }
+  };
+
+  const handleMessageSelect = (
+    event: React.MouseEvent<HTMLDivElement>,
+    messageId: string
+  ) => {
+    if (shouldIgnoreMessageInteraction(event.target)) {
+      return;
+    }
+
+    setSelectedReactionMessageId((current) => (current === messageId ? null : messageId));
+  };
+
+  const handleMessageDoubleClick = (
+    event: React.MouseEvent<HTMLDivElement>,
+    messageId: string
+  ) => {
+    if (shouldIgnoreMessageInteraction(event.target)) {
+      return;
+    }
+
+    setSelectedReactionMessageId(messageId);
+    setReactionSheetMessageId(messageId);
+  };
+
   if (isSingle || !coupleId) {
     return (
       <div className="space-y-5">
@@ -375,11 +512,12 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   }
 
   return (
-    <div
-      ref={rootRef}
-      className="flex min-h-0 flex-1 basis-0 flex-col overflow-hidden bg-white"
-      style={messengerHeight ? { height: `${messengerHeight}px`, maxHeight: `${messengerHeight}px` } : undefined}
-    >
+    <>
+      <div
+        ref={rootRef}
+        className="flex min-h-0 flex-1 basis-0 flex-col overflow-hidden bg-white"
+        style={messengerHeight ? { height: `${messengerHeight}px`, maxHeight: `${messengerHeight}px` } : undefined}
+      >
       <div
         ref={scrollRef}
         onScroll={(event) => {
@@ -438,12 +576,16 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                 : message.author.full_name?.split(" ")[0] || "Partner";
               const messageImages = getMessageImages(message);
               const sticker = message.metadata.sticker;
+              const reactions = message.metadata.reactions;
               const stickerOnly =
                 !!sticker && messageImages.length === 0 && message.content.trim().length === 0;
+              const reactionRequestInFlight = Boolean(reactionRequests[message.id]);
+              const showReactionPicker = activeReactionMessageId === message.id;
 
               return (
                 <motion.div
                   key={message.id}
+                  data-reaction-message-id={message.id}
                   layout="position"
                   initial={{
                     opacity: 0,
@@ -463,11 +605,19 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     duration: 0.22,
                     ease: [0.22, 1, 0.36, 1],
                   }}
-                  className={cn("flex", isMine ? "justify-end" : "justify-start")}
+                  className={cn("flex flex-col", isMine ? "items-end" : "items-start")}
+                  onMouseEnter={() => setHoveredReactionMessageId(message.id)}
+                  onMouseLeave={() =>
+                    setHoveredReactionMessageId((current) =>
+                      current === message.id ? null : current
+                    )
+                  }
                 >
                   <div
+                    onClick={(event) => handleMessageSelect(event, message.id)}
+                    onDoubleClick={(event) => handleMessageDoubleClick(event, message.id)}
                     className={cn(
-                      "max-w-[78%] overflow-hidden shadow-sm ring-1 ring-transparent transition-shadow duration-300",
+                      "max-w-[78%] cursor-pointer overflow-hidden shadow-sm ring-1 ring-transparent transition-shadow duration-300",
                       stickerOnly
                         ? cn(
                             "rounded-[1.45rem] border px-3.5 py-2.5",
@@ -475,7 +625,8 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                           )
                         : isMine
                           ? "rounded-[1.35rem] rounded-br-md bg-gradient-button px-3 py-2.5 text-white shadow-romantic-heart/20"
-                          : "rounded-[1.35rem] rounded-bl-md border border-romantic-blush/30 bg-white px-3 py-2.5 text-slate-700 shadow-slate-200/70"
+                          : "rounded-[1.35rem] rounded-bl-md border border-romantic-blush/30 bg-white px-3 py-2.5 text-slate-700 shadow-slate-200/70",
+                      showReactionPicker && "ring-romantic-heart/20"
                     )}
                   >
                     <p
@@ -581,6 +732,95 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                       })}
                     </p>
                   </div>
+
+                  {(reactions.length > 0 || showReactionPicker) && (
+                    <div
+                      className={cn(
+                        "mt-1.5 flex max-w-[84%] flex-wrap items-center gap-1.5",
+                        isMine ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      {reactions.map((reaction) => {
+                        const reactedByMe = reaction.user_ids.includes(user.id);
+                        return (
+                          <button
+                            key={`${message.id}-${reaction.emoji}`}
+                            type="button"
+                            disabled={reactionRequestInFlight}
+                            onClick={() => void handleReactionToggle(message.id, reaction.emoji)}
+                            className={cn(
+                              "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition",
+                              reactedByMe
+                                ? "border-romantic-heart/40 bg-romantic-blush/20 text-romantic-heart"
+                                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                              reactionRequestInFlight && "cursor-not-allowed opacity-60"
+                            )}
+                          >
+                            <span className="text-sm leading-none">{reaction.emoji}</span>
+                            <span>{reaction.user_ids.length}</span>
+                          </button>
+                        );
+                      })}
+
+                    </div>
+                  )}
+
+                  <AnimatePresence initial={false}>
+                    {showReactionPicker && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 6 }}
+                        className={cn(
+                          "mt-1.5 flex max-w-[84%] flex-wrap items-center gap-2 rounded-[1.25rem] border border-slate-200 bg-white px-3 py-2 shadow-sm",
+                          isMine ? "justify-end" : "justify-start"
+                        )}
+                      >
+                        {COUPLE_CHAT_DEFAULT_REACTIONS.map((emoji) => {
+                          const reactedByMe = message.metadata.reactions.some(
+                            (reaction) =>
+                              reaction.emoji === emoji &&
+                              reaction.user_ids.includes(user.id)
+                          );
+
+                          return (
+                            <button
+                              key={`${message.id}-quick-${emoji}`}
+                              type="button"
+                              disabled={reactionRequestInFlight}
+                              onClick={() => void handleReactionToggle(message.id, emoji)}
+                              className={cn(
+                                "inline-flex h-9 w-9 items-center justify-center rounded-full text-lg transition",
+                                reactedByMe
+                                  ? "bg-romantic-blush/30 ring-1 ring-romantic-heart/30"
+                                  : "bg-slate-50 hover:bg-slate-100",
+                                reactionRequestInFlight && "cursor-not-allowed opacity-60"
+                              )}
+                              aria-label={`React with ${emoji}`}
+                            >
+                              {emoji}
+                            </button>
+                          );
+                        })}
+
+                        <button
+                          type="button"
+                          disabled={reactionRequestInFlight}
+                          onClick={() => {
+                            setSelectedReactionMessageId(message.id);
+                            setReactionSheetMessageId(message.id);
+                          }}
+                          className={cn(
+                            "inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100",
+                            reactionRequestInFlight && "cursor-not-allowed opacity-60"
+                          )}
+                          aria-label="Open full emoji picker"
+                        >
+                          +
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               );
             })}
@@ -695,6 +935,74 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
         </div>
       </div>
     </div>
+
+      <AnimatePresence initial={false}>
+        {reactionSheetMessageId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end bg-slate-900/35"
+            onClick={closeReactionUi}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full rounded-t-[2rem] bg-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-slate-200" />
+
+              <div className="flex items-start justify-between gap-4 px-4 pb-3 pt-4 sm:px-5">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    React To Message
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {reactionSheetMessage
+                      ? reactionSheetMessage.author_id === user.id
+                        ? "Choose an emoji for your message."
+                        : `Choose an emoji for ${reactionSheetMessage.author.full_name?.split(" ")[0] || "your partner"}'s message.`
+                      : "Choose an emoji."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeReactionUi}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
+                  aria-label="Close emoji picker"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="border-t border-slate-100 p-3 sm:p-4">
+                <div className="overflow-hidden rounded-[1.5rem] border border-slate-200">
+                  <EmojiPicker
+                    lazyLoadEmojis
+                    searchPlaceHolder="Search emoji"
+                    skinTonesDisabled
+                    width="100%"
+                    height={420}
+                    previewConfig={{ showPreview: false }}
+                    onEmojiClick={(emojiData: EmojiClickData) => {
+                      if (!reactionSheetMessageId) {
+                        return;
+                      }
+
+                      void handleReactionToggle(reactionSheetMessageId, emojiData.emoji);
+                    }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -734,6 +1042,13 @@ function getMessageImages(message: CoupleChatMessage) {
   }
 
   return [];
+}
+
+function shouldIgnoreMessageInteraction(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("a, button, input, textarea, select, label"))
+  );
 }
 
 function getStickerCardClass(

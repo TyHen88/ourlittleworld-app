@@ -1,19 +1,20 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Heart, Mail, ArrowRight, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { Lock, Eye, EyeOff } from "lucide-react";
-import { loginWithPassword } from "@/lib/actions/auth";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export default function LoginPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -21,25 +22,71 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [redirecting, setRedirecting] = useState(false);
 
+    useEffect(() => {
+        const authError = searchParams.get("error");
+
+        if (!authError) {
+            return;
+        }
+
+        switch (authError) {
+            case "DeletedOAuthAccountRetry":
+                setError("Your old Google login was cleared from a deleted account. Please try Continue with Google again.");
+                break;
+            case "AccessDenied":
+                setError("Sign-in was denied. If this account was deleted before, try Google sign-in once more.");
+                break;
+            case "OAuthAccountNotLinked":
+                setError("This email is already registered with a different sign-in method. Use the original method to continue.");
+                break;
+            default:
+                setError("Authentication failed. Please try again.");
+                break;
+        }
+    }, [searchParams]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         setLoading(true);
 
         try {
-            const result = await loginWithPassword({
-                email,
-                password,
+            const validationResponse = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    email,
+                    password,
+                }),
             });
 
-            if (result?.success) {
-                setRedirecting(true);
-                router.push(result.onboardingCompleted ? "/dashboard" : "/onboarding");
-                router.refresh();
+            const result = await validationResponse.json().catch(() => null);
+
+            if (!validationResponse.ok || !result?.success) {
+                setError(
+                    typeof result?.error === "string"
+                        ? result.error
+                        : "Invalid email or password"
+                );
                 return;
             }
 
-            setError("Invalid email or password");
+            const signInResult = await signIn("credentials", {
+                email: result.normalizedEmail,
+                password,
+                redirect: false,
+            });
+
+            if (signInResult?.error) {
+                setError("Invalid email or password");
+                return;
+            }
+
+            setRedirecting(true);
+            router.push(result.onboardingCompleted ? "/dashboard" : "/onboarding");
+            router.refresh();
         } catch (error: unknown) {
             setError(error instanceof Error ? error.message : "Something went wrong. Please check your credentials.");
         } finally {

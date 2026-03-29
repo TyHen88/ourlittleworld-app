@@ -48,7 +48,12 @@ export async function GET(
 
     const profile = await getCachedProfile(user.id);
 
-    if (!profile?.couple_id || profile.couple_id !== post.couple_id) {
+    const isSingle = profile?.user_type === "SINGLE";
+    const hasAccess = isSingle
+      ? post.author_id === user.id && post.couple_id === null
+      : Boolean(profile?.couple_id && profile.couple_id === post.couple_id);
+
+    if (!hasAccess) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

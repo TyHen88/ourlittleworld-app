@@ -19,7 +19,6 @@ import {
     AlertCircle,
     ShieldCheck
 } from "lucide-react";
-import { changePassword } from "@/lib/actions/auth";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ChangePasswordModalProps {
@@ -53,7 +52,28 @@ export function ChangePasswordModal({ isOpen, onClose, userEmail }: ChangePasswo
 
         setIsLoading(true);
         try {
-            await changePassword(currentPassword, newPassword);
+            const response = await fetch("/api/auth/change-password", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    currentPassword,
+                    newPassword,
+                }),
+            });
+
+            const result = await response.json().catch(() => null);
+
+            if (!response.ok || !result?.success) {
+                setError(
+                    typeof result?.error === "string"
+                        ? result.error
+                        : "Failed to update password."
+                );
+                return;
+            }
+
             setStep("success");
             setTimeout(() => {
                 handleClose();

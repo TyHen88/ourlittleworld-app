@@ -36,9 +36,12 @@ export async function PUT(
             return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
         }
 
-        // Verify user is member of the couple
-        const isMember = existingTransaction.couple?.members.some((m) => m.id === user.id) ?? false;
-        if (!isMember) {
+        // Verify user owns the personal transaction or is a member of the couple
+        const hasAccess =
+            existingTransaction.user_id === user.id ||
+            (existingTransaction.couple?.members.some((m) => m.id === user.id) ?? false);
+
+        if (!hasAccess) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -67,10 +70,10 @@ export async function PUT(
             { success: true, data: transaction },
             { status: 200 }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error updating transaction:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to update transaction" },
+            { error: error instanceof Error ? error.message : "Failed to update transaction" },
             { status: 500 }
         );
     }
@@ -107,9 +110,12 @@ export async function DELETE(
             return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
         }
 
-        // Verify user is member of the couple
-        const isMember = existingTransaction.couple?.members.some((m) => m.id === user.id) ?? false;
-        if (!isMember) {
+        // Verify user owns the personal transaction or is a member of the couple
+        const hasAccess =
+            existingTransaction.user_id === user.id ||
+            (existingTransaction.couple?.members.some((m) => m.id === user.id) ?? false);
+
+        if (!hasAccess) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -122,10 +128,10 @@ export async function DELETE(
             { success: true, message: "Transaction deleted" },
             { status: 200 }
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting transaction:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to delete transaction" },
+            { error: error instanceof Error ? error.message : "Failed to delete transaction" },
             { status: 500 }
         );
     }

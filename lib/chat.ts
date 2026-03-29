@@ -1,5 +1,6 @@
 export const COUPLE_CHAT_CATEGORY = "__COUPLE_CHAT__";
 export const COUPLE_CHAT_EVENT = "message.created";
+export const COUPLE_CHAT_MESSAGE_UPDATED_EVENT = "message.updated";
 
 export type CoupleChatMessageType = "text" | "image" | "sticker" | "mixed";
 
@@ -16,10 +17,16 @@ export interface CoupleChatSticker {
   theme: "rose" | "gold" | "sky" | "mint" | "violet" | "sunset";
 }
 
+export interface CoupleChatReaction {
+  emoji: string;
+  user_ids: string[];
+}
+
 export interface CoupleChatMessageMetadata {
   type: CoupleChatMessageType;
   images: string[];
   sticker: CoupleChatSticker | null;
+  reactions: CoupleChatReaction[];
 }
 
 export interface CoupleChatMessage {
@@ -55,6 +62,15 @@ export const COUPLE_CHAT_STICKERS: CoupleChatSticker[] = [
   { id: "rose-drop", emoji: "🌹", label: "Rose Drop", theme: "sunset" },
 ];
 
+export const COUPLE_CHAT_DEFAULT_REACTIONS = [
+  "💋",
+  "😾",
+  "😛",
+  "☺️",
+  "🦦",
+  "🙂",
+] as const;
+
 export function getCoupleChatChannelName(coupleId: string) {
   return `couple-chat:${coupleId}`;
 }
@@ -64,7 +80,9 @@ export function getCoupleChatStickerById(stickerId: string | null | undefined) {
     return null;
   }
 
-  return COUPLE_CHAT_STICKERS.find((sticker) => sticker.id === stickerId) ?? null;
+  return (
+    COUPLE_CHAT_STICKERS.find((sticker) => sticker.id === stickerId) ?? null
+  );
 }
 
 export function resolveCoupleChatMessageType(input: {
@@ -75,7 +93,8 @@ export function resolveCoupleChatMessageType(input: {
   const hasText = input.content.trim().length > 0;
   const hasImages = input.images.length > 0;
   const hasSticker = !!input.sticker;
-  const richPayloadCount = Number(hasText) + Number(hasImages) + Number(hasSticker);
+  const richPayloadCount =
+    Number(hasText) + Number(hasImages) + Number(hasSticker);
 
   if (hasSticker && !hasText && !hasImages) {
     return "sticker";
@@ -97,13 +116,19 @@ export function normalizeCoupleChatMetadata(
   fallback?: {
     content?: string;
     image_url?: string | null;
-  }
+  },
 ): CoupleChatMessageMetadata {
   const value = isRecord(metadata) ? metadata : {};
   const images = Array.isArray(value.images)
-    ? value.images.filter((image): image is string => typeof image === "string" && image.length > 0)
+    ? value.images.filter(
+        (image): image is string =>
+          typeof image === "string" && image.length > 0,
+      )
     : [];
-  const sticker = isRecord(value.sticker) ? normalizeCoupleChatSticker(value.sticker) : null;
+  const sticker = isRecord(value.sticker)
+    ? normalizeCoupleChatSticker(value.sticker)
+    : null;
+  const reactions = normalizeCoupleChatReactions(value.reactions);
 
   if (fallback?.image_url && !images.includes(fallback.image_url)) {
     images.unshift(fallback.image_url);
@@ -125,11 +150,12 @@ export function normalizeCoupleChatMetadata(
     type,
     images,
     sticker,
+    reactions,
   };
 }
 
 export function serializeCoupleChatMessage(
-  message: CoupleChatMessageRecord
+  message: CoupleChatMessageRecord,
 ): CoupleChatMessage {
   const metadata = normalizeCoupleChatMetadata(message.metadata, {
     content: message.content,
@@ -154,7 +180,7 @@ export function serializeCoupleChatMessage(
 }
 
 function normalizeCoupleChatSticker(
-  value: Record<string, unknown>
+  value: Record<string, unknown>,
 ): CoupleChatSticker | null {
   const stickerId = typeof value.id === "string" ? value.id : null;
   const presetSticker = getCoupleChatStickerById(stickerId);
@@ -175,7 +201,8 @@ function normalizeCoupleChatSticker(
       theme === "sunset")
   ) {
     return {
-      id: stickerId ?? `custom-${value.label.toLowerCase().replace(/\s+/g, "-")}`,
+      id:
+        stickerId ?? `custom-${value.label.toLowerCase().replace(/\s+/g, "-")}`,
       emoji: value.emoji,
       label: value.label,
       theme,
@@ -183,6 +210,64 @@ function normalizeCoupleChatSticker(
   }
 
   return null;
+}
+
+function normalizeCoupleChatReactions(value: unknown): CoupleChatReaction[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const reactions = new Map<string, Set<string>>();
+
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.emoji !== "string" ||
+      entry.emoji.length === 0
+    ) {
+      continue;
+    }
+
+    const userIds = Array.isArray(entry.user_ids)
+      ? entry.user_ids.filter(
+          (userId): userId is string =>
+            typeof userId === "string" && userId.length > 0,
+        )
+      : [];
+
+    if (userIds.length === 0) {
+      continue;
+    }
+
+    const normalizedUserIds = reactions.get(entry.emoji) ?? new Set<string>();
+    for (const userId of userIds) {
+      normalizedUserIds.add(userId);
+    }
+    reactions.set(entry.emoji, normalizedUserIds);
+  }
+
+  return [...reactions.entries()]
+    .map(([emoji, userIds]) => ({
+      emoji,
+      user_ids: [...userIds],
+    }))
+    .sort((left, right) => {
+      const leftIndex = COUPLE_CHAT_DEFAULT_REACTIONS.indexOf(
+        left.emoji as (typeof COUPLE_CHAT_DEFAULT_REACTIONS)[number],
+      );
+      const rightIndex = COUPLE_CHAT_DEFAULT_REACTIONS.indexOf(
+        right.emoji as (typeof COUPLE_CHAT_DEFAULT_REACTIONS)[number],
+      );
+
+      if (leftIndex !== -1 || rightIndex !== -1) {
+        return (
+          (leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) -
+          (rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex)
+        );
+      }
+
+      return left.emoji.localeCompare(right.emoji);
+    });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

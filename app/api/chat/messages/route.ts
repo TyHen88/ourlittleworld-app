@@ -173,6 +173,7 @@ export async function POST(request: NextRequest) {
             theme: sticker.theme,
           }
         : null,
+      reactions: [],
     } satisfies Prisma.InputJsonObject;
 
     const message = await prisma.post.create({

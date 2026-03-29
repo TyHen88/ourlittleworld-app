@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma"
 import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
+import { normalizeEmail } from "@/lib/password-auth"
 
 type AuthUserClaims = {
   full_name?: string | null
@@ -32,7 +33,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           Google({
             clientId: process.env.GOOGLE_CLIENT_ID!,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-            allowDangerousEmailAccountLinking: true,
           }),
         ]
       : []),
@@ -45,8 +45,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
+        const normalizedEmail = normalizeEmail(String(credentials.email))
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string }
+          where: { email: normalizedEmail }
         })
 
         if (!user || !user.password || user.is_deleted) return null
@@ -77,7 +79,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
 
-      if (!user?.id) return true
+      if (!user?.id) {
+        return false
+      }
 
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
@@ -93,6 +97,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       })
 
       if (dbUser?.is_deleted) {
+        if (account?.provider && account.provider !== "credentials" && account.providerAccountId) {
+          await prisma.account.deleteMany({
+            where: {
+              provider: account.provider,
+              providerAccountId: account.providerAccountId,
+            },
+          })
+
+          return "/login?error=DeletedOAuthAccountRetry"
+        }
+
         return false
       }
 
@@ -183,5 +198,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/login",
+    error: "/login",
   }
 })

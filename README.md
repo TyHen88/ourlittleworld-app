@@ -77,7 +77,9 @@ Notes:
   - Production: `https://your-app-domain.up.railway.app/api/auth/callback/google`
 - Railway disables outbound SMTP on Free, Trial, and Hobby plans. `RESEND_API_KEY` over HTTPS is the preferred email setup for Railway.
 - Generate VAPID keys for web push with `npx web-push generate-vapid-keys`.
-- Trip reminders are exposed at `GET/POST /api/push/trips/reminders` and should be called once per day with `Authorization: Bearer $CRON_SECRET` (or `?secret=...`).
+- Reminder delivery is exposed at `GET/POST /api/push/trips/reminders` and should be called on a recurring schedule with `Authorization: Bearer $CRON_SECRET` (or `?secret=...`).
+- Timed custom reminders need a frequent schedule. For near-real-time delivery, run the job every minute.
+- In local development, the app now starts an in-process reminder poller automatically. In production, prefer an external cron job; only enable `ENABLE_IN_PROCESS_REMINDER_SCHEDULER=true` if you are certain a single web instance should own reminder polling.
 
 ## Railway cron setup
 
@@ -86,11 +88,11 @@ Railway cron jobs run the service start command on a schedule and expect the pro
 Recommended setup:
 
 1. Keep your existing app service as the public web service.
-2. Create a second Railway service from the same repo, for example `trip-reminders-cron`.
+2. Create a second Railway service from the same repo, for example `reminders-cron`.
 3. Set the cron service start command to:
 
 ```bash
-npm run cron:trip-reminders
+npm run cron:reminders
 ```
 
 4. Add these variables to the cron service:
@@ -106,13 +108,13 @@ You can use `AUTH_URL` instead of `APP_URL` if it already points at your live we
 
 Examples:
 
-- Every day at 1:00 AM UTC: `0 1 * * *`
-- Every day at 11:00 PM Cambodia time (UTC+7): `0 16 * * *`
+- Every minute: `* * * * *`
+- Every 5 minutes: `*/5 * * * *`
 
 The cron runner script is:
 
 ```bash
-npm run cron:trip-reminders
+npm run cron:reminders
 ```
 
 It calls your deployed app at `/api/push/trips/reminders`, then exits cleanly for Railway cron compatibility.
