@@ -67,6 +67,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const [selectedReactionMessageId, setSelectedReactionMessageId] = useState<string | null>(null);
   const [reactionSheetMessageId, setReactionSheetMessageId] = useState<string | null>(null);
   const [reactionRequests, setReactionRequests] = useState<Record<string, string>>({});
+  const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
   const [messengerHeight, setMessengerHeight] = useState<number | null>(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -98,6 +99,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     setHoveredReactionMessageId(null);
     setSelectedReactionMessageId(null);
     setReactionSheetMessageId(null);
+    setShowFullEmojiPicker(false);
   };
 
   const scrollToLatestMessage = (behavior: ScrollBehavior = "auto") => {
@@ -225,6 +227,13 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [reactionSheetMessageId, selectedReactionMessageId]);
+
+  // Modal-based reaction UI logic
+  useEffect(() => {
+    if (!reactionSheetMessageId) {
+      setShowFullEmojiPicker(false);
+    }
+  }, [reactionSheetMessageId]);
 
   useEffect(() => {
     if (!coupleId || isSingle) {
@@ -579,14 +588,14 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
               const reactions = message.metadata.reactions;
               const stickerOnly =
                 !!sticker && messageImages.length === 0 && message.content.trim().length === 0;
-              const reactionRequestInFlight = Boolean(reactionRequests[message.id]);
+              const isReactionInFlight = Boolean(reactionRequests[message.id]);
               const showReactionPicker = activeReactionMessageId === message.id;
 
               return (
                 <motion.div
                   key={message.id}
                   data-reaction-message-id={message.id}
-                  layout="position"
+                  layout
                   initial={{
                     opacity: 0,
                     y: 12,
@@ -602,11 +611,11 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     y: -8,
                   }}
                   transition={{
-                    duration: 0.22,
+                    duration: 0.25,
                     ease: [0.22, 1, 0.36, 1],
                   }}
                   className={cn(
-                    "flex w-fit max-w-[84%] flex-col",
+                    "relative flex w-fit max-w-[84%] flex-col",
                     isMine ? "self-end items-end" : "self-start items-start"
                   )}
                   onMouseEnter={() => setHoveredReactionMessageId(message.id)}
@@ -616,11 +625,110 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     )
                   }
                 >
+                  <AnimatePresence>
+                    {showReactionPicker && (
+                      <motion.div
+                        data-reaction-menu-id={message.id}
+                        initial={{ opacity: 0, y: 8, scale: 0.8 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.8 }}
+                        transition={{
+                          type: "spring",
+                          damping: 18,
+                          stiffness: 280,
+                        }}
+                        className={cn(
+                          "absolute -top-14 z-20 mb-2 flex items-center gap-1.5 rounded-full border border-slate-200/50 bg-white shadow-2xl backdrop-blur-md p-1.5",
+                          isMine ? "right-0" : "left-0"
+                        )}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {COUPLE_CHAT_DEFAULT_REACTIONS.map((emoji) => {
+                          const reactedByMe = message.metadata.reactions.some(
+                            (reaction) =>
+                              reaction.emoji === emoji &&
+                              reaction.user_ids.includes(user.id)
+                          );
+
+                          return (
+                            <motion.button
+                              key={`floating-${emoji}`}
+                              type="button"
+                              whileHover={{ scale: 1.15 }}
+                              whileTap={{ scale: 0.85 }}
+                              disabled={isReactionInFlight}
+                              onClick={() => void handleReactionToggle(message.id, emoji)}
+                              className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded-full text-xl transition-colors duration-200",
+                                reactedByMe
+                                  ? "bg-romantic-blush/40 ring-1 ring-romantic-heart/30"
+                                  : "hover:bg-slate-50"
+                              )}
+                            >
+                              {emoji}
+                            </motion.button>
+                          );
+                        })}
+                        <div className="mx-1 h-4 w-px bg-slate-200/60" />
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.85 }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setShowFullEmojiPicker((current) => !current);
+                          }}
+                          className={cn(
+                            "flex h-9 w-9 items-center justify-center rounded-full text-lg transition-colors duration-200 hover:bg-slate-50",
+                            showFullEmojiPicker && "bg-slate-100 text-romantic-heart rotate-45"
+                          )}
+                        >
+                          +
+                        </motion.button>
+
+                        {/* Triangle pointer */}
+                        <div className={cn(
+                          "absolute top-full -mt-[2px] h-3 w-4 drop-shadow-sm",
+                          isMine ? "right-6" : "left-6"
+                        )}>
+                          <svg viewBox="0 0 16 8" className="h-full w-full fill-white">
+                            <path d="M0 0 L8 8 L16 0 Z" />
+                          </svg>
+                        </div>
+
+                        {showFullEmojiPicker && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className={cn(
+                              "absolute bottom-full mb-3 overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-2xl",
+                              isMine ? "right-0" : "left-0"
+                            )}
+                            style={{ width: "min(300px, 80vw)" }}
+                          >
+                            <EmojiPicker
+                              lazyLoadEmojis
+                              searchPlaceHolder="Search emoji"
+                              skinTonesDisabled
+                              width="100%"
+                              height={320}
+                              previewConfig={{ showPreview: false }}
+                              onEmojiClick={(emojiData: EmojiClickData) => {
+                                void handleReactionToggle(message.id, emojiData.emoji);
+                              }}
+                            />
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <div
                     onClick={(event) => handleMessageSelect(event, message.id)}
                     onDoubleClick={(event) => handleMessageDoubleClick(event, message.id)}
                     className={cn(
-                      "max-w-full cursor-pointer overflow-hidden shadow-sm ring-1 ring-transparent transition-shadow duration-300",
+                      "max-w-full cursor-pointer overflow-hidden shadow-sm ring-2 transition-all duration-300 active:scale-[0.98]",
                       stickerOnly
                         ? cn(
                             "rounded-[1.45rem] border px-3.5 py-2.5",
@@ -629,7 +737,11 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                         : isMine
                           ? "rounded-[1.35rem] rounded-br-md bg-gradient-button px-3 py-2.5 text-white shadow-romantic-heart/20"
                           : "rounded-[1.35rem] rounded-bl-md border border-romantic-blush/30 bg-white px-3 py-2.5 text-slate-700 shadow-slate-200/70",
-                      showReactionPicker && "ring-romantic-heart/20"
+                      showReactionPicker
+                        ? isMine
+                          ? "ring-romantic-heart/50 brightness-110"
+                          : "ring-romantic-heart/30 bg-romantic-blush/10"
+                        : "ring-transparent"
                     )}
                   >
                     <p
@@ -736,7 +848,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     </p>
                   </div>
 
-                  {(reactions.length > 0 || showReactionPicker) && (
+                  {reactions.length > 0 && (
                     <div
                       className={cn(
                         "mt-1.5 flex max-w-full flex-wrap items-center gap-1.5",
@@ -749,14 +861,17 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                           <button
                             key={`${message.id}-${reaction.emoji}`}
                             type="button"
-                            disabled={reactionRequestInFlight}
-                            onClick={() => void handleReactionToggle(message.id, reaction.emoji)}
+                            disabled={isReactionInFlight}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleReactionToggle(message.id, reaction.emoji);
+                            }}
                             className={cn(
                               "inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold transition",
                               reactedByMe
                                 ? "border-romantic-heart/40 bg-romantic-blush/20 text-romantic-heart"
                                 : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
-                              reactionRequestInFlight && "cursor-not-allowed opacity-60"
+                              isReactionInFlight && "cursor-not-allowed opacity-60"
                             )}
                           >
                             <span className="text-sm leading-none">{reaction.emoji}</span>
@@ -764,66 +879,8 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                           </button>
                         );
                       })}
-
                     </div>
                   )}
-
-                  <AnimatePresence initial={false}>
-                    {showReactionPicker && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 6 }}
-                        className={cn(
-                          "mt-1.5 flex max-w-full flex-wrap items-center gap-2 rounded-[1.25rem] border border-slate-200 bg-white px-3 py-2 shadow-sm",
-                          isMine ? "justify-end" : "justify-start"
-                        )}
-                      >
-                        {COUPLE_CHAT_DEFAULT_REACTIONS.map((emoji) => {
-                          const reactedByMe = message.metadata.reactions.some(
-                            (reaction) =>
-                              reaction.emoji === emoji &&
-                              reaction.user_ids.includes(user.id)
-                          );
-
-                          return (
-                            <button
-                              key={`${message.id}-quick-${emoji}`}
-                              type="button"
-                              disabled={reactionRequestInFlight}
-                              onClick={() => void handleReactionToggle(message.id, emoji)}
-                              className={cn(
-                                "inline-flex h-9 w-9 items-center justify-center rounded-full text-lg transition",
-                                reactedByMe
-                                  ? "bg-romantic-blush/30 ring-1 ring-romantic-heart/30"
-                                  : "bg-slate-50 hover:bg-slate-100",
-                                reactionRequestInFlight && "cursor-not-allowed opacity-60"
-                              )}
-                              aria-label={`React with ${emoji}`}
-                            >
-                              {emoji}
-                            </button>
-                          );
-                        })}
-
-                        <button
-                          type="button"
-                          disabled={reactionRequestInFlight}
-                          onClick={() => {
-                            setSelectedReactionMessageId(message.id);
-                            setReactionSheetMessageId(message.id);
-                          }}
-                          className={cn(
-                            "inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100",
-                            reactionRequestInFlight && "cursor-not-allowed opacity-60"
-                          )}
-                          aria-label="Open full emoji picker"
-                        >
-                          +
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </motion.div>
               );
             })}
@@ -831,14 +888,14 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
         )}
 
         <div ref={bottomAnchorRef} className="h-px shrink-0" aria-hidden="true" />
-      </div>
+    </div>
 
-      <div
-        className={cn(
-          "border-t border-slate-100 bg-white px-3 transition-all sm:px-4",
-          isKeyboardOpen ? "py-3" : "py-4"
-        )}
-      >
+    <div
+      className={cn(
+        "border-t border-slate-100 bg-white px-3 transition-all sm:px-4",
+        isKeyboardOpen ? "py-3" : "py-4"
+      )}
+    >
         {error && (
           <p className="mb-3 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
         )}
@@ -938,73 +995,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
         </div>
       </div>
     </div>
-
-      <AnimatePresence initial={false}>
-        {reactionSheetMessageId && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end bg-slate-900/35"
-            onClick={closeReactionUi}
-          >
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full rounded-t-[2rem] bg-white shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-slate-200" />
-
-              <div className="flex items-start justify-between gap-4 px-4 pb-3 pt-4 sm:px-5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    React To Message
-                  </p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {reactionSheetMessage
-                      ? reactionSheetMessage.author_id === user.id
-                        ? "Choose an emoji for your message."
-                        : `Choose an emoji for ${reactionSheetMessage.author.full_name?.split(" ")[0] || "your partner"}'s message.`
-                      : "Choose an emoji."}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeReactionUi}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
-                  aria-label="Close emoji picker"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="border-t border-slate-100 p-3 sm:p-4">
-                <div className="overflow-hidden rounded-[1.5rem] border border-slate-200">
-                  <EmojiPicker
-                    lazyLoadEmojis
-                    searchPlaceHolder="Search emoji"
-                    skinTonesDisabled
-                    width="100%"
-                    height={420}
-                    previewConfig={{ showPreview: false }}
-                    onEmojiClick={(emojiData: EmojiClickData) => {
-                      if (!reactionSheetMessageId) {
-                        return;
-                      }
-
-                      void handleReactionToggle(reactionSheetMessageId, emojiData.emoji);
-                    }}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   );
 }
