@@ -11,6 +11,7 @@ import { Heart, Stars, MapPin, Sparkles, Pencil, Wallet, TrendingUp, Calendar, B
 import { DailyMoodBadge } from "@/components/moods/DailyMoodBadge";
 import { formatAnniversaryDate } from "@/lib/utils/date-utilities";
 import { AIFloatingAdvisor } from "@/components/ai/AIFloatingAdvisor";
+import { intervalToDuration, differenceInDays } from "date-fns";
 
 interface DashboardUser {
     id: string;
@@ -47,7 +48,7 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ user, profile, couple, daysTogether, daysActive }: DashboardClientProps) {
-    const [displayMode, setDisplayMode] = useState<"days" | "months">("days");
+    const [displayMode, setDisplayMode] = useState<"days" | "months" | "ymd" | "md" | "dh">("days");
     const isSingle = profile?.user_type === "SINGLE";
     const router = useRouter();
 
@@ -61,13 +62,46 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
         ? formatAnniversaryDate(couple?.start_date)
         : "Open Couple Settings";
 
-    // Calculate months together
-    const monthsTogether = Math.floor(daysTogether / 30);
-    const relationshipCounterLabel = hasAnniversary
-        ? displayMode === "days"
-            ? `Day ${daysTogether.toLocaleString()} Together`
-            : `${monthsTogether} Months Together`
-        : "Set your special day";
+    // Calculate relationship duration labels based on anniversary date
+    const anniversaryDate = couple?.start_date ? new Date(couple.start_date) : null;
+    const now = new Date();
+    
+    // Decompose duration using date-fns
+    const duration = anniversaryDate ? intervalToDuration({ start: anniversaryDate, end: now }) : null;
+    const totalDays = anniversaryDate ? differenceInDays(now, anniversaryDate) + 1 : 0;
+    
+    const relationshipCounterLabel = !anniversaryDate 
+        ? "Set your special day" 
+        : (() => {
+            switch (displayMode) {
+                case "days":
+                    return `Day ${totalDays.toLocaleString()} Together`;
+                case "months": {
+                    const months = (duration?.years || 0) * 12 + (duration?.months || 0);
+                    return `${months} Months Together`;
+                }
+                case "ymd": {
+                    const parts = [];
+                    if (duration?.years) parts.push(`${duration.years} Years`);
+                    if (duration?.months) parts.push(`${duration.months} Months`);
+                    if (duration?.days) parts.push(`${duration.days} Days`);
+                    return parts.length > 0 ? parts.join(", ") : "Day 1 Together";
+                }
+                case "md": {
+                    const totalMonths = (duration?.years || 0) * 12 + (duration?.months || 0);
+                    const parts = [];
+                    if (totalMonths > 0) parts.push(`${totalMonths} Months`);
+                    if (duration?.days) parts.push(`${duration.days} Days`);
+                    return parts.length > 0 ? parts.join(", ") : "Day 1 Together";
+                }
+                case "dh": {
+                    const hours = duration?.hours || 0;
+                    return `${totalDays} Days, ${hours} Hours`;
+                }
+                default:
+                    return `Day ${totalDays.toLocaleString()} Together`;
+            }
+        })();
 
     useEffect(() => {
         const routes = [
@@ -101,16 +135,16 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         )}
                         {isSingle ? "Personal Sanctuary" : "Our Little World"}
                     </h1>
-                    <p className={`text-sm font-bold uppercase tracking-widest pl-1 ${isSingle ? "text-emerald-600/60" : "text-slate-400"}`}>
+                    <p className={`text-sm font-bold tracking-widest pl-1 ${isSingle ? "text-emerald-600/60" : "text-slate-400"}`}>
                         Welcome, {profile?.full_name?.split(" ")[0] || user.name?.split(" ")[0] || "Explorer"}!
                     </p>
                 </div>
 
                 <div className="flex items-center gap-4">
                     {couple ? (
-                        <div className="flex items-center -space-x-3">
+                        <div className="flex items-center -space-x-4">
                             <div className="relative">
-                                <Avatar className="w-10 h-10 border-4 border-white shadow-md">
+                                <Avatar className="w-12 h-12 border-4 border-white shadow-md">
                                     <AvatarFallback className="bg-romantic-blush text-romantic-heart font-bold">
                                         {profile?.avatar_url ? (
                                             <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -127,7 +161,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                             </div>
 
                             <div className="relative">
-                                <Avatar className="w-10 h-10 border-4 border-white shadow-md">
+                                <Avatar className="w-12 h-12 border-4 border-white shadow-md">
                                     <AvatarFallback className="bg-romantic-lavender text-slate-600 font-bold overflow-hidden">
                                         {otherPartner?.avatar_url ? (
                                             <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -144,7 +178,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                             </div>
                         </div>
                     ) : (
-                        <Avatar className="w-12 h-12 border-4 border-white shadow-md">
+                        <Avatar className="w-14 h-14 border-4 border-white shadow-md">
                             <AvatarFallback className="bg-gradient-love text-white font-bold">
                                 {profile?.avatar_url ? (
                                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -162,8 +196,8 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                     animate={{ opacity: 1, y: 0 }}
                 >
                     <Card className="relative overflow-hidden p-6 border-none bg-gradient-to-br from-emerald-50 via-teal-50 to-white shadow-xl rounded-3xl">
-                        <div className="relative z-10 flex items-center gap-5">
-                            <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center shadow-inner group overflow-hidden border-4 border-white">
+                        <div className="relative z-10 flex items-center gap-6">
+                            <div className="w-24 h-24 bg-emerald-100 rounded-3xl flex items-center justify-center shadow-inner group overflow-hidden border-4 border-white">
                                 <Avatar className="w-full h-full rounded-none">
                                     <AvatarFallback className="bg-emerald-100 text-emerald-700 text-2xl font-black">
                                         {profile?.avatar_url ? (
@@ -176,7 +210,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                 <h3 className="text-xl font-bold text-slate-800">Your Personal Journey</h3>
                                 <p className="text-slate-500 font-medium">Capture moments and grow daily.</p>
                                 <div className="pt-2 flex gap-2">
-                                    <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                    <span className="text-[10px] font-black tracking-widest bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
                                         Day {daysActive} explorer
                                     </span>
                                 </div>
@@ -197,9 +231,9 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <Card className="relative overflow-hidden p-5 border-none bg-gradient-to-br from-romantic-blush/40 via-romantic-lavender/40 to-white shadow-xl rounded-3xl">
                             <div className="relative z-10 text-center space-y-4">
                                 <div className="flex flex-col items-center space-y-3">
-                                    <div className="flex items-center justify-center -space-x-3">
+                                    <div className="flex items-center justify-center -space-x-5">
                                         <div className="relative group">
-                                            <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
+                                            <Avatar className="w-24 h-24 border-4 border-white shadow-xl relative">
                                                 <AvatarFallback className="bg-romantic-blush text-romantic-heart text-lg font-bold overflow-hidden">
                                                     {profile?.avatar_url ? (
                                                         <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -218,7 +252,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                             <Heart className="text-romantic-heart fill-romantic-heart w-5 h-5 animate-heart-beat" />
                                         </div>
                                         <div className="relative group">
-                                            <Avatar className="w-16 h-16 border-3 border-white shadow-lg relative">
+                                            <Avatar className="w-24 h-24 border-4 border-white shadow-xl relative">
                                                 <AvatarFallback className="bg-romantic-lavender text-slate-600 text-lg font-bold overflow-hidden">
                                                     {otherPartner?.avatar_url ? (
                                                         <img src={otherPartner.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -239,7 +273,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                         <h3 className="text-lg font-bold text-slate-800">
                                             {primaryPartnerName} & {secondaryPartnerName}
                                         </h3>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide bg-white/50 px-2.5 py-0.5 rounded-full">
+                                        <span className="text-xs font-bold text-slate-400 tracking-wide bg-white/50 px-2.5 py-0.5 rounded-full">
                                             {coupleName}
                                         </span>
                                     </div>
@@ -252,9 +286,13 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                                 router.push("/settings?section=couple");
                                                 return;
                                             }
-                                            setDisplayMode(displayMode === "days" ? "months" : "days");
+                                            
+                                            // Handle cycle: days -> months -> ymd -> md -> dh -> days
+                                            const modes: (typeof displayMode)[] = ["days", "months", "ymd", "md", "dh"];
+                                            const nextIndex = (modes.indexOf(displayMode) + 1) % modes.length;
+                                            setDisplayMode(modes[nextIndex]);
                                         }}
-                                        className={`text-lg font-bold text-slate-800 transition-colors ${hasAnniversary ? "hover:text-romantic-heart cursor-pointer" : "hover:text-romantic-heart cursor-pointer"}`}
+                                        className={`text-lg font-semibold text-slate-800 transition-colors tracking-tight ${hasAnniversary ? "hover:text-romantic-heart cursor-pointer" : "hover:text-romantic-heart cursor-pointer"}`}
                                     >
                                         {relationshipCounterLabel}
                                     </button>
@@ -262,7 +300,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                     {hasAnniversary ? (
                                         <div className="flex items-center justify-center gap-1.5 bg-slate-50/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/50 shadow-sm w-fit mx-auto">
                                             <Calendar className="text-romantic-heart w-3 h-3" />
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                            <p className="text-[10px] font-bold text-slate-500 tracking-wide">
                                                 {anniversaryLabel}
                                             </p>
                                         </div>
@@ -272,7 +310,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                             className="flex items-center justify-center gap-1.5 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full border border-romantic-blush/60 shadow-sm w-fit mx-auto hover:border-romantic-heart hover:bg-white transition-colors"
                                         >
                                             <Calendar className="text-romantic-heart w-3 h-3" />
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+                                            <p className="text-[10px] font-bold text-slate-500 tracking-wide">
                                                 {anniversaryLabel}
                                             </p>
                                         </button>
@@ -413,7 +451,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                 <section className="space-y-6">
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-slate-800">Wealth Planner</h3>
-                        <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest px-3 py-1 bg-emerald-50 rounded-full italic">Growing</span>
+                        <span className="text-xs font-bold text-emerald-600 tracking-widest px-3 py-1 bg-emerald-50 rounded-full italic">Growing</span>
                     </div>
                     {/* Reuse BudgetOverview or create a solo version if needed, but for now it should handle null coupleId */}
                     <BudgetOverview id={user?.id} />
@@ -423,7 +461,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                     <section className="space-y-6">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-slate-800">Finances</h3>
-                            <span className="text-xs font-bold text-romantic-heart uppercase tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
+                            <span className="text-xs font-bold text-romantic-heart tracking-widest px-3 py-1 bg-romantic-blush/30 rounded-full italic">Healthy</span>
                         </div>
                         <BudgetOverview id={couple?.id} />
                     </section>
@@ -440,7 +478,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                 <div className="flex items-center gap-2">
                     <Gift className="text-romantic-heart" size={20} />
                     <h3 className="text-lg font-bold text-slate-800">New Feature</h3>
-                    <span className="text-xs font-bold text-amber-600 uppercase tracking-widest px-2 py-0.5 bg-amber-50 rounded-full">New</span>
+                    <span className="text-xs font-bold text-amber-600 tracking-widest px-2 py-0.5 bg-amber-50 rounded-full">New</span>
                 </div>
                 <Card className="p-5 border-none bg-gradient-to-br from-slate-50 to-white shadow-sm rounded-3xl">
                     <div className="space-y-4">
@@ -452,7 +490,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                 <h4 className="font-bold text-slate-800 text-sm">Smart Reminders</h4>
                                 <p className="text-xs text-slate-500 mt-1">To-do reminders, trip alerts, and push notifications</p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
+                                    <span className="text-[10px] text-green-600 font-bold tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
                                 </div>
                             </div>
                             <ArrowRight className="text-slate-300 group-hover:text-amber-400 transition-colors mt-1" size={16} />
@@ -468,7 +506,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                 <h4 className="font-bold text-slate-800 text-sm">Calendar View</h4>
                                 <p className="text-xs text-slate-500 mt-1">Visualize spending by date & week</p>
                                 <div className="flex items-center gap-1.5 mt-2">
-                                    <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
+                                    <span className="text-[10px] text-green-600 font-bold tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">Live</span>
                                 </div>
                             </div>
                             <ArrowRight className="text-slate-300 group-hover:text-blue-400 transition-colors mt-1" size={16} />
@@ -487,7 +525,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                                             Send private messages only your partner can read
                                         </p>
                                         <div className="flex items-center gap-1.5 mt-2">
-                                            <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">
+                                            <span className="text-[10px] text-green-600 font-bold tracking-wider bg-green-50 px-1.5 py-0.5 rounded-full">
                                                 Live
                                             </span>
                                         </div>
