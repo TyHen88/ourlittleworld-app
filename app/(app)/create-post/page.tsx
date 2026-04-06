@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { POST_KEYS, prependPostToCaches, removePostFromCaches } from "@/hooks/use-posts";
 import { toast } from "@/lib/toast";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 type PreviewImage = {
     id: string;
@@ -344,7 +345,7 @@ export default function CreatePostPage() {
     if (isLoading) {
         const isSingle = profile?.user_type === 'SINGLE';
         return (
-            <div className={cn("min-h-screen flex items-center justify-center", isSingle ? "bg-emerald-50" : "bg-gradient-love")}>
+            <div className={cn("min-h-[100dvh] flex items-center justify-center", isSingle ? "bg-emerald-50" : "bg-gradient-love")}>
                 <Loader2 className={cn("w-8 h-8 animate-spin", isSingle ? "text-emerald-500" : "text-romantic-heart")} />
             </div>
         );
@@ -353,7 +354,7 @@ export default function CreatePostPage() {
     const isSingle = profile?.user_type === 'SINGLE';
 
     return (
-        <div className={cn("min-h-screen", isSingle ? "bg-gradient-to-br from-emerald-50/50 to-indigo-50/50" : "bg-gradient-love")}>
+        <div className={cn("min-h-[100dvh]", isSingle ? "bg-gradient-to-br from-emerald-50/50 to-indigo-50/50" : "bg-gradient-love")}>
             <AnimatePresence>
                 {submitting && (
                     <motion.div
@@ -371,16 +372,11 @@ export default function CreatePostPage() {
                 )}
             </AnimatePresence>
 
-            <div className={cn("sticky top-0 z-20 backdrop-blur-xl border-b", isSingle ? "bg-emerald-50/70 border-emerald-100" : "bg-white/70 border-romantic-blush/30")}>
+            <div className={cn("sticky top-0 z-20 border-b md:backdrop-blur-xl", isSingle ? "bg-emerald-50/92 md:bg-emerald-50/70 border-emerald-100" : "bg-white/92 md:bg-white/70 border-romantic-blush/30")}>
                 <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-                    <button
-                        onClick={() => router.back()}
-                        className="p-2 -ml-2 hover:bg-romantic-blush/30 rounded-full transition-colors"
-                        aria-label="Close"
-                        type="button"
-                    >
-                        <X size={22} className="text-slate-700" />
-                    </button>
+                    <AppBackButton
+                        fallbackHref="/feed"
+                    />
                     <h1 className="text-base font-black text-slate-800 tracking-tight">
                         {isSingle ? "New Journal Entry" : "Create Memory"}
                     </h1>
@@ -616,7 +612,7 @@ export default function CreatePostPage() {
             </div>
 
             {/* Bottom options sheet (Facebook-style) */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-romantic-blush/30 rounded-t-3xl">
+            <div className="fixed bottom-0 left-0 right-0 rounded-t-3xl border-t border-romantic-blush/30 bg-white/92 md:bg-white/80 md:backdrop-blur-xl">
                 <div className="max-w-2xl mx-auto">
                     <input
                         ref={fileInputRef}

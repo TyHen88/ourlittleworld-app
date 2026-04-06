@@ -1,11 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Code2, Heart, Instagram, Mail, Phone, Send, Sparkles, UserCheck2 } from "lucide-react";
+import { Code2, Heart, Phone, Send, Sparkles, UserCheck2 } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 const SOCIALS = [
     { icon: Send, label: "Telegram", href: "https://t.me/ahh_tiii", color: "text-pink-600 bg-pink-50" },
@@ -15,16 +16,13 @@ const SOCIALS = [
 
 export default function AboutDeveloperPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
+        <div className="min-h-[100dvh] bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
             <div className="max-w-2xl mx-auto space-y-8 text-center">
                 {/* Header */}
                 <header className="flex items-center gap-4 text-left">
-                    <Link
-                        href="/settings"
-                        className="p-3 rounded-2xl bg-white hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <ArrowLeft className="text-slate-600" size={20} />
-                    </Link>
+                    <AppBackButton
+                        fallbackHref="/settings"
+                    />
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
                             <UserCheck2 className="text-pink-600" size={28} />
@@ -64,8 +62,8 @@ export default function AboutDeveloperPage() {
                             </div>
 
                             <p className="text-slate-600 text-sm leading-relaxed max-w-md mx-auto">
-                                "Our Little World was born from the desire to create a more intentional space for couples.
-                                In a world of noisy social media, we wanted something private, beautiful, and meaningful."
+                                &ldquo;Our Little World was born from the desire to create a more intentional space for couples.
+                                In a world of noisy social media, we wanted something private, beautiful, and meaningful.&rdquo;
                             </p>
 
                             <div className="flex items-center justify-center gap-4 pt-4">

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { CoupleFeedPost } from "@/components/love/CoupleFeedPost";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { MessageCircleHeart, Sparkles, Image as ImageIcon, Clock, Heart as HeartIcon, Search, ArrowLeft, ChevronRight, FolderOpen } from "lucide-react";
+import { MessageCircleHeart, Sparkles, Image as ImageIcon, Clock, Heart as HeartIcon, Search, ChevronRight, FolderOpen } from "lucide-react";
 import { usePosts, prependPostToCaches } from "@/hooks/use-posts";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Stars, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 type FilterType = "all" | "photos" | "recent" | "favorites";
 
@@ -344,9 +345,9 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                     {isSingle ? "A collection of your journey and growth" : "Every moment with you is a gift"}
                                 </p>
                             </div>
-                            <button onClick={() => router.push("/dashboard")} className="rounded-full bg-slate-50 p-1.5 transition-colors hover:bg-slate-100 sm:p-2">
-                                <ArrowLeft className="text-slate-500" size={18} />
-                            </button>
+                            <AppBackButton
+                                fallbackHref="/dashboard"
+                            />
                         </div>
 
                         <div className="flex flex-wrap gap-2">

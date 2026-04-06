@@ -15,6 +15,7 @@ import { FullPageLoader } from "@/components/FullPageLoader";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import Link from "next/link";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 export default function BudgetPage() {
     const { user, couple, profile } = useCouple();
@@ -78,25 +79,33 @@ export default function BudgetPage() {
     }
 
     return (
-        <div className="p-6 space-y-6 max-w-2xl mx-auto pb-32">
+        <div className="p-4 space-y-6 max-w-2xl mx-auto pb-32">
             <motion.header
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-3"
             >
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            <Wallet className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={32} />
-                            {isSingle ? "My Balance" : "Shared Balance"}
-                        </h1>
-                        <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
-                            {isSingle ? "Track what you earned, spent, saved, and what remains" : "Track what came in, what went out, and what remains together"}
-                            <Sparkles className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={14} />
-                        </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                        <AppBackButton
+                            fallbackHref="/dashboard"
+                            className="mt-1"
+                        />
+                        <div>
+                            <h1 className="flex items-center gap-2.5 mt-3 text-xl font-black tracking-tight text-slate-800">
+                                <span
+                                    className={cn(
+                                        "inline-flex size-7 shrink-0 items-center justify-center",
+                                        isSingle ? "text-emerald-500" : "text-romantic-heart",
+                                    )}
+                                >
+                                    <Wallet size={22} strokeWidth={2.35} />
+                                </span>
+                                <span>{isSingle ? "My Balance" : "Shared Balance"}</span>
+                            </h1>
+                        </div>
                     </div>
                 </div>
-
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Focus</p>

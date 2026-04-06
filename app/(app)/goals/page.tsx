@@ -10,13 +10,13 @@ import { useCouple } from "@/hooks/use-couple";
 import { useSavingsGoals, useUpdateSavingsGoal } from "@/hooks/use-savings-goals";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { cn } from "@/lib/utils";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 import {
     Target,
     Plus,
     TrendingUp,
     Calendar,
     Sparkles,
-    ArrowLeft,
     Trophy,
     Rocket,
     Home,
@@ -31,12 +31,13 @@ import {
     Edit,
     Trash2,
     Flag,
+    type LucideIcon,
 } from "lucide-react";
 import { format, differenceInDays, differenceInMonths, differenceInYears } from "date-fns";
 import { AddGoalModal } from "@/components/goals/AddGoalModal";
 import { EditGoalModal } from "@/components/goals/EditGoalModal";
 
-const GOAL_ICONS: Record<string, any> = {
+const GOAL_ICONS: Record<string, LucideIcon> = {
     Target: Target,
     Home: Home,
     Plane: Plane,
@@ -84,7 +85,7 @@ export default function GoalsPage() {
     // Calculate statistics
     const stats = useMemo(() => {
         if (!goals) return { total: 0, active: 0, completed: 0, totalSaved: 0, totalTarget: 0 };
-        
+
         const active = goals.filter(g => !g.is_completed);
         const completed = goals.filter(g => g.is_completed);
         const totalSaved = goals.reduce((sum, g) => sum + parseFloat(String(g.current_amount)), 0);
@@ -104,9 +105,9 @@ export default function GoalsPage() {
         if (!deadline) return null;
         const deadlineDate = new Date(deadline);
         const now = new Date();
-        
+
         if (deadlineDate < now) return { text: "Overdue", color: "text-red-600" };
-        
+
         const days = differenceInDays(deadlineDate, now);
         const months = differenceInMonths(deadlineDate, now);
         const years = differenceInYears(deadlineDate, now);
@@ -154,7 +155,7 @@ export default function GoalsPage() {
     }
 
     return (
-        <div className="p-6 space-y-6 max-w-2xl mx-auto pb-32">
+        <div className="p-4 space-y-6 max-w-2xl mx-auto pb-32">
             {/* Header */}
             <motion.header
                 initial={{ opacity: 0, y: -20 }}
@@ -172,12 +173,9 @@ export default function GoalsPage() {
                             <Sparkles className={effectiveIsSingle ? "text-emerald-500" : "text-romantic-heart"} size={14} />
                         </p>
                     </div>
-                    <a
-                        href="/dashboard"
-                        className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
-                    >
-                        <ArrowLeft className="text-slate-500" size={20} />
-                    </a>
+                    <AppBackButton
+                        fallbackHref="/dashboard"
+                    />
                 </div>
 
             </motion.header>
@@ -222,7 +220,7 @@ export default function GoalsPage() {
                 ].map((tab) => (
                     <button
                         key={tab.value}
-                        onClick={() => setFilter(tab.value as any)}
+                        onClick={() => setFilter(tab.value as "all" | "active" | "completed")}
                         className={cn(
                             "flex-1 py-2 px-4 rounded-xl text-sm font-bold transition-all",
                             filter === tab.value
@@ -257,7 +255,7 @@ export default function GoalsPage() {
                             {filter === "completed" ? "No Completed Goals Yet" : (isSingle ? "Start Your First Goal!" : "Start Your First Goal Together!")}
                         </h3>
                         <p className="text-sm text-slate-500 max-w-sm mx-auto mb-6">
-                            {filter === "completed" 
+                            {filter === "completed"
                                 ? "Complete your active goals to see them here"
                                 : "Set a savings goal and track your progress together. Dream big!"
                             }
@@ -294,8 +292,8 @@ export default function GoalsPage() {
                                     >
                                         <Card className={cn(
                                             "p-5 border-none rounded-3xl shadow-sm relative overflow-hidden",
-                                            goal.is_completed 
-                                                ? "bg-gradient-to-br from-green-50 to-emerald-50" 
+                                            goal.is_completed
+                                                ? "bg-gradient-to-br from-green-50 to-emerald-50"
                                                 : "bg-white"
                                         )}>
                                             {/* Completed Badge */}

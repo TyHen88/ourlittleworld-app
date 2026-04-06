@@ -20,7 +20,7 @@ export default async function ChatPage() {
   const couple = profile?.couple ?? null;
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-5 sm:pt-4 md:mx-auto md:w-full md:max-w-2xl md:px-6">
+    <div className="flex min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden pt-5 sm:pt-4 md:mx-auto md:w-full md:max-w-2xl md:px-6 lg:min-h-[calc(100dvh-2.5rem)] lg:max-h-[calc(100dvh-2.5rem)]">
       <ChatHeader user={{ id: session.user.id }} couple={couple} />
 
       <CoupleMessenger

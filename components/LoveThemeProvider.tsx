@@ -9,7 +9,7 @@ export function LoveThemeProvider({ children }: { children: React.ReactNode }) {
       defaultTheme="light" 
       forcedTheme="light"
     >
-      <div className="selection:bg-romantic-petal/30 min-h-screen">
+      <div className="selection:bg-romantic-petal/30 min-h-[100dvh]">
         {children}
       </div>
     </NextThemesProvider>

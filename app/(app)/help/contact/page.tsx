@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, MessageCircle, Send, Sparkles } from "lucide-react";
+import { Mail, MessageCircle, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sendSupportEmail } from "@/lib/actions/support";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 export default function ContactSupportPage() {
     const [sent, setSent] = useState(false);
@@ -38,22 +39,19 @@ export default function ContactSupportPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
+        <div className="min-h-[100dvh] bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
             <div className="max-w-2xl mx-auto space-y-8">
                 {/* Header */}
                 <header className="flex items-center gap-4">
-                    <Link
-                        href="/settings"
-                        className="p-3 rounded-2xl bg-white hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <ArrowLeft className="text-slate-600" size={20} />
-                    </Link>
+                    <AppBackButton
+                        fallbackHref="/settings"
+                    />
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
                             <Mail className="text-pink-600" size={28} />
                             Contact Support
                         </h1>
-                        <p className="text-sm text-slate-500 mt-0.5">We'd love to hear from you</p>
+                        <p className="text-sm text-slate-500 mt-0.5">We&apos;d love to hear from you</p>
                     </div>
                 </header>
 
@@ -71,7 +69,7 @@ export default function ContactSupportPage() {
                                 </div>
                                 <h2 className="text-2xl font-black text-slate-800">Message Sent!</h2>
                                 <p className="text-sm text-slate-500 max-w-[200px] mx-auto">
-                                    Thanks for reaching out! We'll get back to you within 24 hours.
+                                    Thanks for reaching out! We&apos;ll get back to you within 24 hours.
                                 </p>
                                 <Button
                                     onClick={() => setSent(false)}

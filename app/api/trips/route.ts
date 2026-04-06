@@ -4,18 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCachedUser } from "@/lib/auth-cache";
 import { createCursorPaginatedResponse, decodePaginationCursor, encodePaginationCursor } from "@/lib/pagination";
 import prisma from "@/lib/prisma";
+import { getTripDateKey, getTripDayStart } from "@/lib/trip-dates";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const TRIP_TIME_ZONE = "Asia/Phnom_Penh";
-const CAMBODIA_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
-const tripDateFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: TRIP_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-});
 
 type TripStatus = "PLANNED" | "ONGOING" | "COMPLETED";
 type TripCursorPayload = {
@@ -23,19 +15,6 @@ type TripCursorPayload = {
     id: string;
     startDate: string;
 };
-
-function getTripDateKey(value: Date) {
-    const parts = tripDateFormatter.formatToParts(value);
-    const year = parts.find((part) => part.type === "year")?.value;
-    const month = parts.find((part) => part.type === "month")?.value;
-    const day = parts.find((part) => part.type === "day")?.value;
-
-    if (!year || !month || !day) {
-        throw new Error("Unable to format trip date");
-    }
-
-    return `${year}-${month}-${day}`;
-}
 
 function resolveTripStatus(startDate: Date, endDate: Date, now = new Date()): TripStatus {
     const todayKey = getTripDateKey(now);
@@ -69,22 +48,6 @@ function sanitizeTrip<T extends { budget: Prisma.Decimal | number | null; remind
         budget: trip.budget ? Number(trip.budget.toString()) : 0,
         trip_reminder_enabled: Boolean(reminder && !reminder.is_deleted),
     };
-}
-
-function getPhnomPenhDayStart(now = new Date()) {
-    const localNow = new Date(now.getTime() + CAMBODIA_UTC_OFFSET_MS);
-    const dayStartUtcMs =
-        Date.UTC(
-            localNow.getUTCFullYear(),
-            localNow.getUTCMonth(),
-            localNow.getUTCDate(),
-            0,
-            0,
-            0,
-            0
-        ) - CAMBODIA_UTC_OFFSET_MS;
-
-    return new Date(dayStartUtcMs);
 }
 
 export async function GET(request: NextRequest) {
@@ -126,7 +89,7 @@ export async function GET(request: NextRequest) {
             ],
         };
 
-        const todayStart = getPhnomPenhDayStart();
+        const todayStart = getTripDayStart();
 
         if (statusGroup === "past") {
             where.end_date = { lt: todayStart };

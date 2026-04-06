@@ -64,7 +64,7 @@ export function ReminderDetailSheet({
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span
                 className={cn(
-                  "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]",
+                  "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold",
                   reminder.is_completed
                     ? "bg-green-100 text-green-700"
                     : isTripReminder
@@ -81,37 +81,37 @@ export function ReminderDetailSheet({
         </div>
 
         <div className="space-y-3 border-t border-slate-100 pt-4">
-          <div className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="flex items-start gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/80 px-4 py-3">
             <Calendar size={16} className="mt-0.5 shrink-0 text-slate-400" />
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Date</p>
+              <p className="text-[11px] font-semibold text-slate-500">Date</p>
               <p className="text-sm font-bold text-slate-700">{reminder.date_label}</p>
             </div>
           </div>
 
-          <div className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <div className="flex items-start gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/80 px-4 py-3">
             <Clock3 size={16} className="mt-0.5 shrink-0 text-slate-400" />
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Time</p>
+              <p className="text-[11px] font-semibold text-slate-500">Time</p>
               <p className="text-sm font-bold text-slate-700">{reminder.time_label}</p>
             </div>
           </div>
 
           {reminder.note ? (
-            <div className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="flex items-start gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/80 px-4 py-3">
               <NotebookPen size={16} className="mt-0.5 shrink-0 text-slate-400" />
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Note</p>
+                <p className="text-[11px] font-semibold text-slate-500">Note</p>
                 <p className="text-sm font-medium leading-relaxed text-slate-700">{reminder.note}</p>
               </div>
             </div>
           ) : null}
 
           {reminder.trip ? (
-            <div className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="flex items-start gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/80 px-4 py-3">
               <MapPin size={16} className="mt-0.5 shrink-0 text-slate-400" />
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Trip</p>
+                <p className="text-[11px] font-semibold text-slate-500">Trip</p>
                 <p className="text-sm font-bold text-slate-700">{reminder.trip.destination}</p>
                 <p className="text-xs font-medium text-slate-500">{reminder.trip.title}</p>
               </div>

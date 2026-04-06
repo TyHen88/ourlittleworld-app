@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
     Target, Home, Plane, Car, Heart, GraduationCap, Baby, Rocket, Trophy,
-    Calendar, DollarSign, Flag, Sparkles, ArrowLeft, ChevronLeft
+    Calendar, DollarSign, Flag, Sparkles
 } from "lucide-react";
 import { useCreateSavingsGoal } from "@/hooks/use-savings-goals";
 import { useCouple } from "@/hooks/use-couple";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FullPageLoader } from "@/components/FullPageLoader";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 const GOAL_ICONS = [
     { name: "Target", icon: Target, color: "purple" },
@@ -84,22 +85,19 @@ export default function CreateGoalPage() {
             });
 
             router.push("/goals");
-        } catch (err: any) {
-            setError(err.message || "Failed to create goal");
+        } catch (error) {
+            setError(error instanceof Error ? error.message : "Failed to create goal");
         }
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
+        <div className="min-h-[100dvh] bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
             <div className="max-w-2xl mx-auto space-y-8">
                 {/* Header */}
                 <header className="flex items-center gap-4">
-                    <button
-                        onClick={() => router.back()}
-                        className="p-3 rounded-2xl bg-white hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <ChevronLeft className="text-slate-600" size={24} />
-                    </button>
+                    <AppBackButton
+                        fallbackHref="/goals"
+                    />
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
                             <Target className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={28} />

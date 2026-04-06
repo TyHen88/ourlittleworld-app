@@ -11,13 +11,13 @@ import { useTransactions } from "@/hooks/use-transactions";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { ReminderDetailSheet } from "@/components/reminders/ReminderDetailSheet";
 import { cn } from "@/lib/utils";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 import {
     Calendar as CalendarIcon,
     ChevronLeft,
     ChevronRight,
     TrendingDown,
     TrendingUp,
-    ArrowLeft,
     Flame,
     Sparkles,
     Eye,
@@ -284,23 +284,26 @@ export default function CalendarPage() {
     }
 
     return (
-        <div className="p-6 space-y-6 max-w-2xl mx-auto pb-32">
+        <div className="p-4 space-y-6 max-w-2xl mx-auto pb-32">
             {/* Header */}
             <motion.header
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-3"
             >
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            <CalendarIcon className="text-romantic-heart" size={32} />
-                            Calendar
-                        </h1>
-                        <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
-                            Visualize your spending by date
-                            <Sparkles className="text-romantic-heart" size={14} />
-                        </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                        <AppBackButton
+                            fallbackHref="/dashboard"
+                            className="mt-1"
+                        />
+                        <div>
+                            <h1 className="mt-2 text-xl font-black text-slate-800 flex items-center gap-2">
+                                <CalendarIcon className="text-romantic-heart" size={25} />
+                                Calendar
+                            </h1>
+
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -311,12 +314,6 @@ export default function CalendarPage() {
                         >
                             <Download className="text-slate-500" size={18} />
                         </button>
-                        <a
-                            href="/dashboard"
-                            className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
-                        >
-                            <ArrowLeft className="text-slate-500" size={20} />
-                        </a>
                     </div>
                 </div>
             </motion.header>

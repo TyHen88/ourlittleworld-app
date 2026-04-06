@@ -1,10 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, ChevronDown, HelpCircle, MessageCircle, Sparkles } from "lucide-react";
+import { ChevronDown, HelpCircle, MessageCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 const FAQS = [
     {
@@ -31,16 +32,13 @@ const FAQS = [
 
 export default function FAQPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
+        <div className="min-h-[100dvh] bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20 p-6 pb-32">
             <div className="max-w-2xl mx-auto space-y-8">
                 {/* Header */}
                 <header className="flex items-center gap-4">
-                    <Link
-                        href="/settings"
-                        className="p-3 rounded-2xl bg-white hover:bg-slate-50 transition-colors shadow-sm"
-                    >
-                        <ArrowLeft className="text-slate-600" size={20} />
-                    </Link>
+                    <AppBackButton
+                        fallbackHref="/settings"
+                    />
                     <div>
                         <h1 className="text-3xl font-black text-slate-800 flex items-center gap-2">
                             <HelpCircle className="text-pink-600" size={28} />
@@ -73,7 +71,7 @@ export default function FAQPage() {
                             Still have questions?
                         </h3>
                         <p className="text-pink-100 text-sm max-w-[280px]">
-                            We're here to help! Send us a message and we'll get back to you as soon as possible.
+                            We&apos;re here to help! Send us a message and we&apos;ll get back to you as soon as possible.
                         </p>
                         <Link 
                             href="/help/contact"

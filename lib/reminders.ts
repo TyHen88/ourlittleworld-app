@@ -1,4 +1,5 @@
 import { addDays, endOfMonth, format, startOfMonth } from "date-fns";
+import { getTripDateKey, getTripNotificationDateKey } from "@/lib/trip-dates";
 
 export const REMINDER_TIME_ZONE = "Asia/Phnom_Penh";
 export const CAMBODIA_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -105,16 +106,17 @@ export function getTomorrowReminderDateKey(dateKey: string) {
 }
 
 export function getTripReminderDateKey(startDate: Date) {
-  return getPhnomPenhDateKey(new Date(startDate.getTime() - 24 * 60 * 60 * 1000));
+  return getTripDateKey(startDate);
 }
 
 export function createTripReminderSchedule(startDate: Date) {
   const dateKey = getTripReminderDateKey(startDate);
+  const notificationDateKey = getTripNotificationDateKey(startDate);
 
   return {
     dateKey,
     scheduledFor: createReminderSchedule({
-      dateKey,
+      dateKey: notificationDateKey,
       time: `${String(DEFAULT_REMINDER_HOUR).padStart(2, "0")}:${String(DEFAULT_REMINDER_MINUTE).padStart(2, "0")}`,
     }),
   };

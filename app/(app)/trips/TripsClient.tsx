@@ -2,12 +2,12 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 import {
     MapPin,
     MapPinned,
     Calendar,
     Plus,
-    ArrowLeft,
     X,
     Plane,
     Compass,
@@ -26,11 +26,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage, toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 import { createTrip, deleteTrip, updateTrip } from "@/lib/actions/trips";
-import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { TRIP_KEYS, TripRecord, TripStatusGroup, useInfiniteTrips } from "@/hooks/use-trips";
+import {
+    formatTripDateInputValue,
+    formatTripLongDateLabel,
+    formatTripShortDateLabel,
+} from "@/lib/trip-dates";
 
 type TripBudgetCurrency = "USD" | "KHR";
 
@@ -215,8 +218,8 @@ function toTripForm(trip: TripRecord, isSolo: boolean): TripFormState {
     return {
         title: trip.title,
         destination: trip.destination,
-        startDate: format(new Date(trip.start_date), "yyyy-MM-dd"),
-        endDate: format(new Date(trip.end_date), "yyyy-MM-dd"),
+        startDate: formatTripDateInputValue(trip.start_date),
+        endDate: formatTripDateInputValue(trip.end_date),
         budget: trip.budget ? formatTripBudgetInput(trip.budget.toString(), budgetCurrency) : "",
         budgetCurrency,
         notes: trip.notes ?? "",
@@ -228,7 +231,6 @@ function toTripForm(trip: TripRecord, isSolo: boolean): TripFormState {
 export function TripsClient({ user, profile }: TripsClientProps) {
     void user;
 
-    const router = useRouter();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<TripStatusGroup>("upcoming");
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -367,8 +369,8 @@ export function TripsClient({ user, profile }: TripsClientProps) {
             const payload = {
                 title: newTrip.title,
                 destination: provinceDestination.label,
-                startDate: new Date(newTrip.startDate),
-                endDate: new Date(newTrip.endDate),
+                startDate: newTrip.startDate,
+                endDate: newTrip.endDate,
                 budget: parsedBudget ?? undefined,
                 budgetCurrency: newTrip.budgetCurrency,
                 notes: newTrip.notes,
@@ -420,14 +422,14 @@ export function TripsClient({ user, profile }: TripsClientProps) {
     const filteredTrips = trips;
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-20">
+        <div className="min-h-[100dvh] bg-slate-50/50 pb-20">
             {/* Header */}
-            <header className={`sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b ${isSingle ? 'border-emerald-100' : 'border-romantic-blush/30'}`}>
+            <header className={`sticky top-0 z-20 border-b bg-white/92 md:bg-white/80 md:backdrop-blur-xl ${isSingle ? 'border-emerald-100' : 'border-romantic-blush/30'}`}>
                 <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <button onClick={() => router.back()} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
-                            <ArrowLeft size={20} className="text-slate-600" />
-                        </button>
+                        <AppBackButton
+                            fallbackHref="/dashboard"
+                        />
                         <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2 text-left">
                             {isSingle ? <Stars className="text-emerald-500" size={20} /> : <Compass className="text-romantic-heart" size={20} />}
                             Trip Planner
@@ -562,12 +564,12 @@ export function TripsClient({ user, profile }: TripsClientProps) {
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
                                                         <Calendar size={12} className="text-slate-400" />
-                                                        {format(new Date(trip.start_date), 'MMM d')} - {format(new Date(trip.end_date), 'MMM d, yyyy')}
+                                                        {formatTripShortDateLabel(trip.start_date)} - {formatTripLongDateLabel(trip.end_date)}
                                                     </div>
                                                     {trip.trip_reminder_enabled ? (
                                                         <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold ${isSingle ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                                                             <Bell size={12} />
-                                                            Reminds the day before
+                                                            Pushes day before
                                                         </div>
                                                     ) : null}
                                                     {trip.budget ? (
@@ -883,11 +885,11 @@ export function TripsClient({ user, profile }: TripsClientProps) {
                                             <div className="flex items-center gap-2">
                                                 <Bell size={15} className={newTrip.remindDayBefore ? (isSingle ? "text-emerald-600" : "text-amber-600") : "text-slate-400"} />
                                                 <p className="text-sm font-bold text-slate-800">
-                                                    Remind me one day before
+                                                    Add trip reminder
                                                 </p>
                                             </div>
                                             <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">
-                                                Adds this trip to the Reminder page and sends a push notification the day before it starts.
+                                                Shows this trip on Calendar and Reminders, then sends a push notification the day before it starts.
                                             </p>
                                         </div>
                                     </button>

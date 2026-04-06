@@ -68,7 +68,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const [reactionSheetMessageId, setReactionSheetMessageId] = useState<string | null>(null);
   const [reactionRequests, setReactionRequests] = useState<Record<string, string>>({});
   const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
-  const [messengerHeight, setMessengerHeight] = useState<number | null>(null);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -77,6 +76,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const autoScrollRef = useRef(true);
   const previousScrollHeightRef = useRef<number | null>(null);
   const lastMarkedReadMessageIdRef = useRef<string | null>(null);
+  const keyboardOpenRef = useRef(false);
   const isSingle = profile?.user_type === "SINGLE";
   const coupleId = couple?.id as string | undefined;
   const {
@@ -129,37 +129,51 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   }, [data?.pages]);
 
   useEffect(() => {
-    const updateMessengerHeight = () => {
-      const root = rootRef.current;
-      if (!root || typeof window === "undefined") {
+    let frameId: number | null = null;
+
+    const updateKeyboardState = () => {
+      if (typeof window === "undefined") {
         return;
       }
 
       const viewport = window.visualViewport;
-      const viewportHeight = viewport?.height ?? window.innerHeight;
-      const rootTop = root.getBoundingClientRect().top;
       const keyboardOpen =
         window.innerWidth < 768 &&
         !!viewport &&
         viewport.height < window.innerHeight - 120;
-      const bottomOffset = window.innerWidth < 768 ? (keyboardOpen ? 12 : 112) : 32;
-      const nextHeight = Math.floor(viewportHeight - rootTop - bottomOffset);
 
+      if (keyboardOpenRef.current === keyboardOpen) {
+        return;
+      }
+
+      keyboardOpenRef.current = keyboardOpen;
       setIsKeyboardOpen(keyboardOpen);
-      setMessengerHeight(nextHeight > 320 ? nextHeight : 320);
     };
 
-    updateMessengerHeight();
+    const scheduleKeyboardStateUpdate = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        updateKeyboardState();
+      });
+    };
+
+    updateKeyboardState();
 
     const viewport = window.visualViewport;
-    viewport?.addEventListener("resize", updateMessengerHeight);
-    viewport?.addEventListener("scroll", updateMessengerHeight);
-    window.addEventListener("resize", updateMessengerHeight);
+    viewport?.addEventListener("resize", scheduleKeyboardStateUpdate);
+    window.addEventListener("resize", scheduleKeyboardStateUpdate);
 
     return () => {
-      viewport?.removeEventListener("resize", updateMessengerHeight);
-      viewport?.removeEventListener("scroll", updateMessengerHeight);
-      window.removeEventListener("resize", updateMessengerHeight);
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      viewport?.removeEventListener("resize", scheduleKeyboardStateUpdate);
+      window.removeEventListener("resize", scheduleKeyboardStateUpdate);
     };
   }, []);
 
@@ -189,7 +203,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     if (autoScrollRef.current || isKeyboardOpen) {
       scrollToLatestMessage();
     }
-  }, [isKeyboardOpen, messages.length, messengerHeight]);
+  }, [isKeyboardOpen, messages.length]);
 
   useEffect(() => {
     if (!coupleId || isSingle || messages.length === 0 || typeof document === "undefined") {
@@ -572,8 +586,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     <>
       <div
         ref={rootRef}
-        className="flex min-h-0 flex-1 basis-0 flex-col overflow-hidden bg-white"
-        style={messengerHeight ? { height: `${messengerHeight}px`, maxHeight: `${messengerHeight}px` } : undefined}
+        className="grid min-h-0 flex-1 basis-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-white"
       >
       <div
         ref={scrollRef}

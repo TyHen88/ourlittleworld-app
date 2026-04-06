@@ -17,7 +17,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { updateCoupleAnniversary } from "@/lib/actions/world";
 import {
     AlertTriangle,
-    ArrowLeft,
     Bell,
     Camera,
     Check, ChevronRight,
@@ -54,6 +53,7 @@ import {
     subscribeBrowserToPush,
     unsubscribeBrowserFromPush,
 } from "@/lib/push-client";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 type SettingsSection = "profile" | "couple" | "preferences" | "notifications" | "privacy" | "help";
 
@@ -472,7 +472,7 @@ export default function SettingsPage() {
 
     return (
         <div className={cn(
-            "min-h-screen p-6 pb-32",
+            "min-h-[100dvh] p-4 pb-32",
             isSingle
                 ? "bg-gradient-to-br from-emerald-50 via-white to-indigo-50/20"
                 : "bg-gradient-to-br from-romantic-warm via-white to-romantic-blush/20"
@@ -485,12 +485,9 @@ export default function SettingsPage() {
                     className="flex items-center justify-between"
                 >
                     <div className="flex items-center gap-3">
-                        <a
-                            href="/dashboard"
-                            className="p-2 rounded-full bg-white hover:bg-slate-50 transition-colors shadow-sm"
-                        >
-                            <ArrowLeft className="text-slate-600" size={20} />
-                        </a>
+                        <AppBackButton
+                            fallbackHref="/dashboard"
+                        />
                         <div>
                             <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <SettingsIcon className={isSingle ? "text-emerald-600" : "text-romantic-heart"} size={28} />

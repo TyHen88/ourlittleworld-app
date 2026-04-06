@@ -9,6 +9,7 @@ import {
   getReminderDateLabel,
   getReminderTimeLabel,
 } from "@/lib/reminders";
+import { formatTripDateLabel } from "@/lib/push-events";
 
 export function getReminderAccessWhere(user: { id: string; couple_id: string | null }) {
   return {
@@ -129,8 +130,10 @@ export async function syncTripReminder(params: {
   }
 
   const { dateKey, scheduledFor } = createTripReminderSchedule(params.trip.start_date);
-  const name = `${params.trip.title} starts tomorrow`;
-  const note = `${params.trip.title} begins tomorrow in ${params.trip.destination}.`;
+  const tripLabel = params.trip.title?.trim() || params.trip.destination;
+  const tripDate = formatTripDateLabel(params.trip.start_date);
+  const name = tripLabel;
+  const note = `Starts on ${tripDate} in ${params.trip.destination}.`;
   const existingReminder = await prisma.reminder.findUnique({
     where: {
       trip_id: params.trip.id,

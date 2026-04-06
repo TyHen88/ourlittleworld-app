@@ -5,6 +5,7 @@ import { MessageCircleHeart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCoupleChatChannelName } from "@/lib/chat";
 import { getAblyRealtimeClient } from "@/lib/ably-client";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 
 interface ChatHeaderMember {
   id: string;
@@ -105,11 +106,14 @@ export function ChatHeader({ user, couple }: ChatHeaderProps) {
     <header className="mb-3 shrink-0 px-4 sm:mb-4 sm:px-6 md:px-0">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
+          <AppBackButton
+            fallbackHref="/dashboard"
+          />
           <MessageCircleHeart
-            className="mt-0.5 shrink-0 text-romantic-heart"
+            className="mt-2 shrink-0 text-romantic-heart"
             size={24}
           />
-          <h1 className="truncate text-xl font-black tracking-tighter text-slate-800">
+          <h1 className="mt-2 truncate text-xl font-black tracking-tighter text-slate-800">
             {couple?.couple_name || "Couple Chat"}
           </h1>
         </div>

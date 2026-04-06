@@ -7,14 +7,7 @@ import { revalidatePath } from "next/cache";
 import { sendPushNotificationToUsers } from "@/lib/push";
 import { formatTripDateLabel, getTripNotificationRecipientIds } from "@/lib/push-events";
 import { syncTripReminder } from "@/lib/reminder-service";
-
-const TRIP_TIME_ZONE = "Asia/Phnom_Penh";
-const tripDateFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: TRIP_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-});
+import { createTripDate, getTripDateKey } from "@/lib/trip-dates";
 
 type TripStatus = "PLANNED" | "ONGOING" | "COMPLETED";
 
@@ -22,26 +15,13 @@ type TripMutationInput = {
     budget?: number;
     budgetCurrency: "USD" | "KHR";
     destination: string;
-    endDate: Date;
+    endDate: string;
     isSolo?: boolean;
     notes?: string;
     remindDayBefore?: boolean;
-    startDate: Date;
+    startDate: string;
     title: string;
 };
-
-function getTripDateKey(value: Date) {
-    const parts = tripDateFormatter.formatToParts(value);
-    const year = parts.find((part) => part.type === "year")?.value;
-    const month = parts.find((part) => part.type === "month")?.value;
-    const day = parts.find((part) => part.type === "day")?.value;
-
-    if (!year || !month || !day) {
-        throw new Error("Unable to format trip date");
-    }
-
-    return `${year}-${month}-${day}`;
-}
 
 function resolveTripStatus(startDate: Date, endDate: Date, now = new Date()): TripStatus {
     const todayKey = getTripDateKey(now);
@@ -146,14 +126,16 @@ export async function getTrips() {
 
 export async function createTrip(data: TripMutationInput) {
     const user = await getAuthenticatedTripUser();
-    const status = resolveTripStatus(data.startDate, data.endDate);
+    const startDate = createTripDate(data.startDate);
+    const endDate = createTripDate(data.endDate);
+    const status = resolveTripStatus(startDate, endDate);
 
     const trip = await prisma.trip.create({
         data: {
             title: data.title,
             destination: data.destination,
-            start_date: data.startDate,
-            end_date: data.endDate,
+            start_date: startDate,
+            end_date: endDate,
             budget: data.budget,
             notes: data.notes,
             metadata: {
@@ -218,7 +200,9 @@ export async function createTrip(data: TripMutationInput) {
 
 export async function updateTrip(id: string, data: TripMutationInput) {
     const user = await getAuthenticatedTripUser();
-    const status = resolveTripStatus(data.startDate, data.endDate);
+    const startDate = createTripDate(data.startDate);
+    const endDate = createTripDate(data.endDate);
+    const status = resolveTripStatus(startDate, endDate);
 
     const existingTrip = await prisma.trip.findFirst({
         where: {
@@ -236,8 +220,8 @@ export async function updateTrip(id: string, data: TripMutationInput) {
         data: {
             title: data.title,
             destination: data.destination,
-            start_date: data.startDate,
-            end_date: data.endDate,
+            start_date: startDate,
+            end_date: endDate,
             budget: data.budget,
             notes: data.notes,
             metadata: {

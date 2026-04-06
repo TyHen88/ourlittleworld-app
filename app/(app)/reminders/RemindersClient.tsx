@@ -3,9 +3,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { AppBackButton } from "@/components/navigation/AppBackButton";
 import {
   AlarmClock,
-  ArrowLeft,
   Bell,
   CheckCircle2,
   ChevronLeft,
@@ -211,28 +211,32 @@ export function RemindersClient({
         view: "today" as const,
         count: summaryData?.summary.today ?? 0,
         icon: AlarmClock,
-        tone: isSingle ? "from-emerald-50 to-teal-50" : "from-amber-50 to-orange-50",
+        activeTone: isSingle ? "border-emerald-200 bg-emerald-50/80 ring-emerald-100" : "border-amber-200 bg-amber-50/80 ring-amber-100",
+        iconTone: isSingle ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600",
       },
       {
         label: "All",
         view: "all" as const,
         count: summaryData?.summary.all ?? 0,
         icon: ListTodo,
-        tone: "from-slate-50 to-slate-100",
+        activeTone: "border-slate-200 bg-slate-50/90 ring-slate-100",
+        iconTone: "bg-slate-100 text-slate-600",
       },
       {
         label: "Completed",
         view: "completed" as const,
         count: summaryData?.summary.completed ?? 0,
         icon: CheckCircle2,
-        tone: "from-green-50 to-emerald-50",
+        activeTone: "border-green-200 bg-green-50/80 ring-green-100",
+        iconTone: "bg-green-100 text-green-600",
       },
       {
         label: "Progress",
         view: "progress" as const,
         count: summaryData?.summary.progress ?? 0,
         icon: TrendingUp,
-        tone: isSingle ? "from-emerald-50 to-lime-50" : "from-romantic-blush/15 to-romantic-lavender/25",
+        activeTone: isSingle ? "border-emerald-200 bg-emerald-50/80 ring-emerald-100" : "border-romantic-blush/60 bg-romantic-blush/20 ring-romantic-blush/10",
+        iconTone: isSingle ? "bg-emerald-100 text-emerald-600" : "bg-romantic-blush/45 text-romantic-heart",
       },
     ],
     [isSingle, summaryData]
@@ -375,16 +379,13 @@ export function RemindersClient({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-24">
-      <header className={`sticky top-0 z-20 border-b bg-white/85 backdrop-blur-xl ${isSingle ? "border-emerald-100" : "border-romantic-blush/30"}`}>
+    <div className="min-h-[100dvh] bg-slate-50/50 pb-24">
+      <header className={`sticky top-0 z-20 border-b bg-white/92 md:bg-white/85 md:backdrop-blur-xl ${isSingle ? "border-emerald-100" : "border-romantic-blush/30"}`}>
         <div className="mx-auto flex h-16 max-w-2xl items-center px-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button
-              onClick={() => router.back()}
-              className="rounded-full p-2 transition-colors hover:bg-slate-100"
-            >
-              <ArrowLeft size={20} className="text-slate-600" />
-            </button>
+            <AppBackButton
+              fallbackHref="/dashboard"
+            />
             <div className="min-w-0">
               <h1 className="flex items-center gap-2 text-lg font-black tracking-tight text-slate-800">
                 <Bell className={isSingle ? "text-emerald-500" : "text-romantic-heart"} size={20} />
@@ -414,17 +415,19 @@ export function RemindersClient({
                 >
                   <Card
                     className={cn(
-                      "rounded-2xl border-none bg-gradient-to-br px-3 py-3 shadow-sm transition-all",
-                      card.tone,
+                      "rounded-3xl border bg-white/90 px-4 py-4 shadow-sm transition-all",
                       activeView === card.view &&
-                        (isSingle ? "ring-2 ring-emerald-300 shadow-emerald-100" : "ring-2 ring-romantic-heart/30 shadow-romantic-blush/30")
+                        cn("ring-2", card.activeTone),
+                      activeView !== card.view && "border-slate-200/80 hover:border-slate-300/80 hover:bg-white"
                     )}
                   >
-                    <div className="mb-2 flex items-center justify-between">
-                      <Icon className={isSingle ? "text-emerald-600" : "text-romantic-heart"} size={14} />
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className={cn("inline-flex size-10 items-center justify-center rounded-2xl", card.iconTone)}>
+                        <Icon size={18} />
+                      </div>
                       <span className="text-lg font-black text-slate-800">{card.count}</span>
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    <p className="text-xs font-semibold text-slate-500">
                       {card.label}
                     </p>
                   </Card>
@@ -437,7 +440,7 @@ export function RemindersClient({
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-black text-slate-800">{scopeLabel}</h2>
-            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+            <span className="text-xs font-semibold text-slate-500">
               {activeCard.label}
             </span>
           </div>
@@ -445,11 +448,11 @@ export function RemindersClient({
           {listLoading && reminders.length === 0 ? (
             <div className="space-y-2">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-18 rounded-2xl bg-white animate-pulse shadow-sm" />
+                <div key={index} className="h-18 rounded-3xl border border-slate-200/70 bg-white/80 animate-pulse shadow-sm" />
               ))}
             </div>
           ) : reminders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center">
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center">
               <Bell className={cn("mx-auto mb-2", isSingle ? "text-emerald-400" : "text-romantic-heart/70")} size={22} />
               <p className="text-sm font-bold text-slate-600">{emptyStateTitle}</p>
             </div>
@@ -464,7 +467,7 @@ export function RemindersClient({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                   >
-                    <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex items-start gap-3 rounded-3xl border border-slate-200/80 bg-white/90 px-4 py-3.5 shadow-sm transition-colors hover:border-slate-300/80">
                       <button
                         type="button"
                         onClick={() => void handleToggleComplete(reminder)}
@@ -486,7 +489,7 @@ export function RemindersClient({
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-black text-slate-800">{reminder.name}</p>
                           {reminder.source === "TRIP" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                               <Plane size={10} />
                               Trip
                             </span>
@@ -536,11 +539,11 @@ export function RemindersClient({
 
               <div ref={sentinelRef} className="py-2 text-center">
                 {isFetchingNextPage ? (
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Loading more reminders...</p>
+                  <p className="text-xs font-medium text-slate-400">Loading more reminders...</p>
                 ) : hasNextPage ? (
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">Scroll for more</p>
+                  <p className="text-xs font-medium text-slate-300">Scroll for more</p>
                 ) : reminders.length > 0 ? (
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">End of the list</p>
+                  <p className="text-xs font-medium text-slate-300">End of the list</p>
                 ) : null}
               </div>
             </div>
@@ -670,7 +673,7 @@ export function RemindersClient({
 
                 <form onSubmit={handleReminderSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Name</label>
+                    <label className="ml-1 block text-[11px] font-semibold text-slate-500">Name</label>
                     <Input
                       required
                       placeholder="e.g. Pay rent, call mom, pack bag"
@@ -684,7 +687,7 @@ export function RemindersClient({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="ml-1 block text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Note</label>
+                    <label className="ml-1 block text-[11px] font-semibold text-slate-500">Note</label>
                     <textarea
                       placeholder="Keep it short and useful."
                       value={form.note}
@@ -757,7 +760,7 @@ export function RemindersClient({
 
                       <div className="mb-2 grid grid-cols-7 gap-2">
                         {WEEKDAYS.map((day) => (
-                          <div key={day} className="text-center text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                          <div key={day} className="text-center text-[10px] font-semibold text-slate-400">
                             {day}
                           </div>
                         ))}
@@ -831,7 +834,7 @@ export function RemindersClient({
 
                   {form.hasTime ? (
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <label className="block text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                      <label className="block text-[11px] font-semibold text-slate-500">
                         Reminder Time
                       </label>
                       <div className="mt-2 grid grid-cols-3 gap-2">
