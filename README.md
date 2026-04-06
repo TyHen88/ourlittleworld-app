@@ -13,6 +13,12 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Mobile wrappers
+
+Capacitor scaffolding is included for native iOS/Android wrappers that load the deployed Next.js app and sync widget data into native storage.
+
+See [docs/mobile-widgets.md](./docs/mobile-widgets.md) for setup and widget contract details.
+
 ## Deploy on Railway
 
 This repo is configured for Railway with [`railway.json`](./railway.json).

@@ -42,6 +42,9 @@ model User {
   user_type            String    @default("COUPLE") // "SINGLE" or "COUPLE"
 
   couple_id            String?   @db.Uuid
+  world_theme          String?   @default("blush")
+  world_theme_url      String?
+  world_theme_config   Json?
 
   // Timestamps
   created_at           DateTime  @default(now()) @db.Timestamptz(6)
@@ -59,6 +62,7 @@ model User {
   savingsGoals         SavingsGoal[]
   budgets              Budget[]
   pushSubscriptions    PushSubscription[]
+  chatReadStates       ChatReadState[]
   reminders            Reminder[]         @relation("UserReminders")
   createdReminders     Reminder[]         @relation("CreatedReminders")
 
@@ -131,6 +135,8 @@ model Couple {
   partner_1_nickname String?
   partner_2_nickname String?
   world_theme        String?   @default("blush")
+  world_theme_url    String?
+  world_theme_config Json?
 
   // Timestamps
   created_at DateTime @default(now()) @db.Timestamptz(6)
@@ -144,9 +150,26 @@ model Couple {
   dailyMoods   DailyMood[]
   savingsGoals SavingsGoal[]
   trips        Trip[]
+  chatReadStates ChatReadState[]
   reminders    Reminder[]
 
   @@map("couples")
+}
+
+model ChatReadState {
+  user_id              String    @db.Uuid
+  couple_id            String    @db.Uuid
+  last_read_post_id    String?   @db.Uuid
+  last_read_created_at DateTime? @db.Timestamptz(6)
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime  @updatedAt @db.Timestamptz(6)
+
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  couple Couple @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, couple_id])
+  @@index([couple_id])
+  @@map("chat_read_states")
 }
 
 model Budget {

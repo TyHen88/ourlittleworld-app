@@ -76,6 +76,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoScrollRef = useRef(true);
   const previousScrollHeightRef = useRef<number | null>(null);
+  const lastMarkedReadMessageIdRef = useRef<string | null>(null);
   const isSingle = profile?.user_type === "SINGLE";
   const coupleId = couple?.id as string | undefined;
   const {
@@ -91,9 +92,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     !uploadingImage &&
     (draft.trim().length > 0 || pendingImages.length > 0);
   const activeReactionMessageId = hoveredReactionMessageId ?? selectedReactionMessageId;
-  const reactionSheetMessage = reactionSheetMessageId
-    ? messages.find((message) => message.id === reactionSheetMessageId) ?? null
-    : null;
 
   const closeReactionUi = () => {
     setHoveredReactionMessageId(null);
@@ -192,6 +190,56 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       scrollToLatestMessage();
     }
   }, [isKeyboardOpen, messages.length, messengerHeight]);
+
+  useEffect(() => {
+    if (!coupleId || isSingle || messages.length === 0 || typeof document === "undefined") {
+      return;
+    }
+
+    const latestMessage = messages[messages.length - 1];
+    if (!latestMessage || lastMarkedReadMessageIdRef.current === latestMessage.id) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const syncReadState = async () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/chat/read-state", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ messageId: latestMessage.id }),
+        });
+
+        if (!response.ok || isCancelled) {
+          return;
+        }
+
+        lastMarkedReadMessageIdRef.current = latestMessage.id;
+      } catch {
+        // Read-state sync is best-effort and should never block the chat UI.
+      }
+    };
+
+    void syncReadState();
+
+    const handleVisibilityChange = () => {
+      void syncReadState();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [coupleId, isSingle, messages]);
 
   useEffect(() => {
     if (!selectedReactionMessageId || reactionSheetMessageId || typeof document === "undefined") {
