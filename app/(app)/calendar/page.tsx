@@ -401,6 +401,7 @@ export default function CalendarPage() {
                                 <motion.button
                                     key={idx}
                                     whileTap={{ scale: 0.9 }}
+                                    data-pan-y="true"
                                     onClick={() => setSelectedDate(isSelected ? null : day)}
                                     className={cn(
                                         "relative aspect-square flex flex-col items-center justify-center rounded-xl transition-all text-xs",
@@ -551,6 +552,7 @@ export default function CalendarPage() {
                                                     type="button"
                                                     initial={{ opacity: 0, x: -10 }}
                                                     animate={{ opacity: 1, x: 0 }}
+                                                    data-pan-y="true"
                                                     onClick={() => setDetailReminder(reminder)}
                                                     className="flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors hover:bg-white/60"
                                                 >

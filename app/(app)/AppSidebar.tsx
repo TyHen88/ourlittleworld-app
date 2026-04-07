@@ -7,6 +7,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   Heart,
   Home,
   Menu,
@@ -257,6 +259,67 @@ function SidebarContent({
   );
 }
 
+function SidebarToggleHandle({
+  className,
+  direction,
+  onClick,
+  placement = "edge",
+  unreadCount = 0,
+}: {
+  className?: string;
+  direction: "close" | "open";
+  onClick: () => void;
+  placement?: "edge" | "floating";
+  unreadCount?: number;
+}) {
+  const isCloseAction = direction === "close";
+  const ChevronIcon = isCloseAction ? ChevronLeft : ChevronRight;
+  const isFloating = placement === "floating";
+
+  return (
+    <motion.button
+      type="button"
+      aria-label={isCloseAction ? "Close sidebar" : "Show sidebar"}
+      onClick={onClick}
+      initial={{ opacity: 0, x: -16, scale: 0.96 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: -16, scale: 0.96 }}
+      whileHover={{ x: 2, scale: 1.02 }}
+      whileTap={{ scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      className={cn(
+        isFloating
+          ? "group relative inline-flex size-11 items-center justify-center rounded-full border border-white/80 bg-white text-slate-500 shadow-[0_18px_40px_rgba(15,23,42,0.18)] transition-colors hover:bg-white hover:text-slate-700"
+          : "group relative inline-flex h-14 w-10 items-center justify-center overflow-hidden rounded-r-[1.25rem] border border-l-0 border-slate-200/80 bg-white/96 text-slate-500 shadow-[0_14px_32px_rgba(15,23,42,0.14)] transition-colors hover:bg-white hover:text-slate-700",
+        className,
+      )}
+    >
+      <div className={cn("absolute inset-0", isFloating ? "rounded-full bg-white" : "bg-gradient-to-b from-white to-slate-50/90")} />
+      {!isFloating ? (
+        <div
+          className={cn(
+            "absolute inset-y-2 left-0 w-[3px] rounded-r-full",
+            isCloseAction ? "bg-slate-300/90" : "bg-romantic-heart/45",
+          )}
+        />
+      ) : null}
+      <motion.span
+        animate={{ x: [0, isCloseAction ? -2 : 2, 0] }}
+        transition={{ duration: 1.6, ease: "easeInOut", repeat: Infinity, repeatDelay: 1.2 }}
+        className="relative inline-flex items-center justify-center"
+      >
+        <ChevronIcon size={20} strokeWidth={2.4} />
+      </motion.span>
+
+      {unreadCount > 0 ? (
+        <span className="absolute right-1 top-1 inline-flex min-w-[1.05rem] items-center justify-center rounded-full bg-slate-950 px-1 py-0.5 text-[9px] font-black text-white ring-2 ring-white">
+          {unreadCount > 99 ? "99+" : unreadCount}
+        </span>
+      ) : null}
+    </motion.button>
+  );
+}
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { profile } = useCouple();
@@ -348,25 +411,16 @@ export function AppSidebar() {
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Open sidebar"
-        onClick={() => setIsSidebarOpen(true)}
-        className="fixed bottom-4 left-4 z-50 inline-flex size-11 items-center justify-center rounded-2xl border border-white/80 bg-white/92 text-slate-600 shadow-lg backdrop-blur-xl transition-colors hover:bg-white"
-        style={{
-          bottom: "max(1rem, env(safe-area-inset-bottom))",
-          left: "max(1rem, env(safe-area-inset-left))",
-        }}
-      >
-        <Menu size={18} />
-        {unreadCount > 0 && !isSidebarOpen ? (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-slate-950 px-1 py-0.5 text-[10px] font-black text-white ring-2 ring-white">
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
-        ) : null}
-      </button>
-
       <AnimatePresence>
+        {!isSidebarOpen ? (
+          <SidebarToggleHandle
+            direction="open"
+            unreadCount={unreadCount}
+            onClick={() => setIsSidebarOpen(true)}
+            className="fixed left-0 top-1/2 z-[70] -translate-y-1/2"
+          />
+        ) : null}
+
         {isSidebarOpen ? (
           <>
             <motion.button
@@ -386,6 +440,14 @@ export function AppSidebar() {
               transition={{ type: "spring", stiffness: 260, damping: 30 }}
               className="fixed inset-y-0 left-0 z-[60] w-[min(22rem,calc(100vw-0.75rem))] p-3 lg:w-[22rem] lg:p-5"
             >
+              <div className="absolute left-full top-1/2 z-[70] -translate-y-1/2 pl-2">
+                <SidebarToggleHandle
+                  direction="close"
+                  placement="floating"
+                  onClick={() => setIsSidebarOpen(false)}
+                />
+              </div>
+
               <div className="relative h-full rounded-[2.4rem] border border-white/70 bg-white/78 p-4 shadow-[0_30px_80px_rgba(15,23,42,0.16)] backdrop-blur-2xl">
                 <SidebarContent
                   pathname={pathname}

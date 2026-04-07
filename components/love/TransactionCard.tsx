@@ -38,6 +38,7 @@ export function TransactionCard({ id, category, amount, note, payer, date, type 
             whileHover={{ x: 4 }}
             whileTap={{ scale: 0.98 }}
             onClick={onDetailClick}
+            data-pan-y="true"
             className="w-full"
         >
             <div className="p-3 border-b border-slate-100 hover:bg-slate-50/50 transition-colors flex items-center gap-3 group">

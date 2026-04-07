@@ -21,9 +21,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="relative min-h-[100dvh] overflow-x-hidden bg-romantic-warm">
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute left-[-8%] top-[-10%] h-[18rem] w-[18rem] rounded-full bg-romantic-blush/22 blur-[68px] md:h-[24rem] md:w-[24rem] md:bg-romantic-blush/30 md:blur-[110px]" />
-                <div className="absolute bottom-[-8%] right-[-6%] h-[20rem] w-[20rem] rounded-full bg-romantic-lavender/20 blur-[78px] md:h-[28rem] md:w-[28rem] md:bg-romantic-lavender/28 md:blur-[130px]" />
+            <div className="pointer-events-none absolute inset-0 hidden md:block">
+                <div className="absolute left-[-8%] top-[-10%] h-[24rem] w-[24rem] rounded-full bg-romantic-blush/30 blur-[110px]" />
+                <div className="absolute bottom-[-8%] right-[-6%] h-[28rem] w-[28rem] rounded-full bg-romantic-lavender/28 blur-[130px]" />
             </div>
 
             <AppNavigationHistory />

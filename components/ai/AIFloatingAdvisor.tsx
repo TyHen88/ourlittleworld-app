@@ -46,6 +46,7 @@ export function AIFloatingAdvisor({ isSingle }: { isSingle: boolean }) {
         <motion.button
           whileHover={{ scale: 1.1, rotate: 5 }}
           whileTap={{ scale: 0.9 }}
+          data-pan-y="true"
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
             "w-16 h-16 rounded-full shadow-2xl flex items-center justify-center border-4 border-white transition-all transform",

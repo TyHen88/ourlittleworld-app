@@ -410,6 +410,7 @@ export function RemindersClient({
                 <button
                   key={card.label}
                   type="button"
+                  data-pan-y="true"
                   onClick={() => setActiveView(card.view)}
                   className="text-left"
                 >
@@ -483,6 +484,7 @@ export function RemindersClient({
 
                       <button
                         type="button"
+                        data-pan-y="true"
                         onClick={() => setDetailReminder(reminder)}
                         className="min-w-0 flex-1 text-left"
                       >
@@ -557,6 +559,7 @@ export function RemindersClient({
         aria-label="Add reminder"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
+        data-pan-y="true"
         initial={{ opacity: 0, scale: 0 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.2, type: "spring" }}

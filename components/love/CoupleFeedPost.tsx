@@ -326,7 +326,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
     return (
         <Card className={cn(
-            "group relative overflow-hidden rounded-[1.75rem] border-none bg-white/90 shadow-lg backdrop-blur-sm",
+            "group relative overflow-hidden rounded-[1.75rem] border-none bg-white/90 shadow-lg md:backdrop-blur-sm",
             isDeleting && "opacity-50 pointer-events-none"
         )}>
             {isDeleting && (

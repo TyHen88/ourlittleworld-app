@@ -346,6 +346,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <motion.div
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
+                            data-pan-y="true"
                             className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 hover:border-green-200 transition-all group"
                         >
                             <div className="flex items-start justify-between">
@@ -363,6 +364,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <motion.div
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
+                            data-pan-y="true"
                             className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100 hover:border-blue-200 transition-all group"
                         >
                             <div className="flex items-start justify-between">
@@ -380,6 +382,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <motion.div
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
+                            data-pan-y="true"
                             className="p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group"
                         >
                             <div className="flex items-start justify-between">
@@ -397,6 +400,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <motion.div
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
+                            data-pan-y="true"
                             className={`p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-2xl border border-pink-100 hover:border-pink-200 transition-all group ${isSingle ? 'from-emerald-50 to-teal-50 border-emerald-100 hover:border-emerald-200' : ''}`}
                         >
                             <div className="flex items-start justify-between">
@@ -414,6 +418,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <motion.div
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
+                            data-pan-y="true"
                             className={`p-4 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl border border-sky-100 hover:border-sky-200 transition-all group ${isSingle ? 'from-indigo-50 to-blue-50 border-indigo-100 hover:border-indigo-200' : ''}`}
                         >
                             <div className="flex items-start justify-between">
@@ -431,6 +436,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                         <motion.div
                             whileHover={{ scale: 1.02, y: -2 }}
                             whileTap={{ scale: 0.98 }}
+                            data-pan-y="true"
                             className="p-4 bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all group"
                         >
                             <div className="flex items-start justify-between">

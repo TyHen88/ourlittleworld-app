@@ -467,11 +467,12 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                                         <motion.button
                                             key={group.catName}
                                             type="button"
+                                            data-pan-y="true"
                                             initial={{ opacity: 0, y: 24 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: groupIndex * 0.06 }}
                                             onClick={() => setSelectedCategory(group.catName)}
-                                            className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 text-left shadow-[0_18px_42px_-24px_rgba(15,23,42,0.35)] backdrop-blur-sm transition-transform hover:-translate-y-1"
+                                            className="overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 text-left shadow-[0_18px_42px_-24px_rgba(15,23,42,0.35)] transition-transform hover:-translate-y-1 md:backdrop-blur-sm"
                                         >
                                             <div className="p-2.5">
                                                 <div className="grid grid-cols-2 gap-1.5 rounded-[1.35rem] bg-slate-100/80 p-1.5">
@@ -586,6 +587,7 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
                     transition={{ delay: 0.5, type: "spring" }}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
+                    data-pan-y="true"
                     onClick={() => router.push('/create-post')}
                     className={cn(
                         "fixed bottom-24 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full border-2 border-white text-white shadow-2xl",

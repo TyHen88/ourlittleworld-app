@@ -337,6 +337,7 @@ export default function BudgetPage() {
                 <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
+                    data-pan-y="true"
                     onClick={() => setTransactionModalOpen(true)}
                     className={cn(
                         "fixed bottom-28 right-6 w-14 h-14 text-white rounded-full shadow-2xl flex items-center justify-center border-2 border-white z-50",
