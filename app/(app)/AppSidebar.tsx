@@ -71,14 +71,17 @@ function isRouteActive(pathname: string, href: string) {
 function getNavSections(isSingle: boolean): NavSection[] {
   const explore: NavItem[] = [
     { href: "/dashboard", icon: Home, label: "Dashboard", description: "Overview and highlights" },
-    {
+    { href: "/feed", icon: Heart, label: "Feed", description: "Shared posts and memories" },
+  ];
+
+  if (!isSingle) {
+    explore.splice(1, 0, {
       href: "/chat",
       icon: MessageCircleHeart,
       label: "Chat",
-      description: isSingle ? "Connect with a partner to use chat" : "Realtime conversation",
-    },
-    { href: "/feed", icon: Heart, label: "Feed", description: "Shared posts and memories" },
-  ];
+      description: "Realtime conversation",
+    });
+  }
 
   return [
     { label: "Explore", items: explore },
