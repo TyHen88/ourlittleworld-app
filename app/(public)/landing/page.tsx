@@ -370,7 +370,7 @@ export default function LandingPage() {
 
     return (
         <>
-            <div className="relative flex h-screen flex-col overflow-hidden bg-[#FDFBF7]">
+            <div className="relative flex min-h-[100svh] flex-col overflow-x-hidden bg-[#FDFBF7]">
                 <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-40">
                     <div className="absolute left-[-10%] top-[-10%] h-[60%] w-[60%] animate-pulse rounded-full bg-romantic-blush blur-[120px]" style={{ animationDuration: "8s" }} />
                     <div className="absolute bottom-[-10%] right-[-10%] h-[70%] w-[70%] animate-pulse rounded-full bg-romantic-lavender blur-[140px]" style={{ animationDuration: "12s", animationDelay: "1s" }} />
@@ -380,7 +380,7 @@ export default function LandingPage() {
 
                 <div className="pointer-events-none absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03]" />
 
-                <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6">
+                <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-12">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -485,7 +485,7 @@ export default function LandingPage() {
                         >
                             <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-slate-200 sm:hidden" />
 
-                            <div className="max-h-[90dvh] overflow-y-auto px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pb-6">
+                            <div data-scroll-region="true" className="max-h-[90dvh] overflow-y-auto px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pb-6">
                                 <div className="mb-5 flex items-start justify-between gap-4">
                                     <div>
                                         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-romantic-heart">

@@ -180,7 +180,7 @@ function SidebarContent({
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto pr-1">
+      <div data-scroll-region="true" className="flex-1 space-y-5 overflow-y-auto pr-1">
         {navSections.map((section) => (
           <div key={section.label}>
             <p className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">

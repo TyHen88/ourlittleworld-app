@@ -590,6 +590,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       >
       <div
         ref={scrollRef}
+        data-scroll-region="true"
         onScroll={(event) => {
           const container = event.currentTarget;
           autoScrollRef.current = isNearBottom(container);
@@ -599,7 +600,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
           }
         }}
         className={cn(
-          "flex min-h-0 flex-1 basis-0 flex-col gap-4 overflow-y-scroll touch-pan-y bg-slate-50/70 px-3 sm:px-4",
+          "flex min-h-0 flex-1 basis-0 flex-col gap-4 overflow-y-auto touch-pan-y bg-slate-50/70 px-3 sm:px-4",
           isKeyboardOpen ? "py-3" : "py-4 sm:py-5"
         )}
         style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}
