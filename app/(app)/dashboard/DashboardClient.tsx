@@ -108,6 +108,7 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
             "/budget",
             "/calendar",
             "/create-post",
+            "/notifications",
             "/reminders",
             "/trips",
             "/settings",

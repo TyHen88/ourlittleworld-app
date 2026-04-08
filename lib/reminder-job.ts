@@ -2,7 +2,7 @@ import "server-only";
 
 import { ReminderSource } from "@prisma/client";
 
-import { sendPushNotificationToUsers } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 import { getTripNotificationRecipientIds } from "@/lib/push-events";
 import prisma from "@/lib/prisma";
 
@@ -79,26 +79,29 @@ export async function runReminderJob() {
         ? `${tripLabel} starts tomorrow${reminder.trip?.destination ? ` in ${reminder.trip.destination}` : ""}.`
         : reminder.note?.trim() || `Reminder: ${reminder.name}`;
 
-      const result = await sendPushNotificationToUsers({
+      const result = await notifyUsers({
         userIds: recipientIds,
-        allowSingleUserRecipients: true,
-        payload: {
-          title: isTripReminder ? "Your trip starts tomorrow" : reminder.name,
-          body,
-          url: isTripReminder ? "/trips" : "/reminders",
+        coupleId: reminder.couple_id,
+        type: isTripReminder ? "TRIP_REMINDER_DUE" : "CUSTOM_REMINDER_DUE",
+        title: isTripReminder ? "Your trip starts tomorrow" : reminder.name,
+        body,
+        detail: reminder.note?.trim() || body,
+        url: isTripReminder ? "/trips" : "/reminders",
+        push: {
+          allowSingleUserRecipients: true,
           tag: `reminder-${reminder.id}`,
-        },
-        options: {
-          TTL: 60 * 60,
-          urgency: "high",
+          options: {
+            TTL: 60 * 60,
+            urgency: "high",
+          },
         },
       });
 
-      attemptedDeliveries += result.attempted;
-      failedDeliveries += result.failed;
-      removedDeliveries += result.removed;
+      attemptedDeliveries += result.push?.attempted ?? 0;
+      failedDeliveries += result.push?.failed ?? 0;
+      removedDeliveries += result.push?.removed ?? 0;
 
-      if (result.failed > 0 && result.delivered === 0 && result.removed === 0) {
+      if ((result.push?.failed ?? 0) > 0 && (result.push?.delivered ?? 0) === 0 && (result.push?.removed ?? 0) === 0) {
         continue;
       }
 

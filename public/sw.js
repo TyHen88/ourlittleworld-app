@@ -50,6 +50,22 @@ function canStoreResponse(response) {
   return !/(no-store|no-cache|private)/i.test(cacheControl);
 }
 
+async function broadcastPushToClients(payload) {
+  const windowClients = await clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+
+  await Promise.all(
+    windowClients.map((client) =>
+      client.postMessage({
+        type: "olw-push-received",
+        payload,
+      }),
+    ),
+  );
+}
+
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -167,13 +183,16 @@ self.addEventListener("push", (event) => {
   })();
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      tag: payload.tag,
-      icon: payload.icon,
-      badge: payload.badge,
-      data: payload.data,
-    }),
+    Promise.all([
+      self.registration.showNotification(payload.title, {
+        body: payload.body,
+        tag: payload.tag,
+        icon: payload.icon,
+        badge: payload.badge,
+        data: payload.data,
+      }),
+      broadcastPushToClients(payload),
+    ]),
   );
 });
 

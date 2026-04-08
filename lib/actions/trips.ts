@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getCachedUser } from "@/lib/auth-cache";
 import { revalidatePath } from "next/cache";
-import { sendPushNotificationToUsers } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 import { formatTripDateLabel, getTripNotificationRecipientIds } from "@/lib/push-events";
 import { syncTripReminder } from "@/lib/reminder-service";
 import { createTripDate, getTripDateKey } from "@/lib/trip-dates";
@@ -177,17 +177,21 @@ export async function createTrip(data: TripMutationInput) {
         const tripDate = formatTripDateLabel(trip.start_date);
         const tripLabel = trip.title?.trim() || trip.destination;
 
-        await sendPushNotificationToUsers({
+        await notifyUsers({
             userIds: recipientIds,
-            payload: {
-                title: `${creatorName} added a new trip`,
-                body: `${tripLabel} starts on ${tripDate} in ${trip.destination}.`,
-                url: "/trips",
+            actorUserId: user.id,
+            coupleId: trip.couple_id,
+            type: "TRIP_CREATED",
+            title: `${creatorName} added a new trip`,
+            body: `${tripLabel} starts on ${tripDate} in ${trip.destination}.`,
+            detail: `${creatorName} planned ${tripLabel} for ${tripDate}${trip.notes ? `. Notes: ${trip.notes}` : "."}`,
+            url: "/trips",
+            push: {
                 tag: `trip-created-${trip.id}`,
-            },
-            options: {
-                TTL: 10 * 60,
-                urgency: "normal",
+                options: {
+                    TTL: 10 * 60,
+                    urgency: "normal",
+                },
             },
         });
     }

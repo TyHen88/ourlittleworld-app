@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
+  BellRing,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,7 @@ import * as Ably from "ably";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { useNotificationSummary } from "@/hooks/use-notifications";
 import { getAblyRealtimeClient } from "@/lib/ably-client";
 import { getCoupleChatChannelName, COUPLE_CHAT_EVENT } from "@/lib/chat";
 import { useCouple } from "@/hooks/use-couple";
@@ -72,6 +74,7 @@ function getNavSections(isSingle: boolean): NavSection[] {
   const explore: NavItem[] = [
     { href: "/dashboard", icon: Home, label: "Dashboard", description: "Overview and highlights" },
     { href: "/feed", icon: Heart, label: "Feed", description: "Shared posts and memories" },
+    { href: "/notifications", icon: BellRing, label: "Notifications", description: "Inbox and activity" },
   ];
 
   if (!isSingle) {
@@ -105,10 +108,12 @@ function SidebarContent({
   onNavigate,
   pathname,
   unreadCount,
+  notificationUnreadCount,
 }: {
   onNavigate?: () => void;
   pathname: string;
   unreadCount: number;
+  notificationUnreadCount: number;
 }) {
   const { user, profile, couple, daysTogether } = useCouple();
   const isSingle = profile?.user_type === "SINGLE";
@@ -195,7 +200,13 @@ function SidebarContent({
             <div className="space-y-1.5">
               {section.items.map((item) => {
                 const active = isRouteActive(pathname, item.href);
-                const showUnread = item.href === "/chat" && unreadCount > 0 && pathname !== "/chat";
+                const badgeCount =
+                  item.href === "/chat" && pathname !== "/chat"
+                    ? unreadCount
+                    : item.href === "/notifications" && pathname !== "/notifications"
+                      ? notificationUnreadCount
+                      : 0;
+                const showUnread = badgeCount > 0;
 
                 return (
                   <Link
@@ -221,7 +232,7 @@ function SidebarContent({
                         <item.icon size={18} />
                         {showUnread ? (
                           <span className="absolute -right-1 -top-1 inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-slate-950 px-1 py-0.5 text-[10px] font-black text-white ring-2 ring-white/80">
-                            {unreadCount > 99 ? "99+" : unreadCount}
+                            {badgeCount > 99 ? "99+" : badgeCount}
                           </span>
                         ) : null}
                       </div>
@@ -331,14 +342,14 @@ export function AppSidebar() {
   const isChatPage = pathname === "/chat";
   const shouldHideSidebar = pathname === "/create-post";
   const coupleId = profile?.couple_id;
+  const { data: notificationSummary } = useNotificationSummary(Boolean(profile?.id));
+  const notificationUnreadCount = notificationSummary?.unreadCount ?? 0;
+  const totalUnreadCount = unreadCount + notificationUnreadCount;
   const closeSidebar = useEffectEvent(() => {
     setIsSidebarOpen(false);
   });
   const resetUnreadBadge = useEffectEvent(() => {
     setUnreadCount(0);
-    if ("setAppBadge" in navigator) {
-      void (navigator as { clearAppBadge?: () => Promise<void> }).clearAppBadge?.();
-    }
   });
 
   useEffect(() => {
@@ -408,6 +419,19 @@ export function AppSidebar() {
     };
   }, [isSidebarOpen]);
 
+  useEffect(() => {
+    if (!("setAppBadge" in navigator)) {
+      return;
+    }
+
+    if (totalUnreadCount > 0) {
+      void (navigator as { setAppBadge?: (count?: number) => Promise<void> }).setAppBadge?.(totalUnreadCount);
+      return;
+    }
+
+    void (navigator as { clearAppBadge?: () => Promise<void> }).clearAppBadge?.();
+  }, [totalUnreadCount]);
+
   if (shouldHideSidebar) {
     return null;
   }
@@ -418,7 +442,7 @@ export function AppSidebar() {
         {!isSidebarOpen ? (
           <SidebarToggleHandle
             direction="open"
-            unreadCount={unreadCount}
+            unreadCount={totalUnreadCount}
             onClick={() => setIsSidebarOpen(true)}
             className="fixed left-0 top-1/2 z-[70] -translate-y-1/2"
           />
@@ -447,6 +471,7 @@ export function AppSidebar() {
                 <SidebarToggleHandle
                   direction="close"
                   placement="floating"
+                  unreadCount={totalUnreadCount}
                   onClick={() => setIsSidebarOpen(false)}
                 />
               </div>
@@ -455,6 +480,7 @@ export function AppSidebar() {
                 <SidebarContent
                   pathname={pathname}
                   unreadCount={unreadCount}
+                  notificationUnreadCount={notificationUnreadCount}
                   onNavigate={() => setIsSidebarOpen(false)}
                 />
               </div>

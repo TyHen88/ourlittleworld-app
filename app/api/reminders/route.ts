@@ -2,9 +2,9 @@ import { Prisma, ReminderSource } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getCachedUser } from "@/lib/auth-cache";
+import { notifyUsers } from "@/lib/notifications";
 import { createCursorPaginatedResponse, decodePaginationCursor, encodePaginationCursor } from "@/lib/pagination";
 import { getTripNotificationRecipientIds } from "@/lib/push-events";
-import { sendPushNotificationToUsers } from "@/lib/push";
 import prisma from "@/lib/prisma";
 import { getReminderAccessWhere, serializeReminder } from "@/lib/reminder-service";
 import {
@@ -267,26 +267,31 @@ export async function POST(request: NextRequest) {
 
       if (recipientIds.length > 0) {
         const creatorName = reminder.creator?.full_name?.trim() || "Your partner";
+        const notificationBody = getReminderCreatedPushBody({
+          name: reminder.name,
+          note: reminder.note,
+          hasDate,
+          hasTime,
+          reminderDateKey,
+          reminderTime,
+        });
 
         try {
-          await sendPushNotificationToUsers({
+          await notifyUsers({
             userIds: recipientIds,
-            payload: {
-              title: `${creatorName} added a reminder`,
-              body: getReminderCreatedPushBody({
-                name: reminder.name,
-                note: reminder.note,
-                hasDate,
-                hasTime,
-                reminderDateKey,
-                reminderTime,
-              }),
-              url: "/reminders",
+            actorUserId: actor.id,
+            coupleId: actor.couple_id,
+            type: "REMINDER_CREATED",
+            title: `${creatorName} added a reminder`,
+            body: notificationBody,
+            detail: reminder.note?.trim() || notificationBody,
+            url: "/reminders",
+            push: {
               tag: `reminder-created-${reminder.id}`,
-            },
-            options: {
-              TTL: 10 * 60,
-              urgency: "normal",
+              options: {
+                TTL: 10 * 60,
+                urgency: "normal",
+              },
             },
           });
         } catch (pushError) {

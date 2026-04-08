@@ -1,6 +1,8 @@
 "use client";
 
 import { WidgetSummarySync } from "@/components/mobile/WidgetSummarySync";
+import { AutoEnablePushAfterRegister } from "@/components/push/AutoEnablePushAfterRegister";
+import { PushNotificationRealtimeSync } from "@/components/push/PushNotificationRealtimeSync";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
@@ -32,6 +34,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <SessionProvider>
             <QueryClientProvider client={queryClient}>
+                <AutoEnablePushAfterRegister />
+                <PushNotificationRealtimeSync />
                 <WidgetSummarySync />
                 {children}
                 <Toaster />

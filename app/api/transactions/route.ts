@@ -7,7 +7,7 @@ import {
     decodePaginationCursor,
     encodePaginationCursor,
 } from "@/lib/pagination";
-import { sendPushNotificationToUsers } from "@/lib/push";
+import { notifyUsers } from "@/lib/notifications";
 import { getCoupleMemberIds } from "@/lib/push-events";
 
 type TransactionCursorPayload = {
@@ -281,17 +281,21 @@ export async function POST(request: NextRequest) {
                 const amountLabel = transaction.amount ? Number(transaction.amount.toString()).toFixed(2) : "0.00";
                 const entryLabel = `${transaction.type === "INCOME" ? "income" : "expense"} item`;
 
-                await sendPushNotificationToUsers({
+                await notifyUsers({
                     userIds: recipientIds,
-                    payload: {
-                        title: `${actorName} added a budget item`,
-                        body: `${entryLabel} "${transaction.category}" for $${amountLabel}.`,
-                        url: "/budget",
+                    actorUserId: user.id,
+                    coupleId: transaction.couple_id,
+                    type: "BUDGET_ITEM_CREATED",
+                    title: `${actorName} added a budget item`,
+                    body: `${entryLabel} "${transaction.category}" for $${amountLabel}.`,
+                    detail: transaction.note?.trim() || `${actorName} added ${transaction.category} as a ${entryLabel} for $${amountLabel}.`,
+                    url: "/budget",
+                    push: {
                         tag: `budget-item-${transaction.id}`,
-                    },
-                    options: {
-                        TTL: 10 * 60,
-                        urgency: "normal",
+                        options: {
+                            TTL: 10 * 60,
+                            urgency: "normal",
+                        },
                     },
                 });
             }

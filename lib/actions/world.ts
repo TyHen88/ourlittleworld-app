@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getCachedUser } from "@/lib/auth-cache";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload";
+import { notifyUsers } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 
 // Romantic world name suggestions 
@@ -14,6 +15,10 @@ const ROMANTIC_NAMES = [
     "OurParadise", "SweetJourney", "EternalBond", "LoveNest"
 ];
 
+const INVITE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const INVITE_CODE_LENGTH = 8;
+const INVITE_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/;
+
 // Generate a random romantic world name
 export async function generateWorldName() {
     const randomName = ROMANTIC_NAMES[Math.floor(Math.random() * ROMANTIC_NAMES.length)];
@@ -23,12 +28,33 @@ export async function generateWorldName() {
 
 // Generate unique invite code
 function generateInviteCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
-    for (let i = 0; i < 8; i++) { // 8 characters for uniqueness
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
+        code += INVITE_CODE_ALPHABET.charAt(Math.floor(Math.random() * INVITE_CODE_ALPHABET.length));
     }
     return code;
+}
+
+function normalizeInviteCode(value: string) {
+    return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function getWorldDisplayName(value: string | null | undefined) {
+    const trimmed = value?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : "your world";
+}
+
+function getPartnerDisplayName(user: {
+    full_name?: string | null;
+    name?: string | null;
+}) {
+    const fullName = user.full_name?.trim();
+    if (fullName) {
+        return fullName;
+    }
+
+    const fallbackName = user.name?.trim();
+    return fallbackName && fallbackName.length > 0 ? fallbackName : "Your partner";
 }
 
 interface CreateWorldData {
@@ -147,59 +173,122 @@ export async function joinWorld(data: JoinWorldData) {
             return { success: false, error: "Missing user email" };
         }
 
-        // Find the couple by invite code
-        const couple = await prisma.couple.findUnique({
-            where: { invite_code: data.inviteCode.toUpperCase() }
-        });
+        const normalizedInviteCode = normalizeInviteCode(data.inviteCode);
 
-        if (!couple) {
-            throw new Error('Invalid invite code. Please check and try again.');
+        if (!normalizedInviteCode) {
+            return { success: false, error: "Enter your partner's invite code to continue." };
         }
 
-        // Check if couple already has 2 partners
-        const memberCount = await prisma.user.count({
-            where: { couple_id: couple.id }
-        });
-
-        if (memberCount >= 2) {
-            throw new Error('This world is already complete. Please ask for a new invite code.');
+        if (!INVITE_CODE_PATTERN.test(normalizedInviteCode)) {
+            return {
+                success: false,
+                error: `Invite codes use ${INVITE_CODE_LENGTH} letters and numbers. Double-check the code and try again.`,
+            };
         }
 
-        // Check if user is already in this world
         const currentUser = await prisma.user.findUnique({
             where: { id: user.id },
             select: { couple_id: true }
         });
 
-        if (currentUser?.couple_id === couple.id) {
-            throw new Error('You are already a member of this world!');
+        // Find the couple by invite code
+        const couple = await prisma.couple.findUnique({
+            where: { invite_code: normalizedInviteCode },
+            select: {
+                id: true,
+                couple_name: true,
+                partner_2_nickname: true,
+            }
+        });
+
+        if (!couple) {
+            return {
+                success: false,
+                error: "We couldn't find that invite code. Ask your partner to share it again and try once more.",
+            };
         }
+
+        if (currentUser?.couple_id === couple.id) {
+            return {
+                success: false,
+                error: "You're already connected to this world.",
+            };
+        }
+
         if (currentUser?.couple_id && currentUser.couple_id !== couple.id) {
-            throw new Error('You are already a member of another world.');
+            return {
+                success: false,
+                error: "Your account is already connected to another world. Leave that world first before joining a new one.",
+            };
         }
 
         // Update couple and user profile in a transaction
         await prisma.$transaction(async (tx) => {
+            const latestMemberCount = await tx.user.count({
+                where: { couple_id: couple.id }
+            });
+
+            if (latestMemberCount >= 2) {
+                throw new Error("This world already has both partners connected. Ask your partner for a fresh invite only if they create a new world.");
+            }
+
             // 1. Update couple with second partner's nickname
             await tx.couple.update({
                 where: { id: couple.id },
                 data: {
-                    partner_2_nickname: data.partnerNickname || null
+                    partner_2_nickname: data.partnerNickname?.trim() || couple.partner_2_nickname || null
                 }
             });
 
             // 2. Update user's profile with couple_id
-            await tx.user.upsert({
+            await tx.user.update({
                 where: { id: user.id },
-                update: { couple_id: couple.id },
-                create: {
-                    id: user.id,
-                    email: user.email,
-                    full_name: user.name ?? null,
+                data: {
                     couple_id: couple.id,
-                }
+                },
             });
         });
+
+        const recipientIds = await prisma.user.findMany({
+            where: {
+                couple_id: couple.id,
+                id: {
+                    not: user.id,
+                },
+                is_deleted: false,
+            },
+            select: {
+                id: true,
+            },
+        });
+
+        if (recipientIds.length > 0) {
+            const joinedPartnerName = getPartnerDisplayName(user);
+            const worldName = getWorldDisplayName(couple.couple_name);
+
+            try {
+                await notifyUsers({
+                    userIds: recipientIds.map((recipient) => recipient.id),
+                    type: "PARTNER_JOINED",
+                    actorUserId: user.id,
+                    coupleId: couple.id,
+                    title: `${joinedPartnerName} joined ${worldName}`,
+                    body: `Your partner just joined ${worldName}. You are both connected now.`,
+                    detail: `${joinedPartnerName} joined ${worldName} successfully. Your shared space is now ready for both of you.`,
+                    url: "/dashboard",
+                    push: {
+                        allowSingleUserRecipients: true,
+                        tag: `world-partner-joined-${couple.id}-${user.id}`,
+                        options: {
+                            TTL: 10 * 60,
+                            urgency: "high",
+                        },
+                    },
+                });
+            } catch (pushError) {
+                console.error("Partner joined push notification error:", pushError);
+            }
+        }
 
         return {
             success: true,

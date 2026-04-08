@@ -21,11 +21,9 @@ import {
     Camera,
     Check, ChevronRight,
     Copy,
-    Download,
     Edit2,
     Heart,
     HelpCircle,
-    Image as ImageIcon,
     Info,
     Lock,
     LogOut,
@@ -49,9 +47,9 @@ import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import {
     browserSupportsPushNotifications,
+    disablePushNotifications,
+    enablePushNotifications,
     getExistingPushSubscription,
-    subscribeBrowserToPush,
-    unsubscribeBrowserFromPush,
 } from "@/lib/push-client";
 import { AppBackButton } from "@/components/navigation/AppBackButton";
 
@@ -83,13 +81,7 @@ export default function SettingsPage() {
     const [selectedTheme, setSelectedTheme] = useState("blush");
     const [darkMode, setDarkMode] = useState(false);
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-    const [notifications, setNotifications] = useState({
-        push: false,
-        email: true,
-        posts: true,
-        comments: true,
-        likes: true,
-    });
+    const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
     const [pushSupported, setPushSupported] = useState(false);
     const [pushLoading, setPushLoading] = useState(true);
     const [pushSaving, setPushSaving] = useState(false);
@@ -145,26 +137,26 @@ export default function SettingsPage() {
         let cancelled = false;
 
         const loadPushState = async () => {
-            if (!browserSupportsPushNotifications()) {
-                if (!cancelled) {
-                    setPushSupported(false);
-                    setPushLoading(false);
-                    setNotifications((prev) => ({ ...prev, push: false }));
+                if (!browserSupportsPushNotifications()) {
+                    if (!cancelled) {
+                        setPushSupported(false);
+                        setPushLoading(false);
+                        setPushNotificationsEnabled(false);
+                    }
+                    return;
                 }
-                return;
-            }
 
             try {
                 const subscription = await getExistingPushSubscription();
                 if (!cancelled) {
                     setPushSupported(true);
-                    setNotifications((prev) => ({ ...prev, push: Boolean(subscription) }));
+                    setPushNotificationsEnabled(Boolean(subscription));
                 }
             } catch (error) {
                 console.error("Failed to load push subscription:", error);
                 if (!cancelled) {
                     setPushSupported(true);
-                    setNotifications((prev) => ({ ...prev, push: false }));
+                    setPushNotificationsEnabled(false);
                 }
             } finally {
                 if (!cancelled) {
@@ -367,51 +359,15 @@ export default function SettingsPage() {
         setPushSaving(true);
 
         try {
-            if (notifications.push) {
-                const endpoint = await unsubscribeBrowserFromPush();
-                if (endpoint) {
-                    await fetch("/api/push/subscriptions", {
-                        method: "DELETE",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ endpoint }),
-                    });
-                }
-
-                setNotifications((prev) => ({ ...prev, push: false }));
+            if (pushNotificationsEnabled) {
+                await disablePushNotifications();
+                setPushNotificationsEnabled(false);
                 toast.success("Push disabled", "This device will stop receiving push notifications.");
                 return;
             }
 
-            const publicKeyResponse = await fetch("/api/push/public-key", {
-                method: "GET",
-                cache: "no-store",
-            });
-            const publicKeyPayload = await publicKeyResponse.json().catch(() => null);
-
-            if (!publicKeyResponse.ok || !publicKeyPayload?.publicKey) {
-                throw new Error(publicKeyPayload?.error || "Push notifications are not configured.");
-            }
-
-            const subscription = await subscribeBrowserToPush(publicKeyPayload.publicKey);
-
-            const subscribeResponse = await fetch("/api/push/subscriptions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    subscription: subscription.toJSON(),
-                }),
-            });
-            const subscribePayload = await subscribeResponse.json().catch(() => null);
-
-            if (!subscribeResponse.ok) {
-                throw new Error(subscribePayload?.error || "Failed to enable push notifications.");
-            }
-
-            setNotifications((prev) => ({ ...prev, push: true }));
+            await enablePushNotifications();
+            setPushNotificationsEnabled(true);
             toast.success(
                 "Push enabled",
                 isSingle
@@ -430,6 +386,23 @@ export default function SettingsPage() {
     }
 
     const isSingle = profile?.user_type === 'SINGLE';
+    const hasGoogleAccount = profile?.has_google_account === true;
+    const hasPassword = profile?.has_password === true;
+    const passwordActionLabel = hasGoogleAccount && !hasPassword ? "Set Password" : "Change Password";
+    const authMethodLabel = hasGoogleAccount
+        ? hasPassword
+            ? "Google + password"
+            : "Google"
+        : hasPassword
+            ? "Manual register"
+            : "Account access";
+    const authMethodDescription = hasGoogleAccount
+        ? hasPassword
+            ? "This account can sign in with Google or with email and password."
+            : "This account was created with Google. Add a password if you also want email sign-in."
+        : hasPassword
+            ? "This account was created with email and password."
+            : "No password is currently set for this account.";
 
     const sections = [
         { id: "profile", label: "Profile", icon: User, color: isSingle ? "text-emerald-600" : "text-blue-600", bg: isSingle ? "bg-emerald-50" : "bg-blue-50" },
@@ -695,23 +668,6 @@ export default function SettingsPage() {
                                             </Button>
                                         )}
                                     </div>
-
-                                    <div className="grid grid-cols-3 gap-3 border-t pt-4">
-                                        <div className={cn("rounded-xl p-3 text-center", isSingle ? "bg-emerald-50" : "bg-blue-50")}>
-                                            <p className={cn("text-2xl font-black", isSingle ? "text-emerald-600" : "text-blue-600")}>
-                                                {isSingle ? "Solo" : daysTogether}
-                                            </p>
-                                            <p className="text-[10px] font-bold uppercase text-slate-500">{isSingle ? "Explorer" : "Days Together"}</p>
-                                        </div>
-                                        <div className="rounded-xl bg-pink-50 p-3 text-center">
-                                            <p className="text-2xl font-black text-pink-600">0</p>
-                                            <p className="text-[10px] font-bold uppercase text-slate-500">Posts</p>
-                                        </div>
-                                        <div className="rounded-xl bg-purple-50 p-3 text-center">
-                                            <p className="text-2xl font-black text-purple-600">0</p>
-                                            <p className="text-[10px] font-bold uppercase text-slate-500">Photos</p>
-                                        </div>
-                                    </div>
                                 </div>
                             </Card>
                         )}
@@ -916,47 +872,38 @@ export default function SettingsPage() {
                                     Notification Settings
                                 </h2>
 
-                                <div className="space-y-4">
-                                    {[
-                                        {
-                                            key: "push",
-                                            label: "Push Notifications",
-                                            desc: "Receive updates directly on your device",
-                                            icon: Bell,
-                                        },
-                                        { key: "email", label: "Email Notifications", desc: "Receive updates via email", icon: Mail },
-                                        { key: "posts", label: "New Posts", desc: "When your partner posts", icon: ImageIcon },
-                                        { key: "comments", label: "Comments", desc: "When someone comments", icon: Heart },
-                                        { key: "likes", label: "Likes & Reactions", desc: "When someone reacts", icon: Heart },
-                                    ].map((item) => {
-                                        const Icon = item.icon;
-                                        if (item.key === "posts" || item.key === "comments" || item.key === "likes") return null;
-                                        return (
-                                            <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                                                <div className="flex items-center gap-3">
-                                                    <Icon size={20} className="text-amber-600" />
-                                                    <div>
-                                                        <p className="font-bold text-slate-800">{item.label}</p>
-                                                        <p className="text-xs text-slate-500">{item.desc}</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={item.key === "push" ? handlePushToggle : () => setNotifications({ ...notifications, [item.key]: !notifications[item.key as keyof typeof notifications] })}
-                                                    disabled={item.key === "push" && (pushLoading || pushSaving || !pushSupported)}
-                                                    className={cn(
-                                                        "w-14 h-8 rounded-full transition-colors relative disabled:cursor-not-allowed disabled:opacity-60",
-                                                        notifications[item.key as keyof typeof notifications] ? "bg-amber-600" : "bg-slate-300"
-                                                    )}
-                                                >
-                                                    <div className={cn(
-                                                        "absolute top-1 w-6 h-6 bg-white rounded-full transition-transform",
-                                                        notifications[item.key as keyof typeof notifications] ? "right-1" : "left-1"
-                                                    )} />
-                                                </button>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+                                        <div className="flex items-center gap-3">
+                                            <Bell size={20} className="text-amber-600" />
+                                            <div>
+                                                <p className="font-bold text-slate-800">Push Notifications</p>
+                                                <p className="text-xs text-slate-500">
+                                                    Receive updates directly on this device.
+                                                </p>
                                             </div>
-                                        );
-                                    })}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handlePushToggle}
+                                            disabled={pushLoading || pushSaving || !pushSupported}
+                                            className={cn(
+                                                "relative h-8 w-14 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                                                pushNotificationsEnabled ? "bg-amber-600" : "bg-slate-300"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "absolute top-1 h-6 w-6 rounded-full bg-white transition-transform",
+                                                pushNotificationsEnabled ? "right-1" : "left-1"
+                                            )} />
+                                        </button>
+                                    </div>
+
+                                    {!pushSupported && !pushLoading ? (
+                                        <p className="text-xs text-slate-500">
+                                            Push notifications are not supported in this browser.
+                                        </p>
+                                    ) : null}
                                 </div>
                             </Card>
                         )}
@@ -969,13 +916,27 @@ export default function SettingsPage() {
                                     Privacy & Security
                                 </h2>
 
-                                <div className="space-y-3">
+                                <div className="space-y-4">
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                                        <div className="flex items-start gap-3">
+                                            <Shield className="mt-0.5 text-green-600" size={20} />
+                                            <div className="space-y-1">
+                                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                                    Sign-in Method
+                                                </p>
+                                                <p className="text-base font-bold text-slate-800">{authMethodLabel}</p>
+                                                <p className="text-sm leading-6 text-slate-500">
+                                                    {authMethodDescription}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
                                     {[
-                                        { label: "Change Password", icon: Lock, action: () => setIsChangePasswordOpen(true) },
-                                        { label: "Download Your Data", icon: Download, action: () => { } },
+                                        { label: passwordActionLabel, icon: Lock, action: () => setIsChangePasswordOpen(true) },
                                         { label: isSingle ? "Delete Personal Data" : "Delete Account", icon: Trash2, action: () => setShowDeleteConfirm(true), danger: true },
                                     ].map((item) => {
-                                        if (item.label === "Download Your Data") return null;
                                         const Icon = item.icon;
                                         return (
                                             <button
@@ -996,6 +957,7 @@ export default function SettingsPage() {
                                             </button>
                                         );
                                     })}
+                                    </div>
                                 </div>
                             </Card>
                         )}
@@ -1067,6 +1029,8 @@ export default function SettingsPage() {
                 isOpen={isChangePasswordOpen}
                 onClose={() => setIsChangePasswordOpen(false)}
                 userEmail={user?.email || ""}
+                requireCurrentPassword={!(hasGoogleAccount && !hasPassword)}
+                mode={hasGoogleAccount && !hasPassword ? "set" : "change"}
             />
 
             {/* Delete Confirmation Modal */}

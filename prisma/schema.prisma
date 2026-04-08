@@ -65,6 +65,8 @@ model User {
   chatReadStates       ChatReadState[]
   reminders            Reminder[]         @relation("UserReminders")
   createdReminders     Reminder[]         @relation("CreatedReminders")
+  receivedNotifications AppNotification[] @relation("NotificationRecipient")
+  createdNotifications AppNotification[] @relation("NotificationActor")
 
   @@index([is_deleted])
 
@@ -152,6 +154,7 @@ model Couple {
   trips        Trip[]
   chatReadStates ChatReadState[]
   reminders    Reminder[]
+  notifications AppNotification[]
 
   @@map("couples")
 }
@@ -357,4 +360,30 @@ model Reminder {
   @@index([is_deleted])
   @@index([is_completed, scheduled_for])
   @@map("reminders")
+}
+
+model AppNotification {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipient_user_id String    @db.Uuid
+  actor_user_id     String?   @db.Uuid
+  couple_id         String?   @db.Uuid
+  type              String
+  title             String
+  body              String    @db.Text
+  detail            String?   @db.Text
+  url               String    @default("/dashboard")
+  metadata          Json?
+  is_read           Boolean   @default(false)
+  read_at           DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @updatedAt @db.Timestamptz(6)
+
+  recipient User   @relation("NotificationRecipient", fields: [recipient_user_id], references: [id], onDelete: Cascade)
+  actor     User?  @relation("NotificationActor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+  couple    Couple? @relation(fields: [couple_id], references: [id], onDelete: Cascade)
+
+  @@index([recipient_user_id, is_read])
+  @@index([recipient_user_id, created_at])
+  @@index([couple_id])
+  @@map("app_notifications")
 }

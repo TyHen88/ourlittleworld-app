@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { getProviders, signIn } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { markAutoEnablePushAfterRegister } from "@/lib/push-client";
 
 type GoogleAuthButtonProps = {
     label: string;
     redirectTo?: string;
+    autoEnablePushOnReturn?: boolean;
 };
 
 function GoogleIcon() {
@@ -36,6 +38,7 @@ function GoogleIcon() {
 export function GoogleAuthButton({
     label,
     redirectTo = "/onboarding",
+    autoEnablePushOnReturn = false,
 }: GoogleAuthButtonProps) {
     const [isAvailable, setIsAvailable] = useState(false);
     const [isReady, setIsReady] = useState(false);
@@ -76,6 +79,9 @@ export function GoogleAuthButton({
     const handleGoogleSignIn = async () => {
         try {
             setLoading(true);
+            if (autoEnablePushOnReturn) {
+                markAutoEnablePushAfterRegister();
+            }
             await signIn("google", { redirectTo });
         } catch (error) {
             console.error("[GOOGLE_SIGNIN_ERROR]", error);

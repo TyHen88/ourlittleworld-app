@@ -6,7 +6,7 @@ import { getCachedUserOrThrow, getCachedUser } from "@/lib/auth-cache";
 import { getCachedProfile } from "@/lib/db-utils";
 import { Prisma } from "@prisma/client";
 import { uploadFileToCloudinary } from "@/lib/cloudinary-upload";
-import { sendPushNotificationToUsers } from "@/lib/push";
+import { notifyUsers, type AppNotificationType } from "@/lib/notifications";
 
 type PostProfile = NonNullable<Awaited<ReturnType<typeof getCachedProfile>>>;
 type PostAccessContext = {
@@ -65,11 +65,34 @@ const postPushOptions = {
     urgency: "normal" as const,
 };
 
-async function sendPostPushNotification(params: Parameters<typeof sendPushNotificationToUsers>[0]) {
+async function sendPostNotification(params: {
+    userIds: string[];
+    actorUserId?: string | null;
+    coupleId?: string | null;
+    type: AppNotificationType;
+    title: string;
+    body: string;
+    detail?: string | null;
+    url: string;
+    tag: string;
+}) {
     try {
-        await sendPushNotificationToUsers(params);
+        await notifyUsers({
+            userIds: params.userIds,
+            actorUserId: params.actorUserId,
+            coupleId: params.coupleId,
+            type: params.type,
+            title: params.title,
+            body: params.body,
+            detail: params.detail,
+            url: params.url,
+            push: {
+                tag: params.tag,
+                options: postPushOptions,
+            },
+        });
     } catch (pushError) {
-        console.error("Post push notification error:", pushError);
+        console.error("Post notification error:", pushError);
     }
 }
 
@@ -195,15 +218,16 @@ export async function createPost(input: {
                         ? `${authorName} shared ${imageUrls.length > 1 ? "new photos" : "a new photo"}.`
                         : `${authorName} shared a new post.`;
 
-                await sendPostPushNotification({
+                await sendPostNotification({
                     userIds: recipients.map((recipient) => recipient.id),
-                    payload: {
-                        title: `${authorName} posted something new`,
-                        body: preview,
-                        url: "/feed",
-                        tag: `post-${data.id}`,
-                    },
-                    options: postPushOptions,
+                    actorUserId: user.id,
+                    coupleId: profile.couple_id,
+                    type: "FEED_POST_CREATED",
+                    title: `${authorName} posted something new`,
+                    body: preview,
+                    detail: content || preview,
+                    url: "/feed",
+                    tag: `post-${data.id}`,
                 });
             }
         }
@@ -307,15 +331,16 @@ export async function toggleLikePost(postId: string) {
         const isNewLike = userIndex === -1;
         if (isNewLike && post.author_id !== user.id) {
             const actorName = getPostAuthorLabel(actor.profile);
-            await sendPostPushNotification({
+            await sendPostNotification({
                 userIds: [post.author_id],
-                payload: {
-                    title: `${actorName} liked your post`,
-                    body: "Someone reacted to your latest memory.",
-                    url: getPostPushUrl(),
-                    tag: `post-like-${postId}`,
-                },
-                options: postPushOptions,
+                actorUserId: user.id,
+                coupleId: actor.profile.couple_id,
+                type: "POST_LIKED",
+                title: `${actorName} liked your post`,
+                body: "Someone reacted to your latest memory.",
+                detail: `${actorName} liked one of your shared memories in the feed.`,
+                url: getPostPushUrl(),
+                tag: `post-like-${postId}`,
             });
         }
 
@@ -367,15 +392,16 @@ export async function addComment(postId: string, content: string) {
 
         if (post.author_id !== user.id) {
             const actorName = getPostAuthorLabel(profile);
-            await sendPostPushNotification({
+            await sendPostNotification({
                 userIds: [post.author_id],
-                payload: {
-                    title: `${actorName} commented on your post`,
-                    body: trimmedContent.slice(0, 120),
-                    url: getPostPushUrl(),
-                    tag: `post-comment-${postId}`,
-                },
-                options: postPushOptions,
+                actorUserId: user.id,
+                coupleId: profile.couple_id,
+                type: "POST_COMMENTED",
+                title: `${actorName} commented on your post`,
+                body: trimmedContent.slice(0, 120),
+                detail: trimmedContent,
+                url: getPostPushUrl(),
+                tag: `post-comment-${postId}`,
             });
         }
 
@@ -437,15 +463,16 @@ export async function addReply(postId: string, commentId: string, content: strin
         const replyRecipients = [...new Set([post.author_id, commentAuthorId].filter((recipientId): recipientId is string => Boolean(recipientId) && recipientId !== user.id))];
         if (replyRecipients.length > 0) {
             const actorName = getPostAuthorLabel(profile);
-            await sendPostPushNotification({
+            await sendPostNotification({
                 userIds: replyRecipients,
-                payload: {
-                    title: `${actorName} replied to a comment`,
-                    body: trimmedContent.slice(0, 120),
-                    url: getPostPushUrl(),
-                    tag: `post-reply-${postId}-${commentId}`,
-                },
-                options: postPushOptions,
+                actorUserId: user.id,
+                coupleId: profile.couple_id,
+                type: "POST_REPLIED",
+                title: `${actorName} replied to a comment`,
+                body: trimmedContent.slice(0, 120),
+                detail: trimmedContent,
+                url: getPostPushUrl(),
+                tag: `post-reply-${postId}-${commentId}`,
             });
         }
 

@@ -32,6 +32,9 @@ export interface UserProfile {
     created_at?: string;
     bio?: string | null;
     nickname?: string | null;
+    auth_method?: "google" | "password" | "google_and_password" | "unknown";
+    has_password?: boolean;
+    has_google_account?: boolean;
     couple?: CoupleData | null;
 }
 

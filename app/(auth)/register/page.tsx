@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { FullPageLoader } from "@/components/FullPageLoader";
 import { signIn } from "next-auth/react";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
+import { markAutoEnablePushAfterRegister } from "@/lib/push-client";
 
 function validateSignUpForm(fullName: string, email: string, password: string, confirmPassword: string) {
     const normalizedFullName = fullName.trim();
@@ -81,6 +82,7 @@ export default function RegisterPage() {
                     throw new Error("Account created, but automatic sign-in failed. Please sign in manually.");
                 }
 
+                markAutoEnablePushAfterRegister();
                 setRedirecting(true);
                 router.push("/onboarding");
                 router.refresh();
@@ -112,7 +114,7 @@ export default function RegisterPage() {
 
                 <Card className="p-8 space-y-6 border-none shadow-2xl bg-white/70 backdrop-blur-xl rounded-4xl">
                     <div className="space-y-4">
-                        <GoogleAuthButton label="Sign up with Google" />
+                        <GoogleAuthButton label="Sign up with Google" autoEnablePushOnReturn />
 
                         <div className="flex items-center gap-3">
                             <div className="h-px flex-1 bg-slate-200" />

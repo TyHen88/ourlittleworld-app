@@ -1,18 +1,18 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Heart, ArrowRight, Sparkles, Plus, Users, Copy, Check,
-    Calendar, Camera, Wand2, Upload, X, Globe, User, Book, Map, Target, Wallet
+    Heart, ArrowRight, Sparkles, Plus, Users, Copy, Check, Share2,
+    Calendar, Camera, Wand2, Upload, X, Globe, User, Book, Map, Target
 } from "lucide-react";
 import { FloatingHearts } from "@/components/love/FloatingHearts";
-import { createWorld, joinWorld, generateWorldName, uploadCouplePhoto, getUserCouple } from "@/lib/actions/world";
+import { createWorld, joinWorld, generateWorldName, uploadCouplePhoto } from "@/lib/actions/world";
 import { completeOnboarding, getCurrentUser } from "@/lib/actions/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import confetti from "canvas-confetti";
 
@@ -49,8 +49,17 @@ const SOLO_GUIDE_SLIDES = [
     }
 ];
 
+function normalizeInviteCodeInput(value: string) {
+    return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function EnhancedOnboardingPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { data: session, status } = useSession();
     const [onboardingType, setOnboardingType] = useState<"SINGLE" | "COUPLE" | "CHOOSE">("CHOOSE");
     const [step, setStep] = useState<number>(1);
@@ -75,6 +84,21 @@ export default function EnhancedOnboardingPage() {
     const [generatedCode, setGeneratedCode] = useState("");
     const [createdWorldName, setCreatedWorldName] = useState("");
     const [copied, setCopied] = useState(false);
+    const [inviteNotice, setInviteNotice] = useState("");
+    const [isCompletingCoupleOnboarding, setIsCompletingCoupleOnboarding] = useState(false);
+    const joinRedirectTimeoutRef = React.useRef<number | null>(null);
+
+    const checkProfile = useCallback(async () => {
+        try {
+            const userProfile = await getCurrentUser() as { onboarding_completed?: boolean } | null;
+            if (userProfile?.onboarding_completed) {
+                router.push("/dashboard");
+                return;
+            }
+        } catch (err) {
+            console.error("Profile check failed", err);
+        }
+    }, [router]);
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -86,19 +110,29 @@ export default function EnhancedOnboardingPage() {
             setUserId(session.user.id);
             checkProfile();
         }
-    }, [status, session]);
+    }, [status, session, checkProfile, router]);
 
-    const checkProfile = async () => {
-        try {
-            const userProfile = await getCurrentUser();
-            if ((userProfile as any).onboarding_completed) {
-                router.push("/dashboard");
-                return;
-            }
-        } catch (err) {
-            console.error("Profile check failed", err);
+    useEffect(() => {
+        const sharedInviteCode = normalizeInviteCodeInput(searchParams.get("code") || "");
+
+        if (!sharedInviteCode) {
+            return;
         }
-    };
+
+        setOnboardingType("COUPLE");
+        setMode("join");
+        setStep(3);
+        setInviteCode(sharedInviteCode);
+        setError("");
+    }, [searchParams]);
+
+    useEffect(() => {
+        return () => {
+            if (joinRedirectTimeoutRef.current) {
+                window.clearTimeout(joinRedirectTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const handleGenerateName = async () => {
         const name = await generateWorldName();
@@ -116,6 +150,60 @@ export default function EnhancedOnboardingPage() {
             reader.readAsDataURL(file);
         }
     };
+
+    const showInviteNotice = (message: string) => {
+        setInviteNotice(message);
+        setTimeout(() => setInviteNotice(""), 2800);
+    };
+
+    const setCopiedState = () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2200);
+    };
+
+    const copyTextToClipboard = async (value: string) => {
+        if (!value || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+            return false;
+        }
+
+        try {
+            await navigator.clipboard.writeText(value);
+            return true;
+        } catch (clipboardError) {
+            console.error("Clipboard write failed", clipboardError);
+            return false;
+        }
+    };
+
+    const getInviteSharePayload = (code: string) => {
+        const resolvedWorldName = createdWorldName || worldName.trim() || "our world";
+        const joinUrl = typeof window === "undefined"
+            ? ""
+            : `${window.location.origin}/onboarding?code=${code}`;
+
+        return {
+            title: `Join ${resolvedWorldName}`,
+            text: `Join ${resolvedWorldName} on OurLittleWorld with my invite code: ${code}`,
+            url: joinUrl
+        };
+    };
+
+    const finishCoupleOnboarding = useCallback(async () => {
+        if (isCompletingCoupleOnboarding) {
+            return;
+        }
+
+        setIsCompletingCoupleOnboarding(true);
+        setError("");
+
+        try {
+            await completeOnboarding('COUPLE');
+            router.push("/dashboard");
+        } catch (err) {
+            setIsCompletingCoupleOnboarding(false);
+            setError(getErrorMessage(err, "Failed to finish onboarding"));
+        }
+    }, [isCompletingCoupleOnboarding, router]);
 
     const handleCreateWorld = async () => {
         if (!userId || !worldName.trim()) {
@@ -149,10 +237,15 @@ export default function EnhancedOnboardingPage() {
             });
 
             if (result.success && result.inviteCode) {
-                await completeOnboarding('COUPLE');
                 setGeneratedCode(result.inviteCode);
                 setCreatedWorldName(result.worldName || worldName);
                 setStep(4); // Success screen
+
+                const copiedInviteCode = await copyTextToClipboard(result.inviteCode);
+                if (copiedInviteCode) {
+                    setCopiedState();
+                    showInviteNotice("Invite code copied. Share it with your partner now.");
+                }
 
                 // Trigger confetti
                 confetti({
@@ -164,16 +257,18 @@ export default function EnhancedOnboardingPage() {
             } else {
                 setError(result.error || "Failed to create world");
             }
-        } catch (err: any) {
-            setError(err.message || "Something went wrong");
+        } catch (err) {
+            setError(getErrorMessage(err, "Something went wrong"));
         } finally {
             setLoading(false);
         }
     };
 
     const handleJoinWorld = async () => {
-        if (!userId || !inviteCode.trim()) {
-            setError("Please enter an invite code");
+        const normalizedInviteCode = normalizeInviteCodeInput(inviteCode);
+
+        if (!userId || !normalizedInviteCode) {
+            setError("Please enter your partner's invite code.");
             return;
         }
 
@@ -182,14 +277,13 @@ export default function EnhancedOnboardingPage() {
 
         const result = await joinWorld({
             userId,
-            inviteCode: inviteCode.trim(),
+            inviteCode: normalizedInviteCode,
             partnerNickname: partnerNickname.trim() || undefined
         });
 
         setLoading(false);
 
         if (result.success) {
-            await completeOnboarding('COUPLE');
             setCreatedWorldName(result.worldName || "Your World");
             setStep(4); // Success screen
 
@@ -201,16 +295,57 @@ export default function EnhancedOnboardingPage() {
                 colors: ['#FFE4E1', '#E6E6FA', '#FF6B6B', '#FFB6C1']
             });
 
-            setTimeout(() => router.push("/dashboard"), 3000);
+            joinRedirectTimeoutRef.current = window.setTimeout(() => {
+                void finishCoupleOnboarding();
+            }, 3000);
         } else {
             setError(result.error || "Failed to join world");
         }
     };
 
-    const copyInviteCode = () => {
-        navigator.clipboard.writeText(generatedCode);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const copyInviteCode = async () => {
+        const copiedInviteCode = await copyTextToClipboard(generatedCode);
+
+        if (copiedInviteCode) {
+            setCopiedState();
+            return;
+        }
+
+        showInviteNotice("Couldn't copy here. Please long-press the code and share it manually.");
+    };
+
+    const shareInviteCode = async () => {
+        if (!generatedCode) {
+            return;
+        }
+
+        const sharePayload = getInviteSharePayload(generatedCode);
+
+        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+            try {
+                await navigator.share(sharePayload);
+                showInviteNotice("Share sheet opened. Your partner can join from the link or code.");
+                return;
+            } catch (shareError) {
+                if (shareError instanceof Error && shareError.name === "AbortError") {
+                    return;
+                }
+            }
+        }
+
+        const fallbackShareText = sharePayload.url
+            ? `${sharePayload.text}\n${sharePayload.url}`
+            : sharePayload.text;
+
+        const copiedInviteMessage = await copyTextToClipboard(fallbackShareText);
+
+        if (copiedInviteMessage) {
+            setCopiedState();
+            showInviteNotice("Invite message copied. Paste it to your partner.");
+            return;
+        }
+
+        showInviteNotice("Share isn't available here yet. Copy the code and send it manually.");
     };
 
     const containerVariants: Variants = {
@@ -244,8 +379,8 @@ export default function EnhancedOnboardingPage() {
                 colors: ['#10B981', '#6366F1', '#34D399', '#818CF8']
             });
             setTimeout(() => router.push("/dashboard"), 1500);
-        } catch (err: any) {
-            setError(err.message || "Failed to finish onboarding");
+        } catch (err) {
+            setError(getErrorMessage(err, "Failed to finish onboarding"));
         } finally {
             setLoading(false);
         }
@@ -727,11 +862,22 @@ export default function EnhancedOnboardingPage() {
                                     </Label>
                                     <Input
                                         value={inviteCode}
-                                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                                        onChange={(e) => {
+                                            setInviteCode(normalizeInviteCodeInput(e.target.value));
+                                            if (error) {
+                                                setError("");
+                                            }
+                                        }}
                                         placeholder="ABC12345"
                                         maxLength={8}
+                                        autoCapitalize="characters"
+                                        autoCorrect="off"
+                                        spellCheck={false}
                                         className="h-16 text-center text-2xl font-bold tracking-widest rounded-2xl border-romantic-blush bg-white/50 focus:ring-romantic-heart uppercase"
                                     />
+                                    <p className="px-2 text-xs text-slate-400">
+                                        Use the 8-character code your partner shared with you.
+                                    </p>
                                 </div>
 
                                 <div className="space-y-2">
@@ -752,7 +898,7 @@ export default function EnhancedOnboardingPage() {
                             <div className="space-y-3 pt-4">
                                 <Button
                                     onClick={handleJoinWorld}
-                                    disabled={loading || !inviteCode.trim()}
+                                    disabled={loading || normalizeInviteCodeInput(inviteCode).length !== 8}
                                     className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg"
                                 >
                                     {loading ? "Connecting Hearts..." : "Join Our World 💕"}
@@ -776,24 +922,24 @@ export default function EnhancedOnboardingPage() {
                         initial="hidden"
                         animate="visible"
                         exit="exit"
-                        className="w-full max-w-md space-y-6 relative z-10"
+                        className="w-full max-w-sm space-y-4 relative z-10"
                     >
-                        <Card className="p-8 space-y-6 border-none shadow-2xl bg-white/80 backdrop-blur-xl rounded-4xl text-center">
+                        <Card className="p-6 space-y-5 border-none shadow-2xl bg-white/80 backdrop-blur-xl rounded-[2rem] text-center">
                             <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
                                 transition={{ type: "spring", duration: 0.6 }}
                             >
-                                <div className="mx-auto w-24 h-24 bg-gradient-button rounded-full flex items-center justify-center mb-4">
-                                    <Heart className="text-white fill-white" size={48} />
+                                <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-button">
+                                    <Heart className="text-white fill-white" size={40} />
                                 </div>
                             </motion.div>
 
-                            <div className="space-y-3">
-                                <h1 className="text-3xl font-bold text-slate-800">
+                            <div className="space-y-2">
+                                <h1 className="text-2xl font-bold text-slate-800">
                                     Welcome to {createdWorldName}! 💕
                                 </h1>
-                                <p className="text-lg text-slate-600">
+                                <p className="text-sm leading-6 text-slate-600">
                                     {mode === "create"
                                         ? "Your world is ready! Share the code below with your partner."
                                         : "You've joined the world! Redirecting to your dashboard..."
@@ -802,42 +948,77 @@ export default function EnhancedOnboardingPage() {
                             </div>
 
                             {mode === "create" && generatedCode && (
-                                <div className="space-y-4">
-                                    <div className="p-6 bg-gradient-love rounded-3xl relative">
-                                        <p className="text-sm text-slate-600 mb-2">Your Invite Code</p>
-                                        <p className="text-4xl font-black text-slate-800 tracking-widest">
-                                            {generatedCode}
-                                        </p>
-                                        <button
-                                            onClick={copyInviteCode}
-                                            className="absolute top-4 right-4 p-2 bg-white/80 rounded-full hover:bg-white transition-colors"
-                                        >
-                                            {copied ? (
-                                                <Check size={20} className="text-green-600" />
-                                            ) : (
-                                                <Copy size={20} className="text-slate-600" />
-                                            )}
-                                        </button>
+                                <div className="space-y-3">
+                                    <div className="p-4 bg-gradient-love rounded-[1.6rem] text-left border border-white/70 shadow-lg">
+                                        <div>
+                                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                                Invite Code
+                                            </p>
+                                            <p className="text-xs leading-5 text-slate-600 mt-1">
+                                                Share this with your partner so they can join right away.
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-xl bg-white/80 px-3 py-4 border border-white/80">
+                                            <p className="text-center text-[1.7rem] font-black text-slate-800 tracking-[0.18em] sm:text-[1rem]">
+                                                {generatedCode}
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                                            <Button
+                                                onClick={copyInviteCode}
+                                                variant="outline"
+                                                className="h-11 rounded-xl border-white/80 bg-white/70 text-sm text-slate-700 hover:bg-white"
+                                            >
+                                                {copied ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
+                                                {copied ? "Copied" : "Copy Code"}
+                                            </Button>
+                                            <Button
+                                                onClick={shareInviteCode}
+                                                className="h-11 rounded-xl bg-gradient-button text-sm text-white shadow-md"
+                                            >
+                                                <Share2 size={18} />
+                                                Share
+                                            </Button>
+                                        </div>
+
+                                        {inviteNotice && (
+                                            <p className="mt-3 text-xs font-medium text-emerald-600 text-center">
+                                                {inviteNotice}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <Button
-                                        onClick={() => router.push("/dashboard")}
-                                        className="w-full h-14 rounded-3xl bg-gradient-button text-white shadow-lg text-lg"
+                                        onClick={() => void finishCoupleOnboarding()}
+                                        disabled={isCompletingCoupleOnboarding}
+                                        className="w-full h-12 rounded-2xl bg-gradient-button text-white shadow-lg text-base"
                                     >
-                                        Continue to Dashboard
+                                        {isCompletingCoupleOnboarding ? "Opening Dashboard..." : "Continue to Dashboard"}
                                         <ArrowRight className="ml-2" size={20} />
                                     </Button>
                                 </div>
                             )}
 
                             {mode === "join" && (
-                                <div className="flex justify-center">
-                                    <motion.div
-                                        animate={{ rotate: 360 }}
-                                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                <div className="space-y-3">
+                                    <div className="flex justify-center">
+                                        <motion.div
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                        >
+                                            <Heart className="text-romantic-heart fill-romantic-heart" size={40} />
+                                        </motion.div>
+                                    </div>
+                                    <Button
+                                        onClick={() => void finishCoupleOnboarding()}
+                                        disabled={isCompletingCoupleOnboarding}
+                                        className="w-full h-12 rounded-2xl bg-gradient-button text-white shadow-lg text-base"
                                     >
-                                        <Heart className="text-romantic-heart fill-romantic-heart" size={48} />
-                                    </motion.div>
+                                        {isCompletingCoupleOnboarding ? "Opening Dashboard..." : "Open Dashboard Now"}
+                                        <ArrowRight className="ml-2" size={20} />
+                                    </Button>
                                 </div>
                             )}
                         </Card>

@@ -205,13 +205,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const recipientIds =
-      profile.couple?.members
-        ?.map((member) => member.id)
-        .filter((memberId) => memberId !== user.id) ?? [];
+    const recipientIds = await prisma.user.findMany({
+      where: {
+        couple_id: profile.couple_id,
+        id: {
+          not: user.id,
+        },
+        is_deleted: false,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (recipientIds.length > 0) {
-      const senderName = profile.full_name?.trim() || "Your partner";
+      const senderName = message.author.full_name?.trim() || profile.full_name?.trim() || "Your partner";
       const pushBody = content
         ? content.slice(0, 120)
         : sticker
@@ -221,12 +229,12 @@ export async function POST(request: NextRequest) {
             : `${senderName} sent you a new message.`;
 
       await sendPushNotificationToUsers({
-        userIds: recipientIds,
+        userIds: recipientIds.map((recipient) => recipient.id),
         payload: {
           title: `${senderName} sent a message`,
           body: pushBody,
           url: "/chat",
-          tag: `chat-${profile.couple_id}`,
+          tag: `chat-message-${message.id}`,
         },
         options: {
           TTL: 60,
