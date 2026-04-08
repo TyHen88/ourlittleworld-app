@@ -134,10 +134,10 @@ export function useInfiniteNotifications(enabled = true) {
     queryFn: ({ pageParam }) => fetchNotificationPage(typeof pageParam === "string" ? pageParam : null),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: 30 * 1000,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
     refetchInterval: 15 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     retry: 1,
@@ -169,9 +169,11 @@ export function useNotificationSummary(enabled = true) {
         unreadCount: typeof json?.unreadCount === "number" ? json.unreadCount : 0,
       } satisfies NotificationSummaryResponse;
     },
-    staleTime: 15 * 1000,
+    staleTime: 0,
     refetchInterval: 15 * 1000,
+    refetchOnMount: "always",
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     enabled,
   });
 }

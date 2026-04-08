@@ -101,18 +101,6 @@ export default function FeedClient({ user, profile, couple }: FeedClientProps) {
     } = usePosts(id, debouncedSearchQuery || undefined);
 
     useEffect(() => {
-        const routes = ["/dashboard", "/create-post"];
-
-        if (!couple && !isSingle) {
-            routes.push("/onboarding");
-        }
-
-        routes.forEach((route) => {
-            router.prefetch(route);
-        });
-    }, [couple, isSingle, router]);
-
-    useEffect(() => {
         if (!id || typeof window === "undefined") return;
 
         const storageKey = `pending-created-post:${id}`;

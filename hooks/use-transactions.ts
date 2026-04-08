@@ -121,7 +121,10 @@ export function useTransactions(id: string | undefined, filters?: TransactionFil
 
             return result.data;
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         enabled: !!id,
     });
 }
@@ -152,11 +155,11 @@ export function useInfiniteTransactions(id: string | undefined, filters?: Transa
         initialPageParam: null as string | null,
         getNextPageParam: (lastPage) => lastPage.nextCursor,
         enabled: !!id,
-        staleTime: 60 * 1000,
+        staleTime: 0,
         gcTime: 10 * 60 * 1000,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         placeholderData: (previousData) => previousData,
         retry: 1,
     });
@@ -304,7 +307,7 @@ export function useBudgetSummary(
             if (filters?.period) url.searchParams.set("period", filters.period);
             if (filters?.date) url.searchParams.set("date", filters.date);
 
-            const res = await fetch(url.toString());
+            const res = await fetch(url.toString(), { cache: "no-store" });
             const json = await res.json();
 
             if (!res.ok) {
@@ -313,7 +316,10 @@ export function useBudgetSummary(
 
             return json.data;
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         enabled: !!id,
     });
 }

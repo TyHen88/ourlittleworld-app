@@ -1,7 +1,6 @@
 import prisma from "@/lib/prisma";
-import { cache } from "react";
 
-export const getCachedProfile = cache(async (userId: string) => {
+export async function getCachedProfile(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -16,9 +15,9 @@ export const getCachedProfile = cache(async (userId: string) => {
       created_at: true,
     },
   });
-});
+}
 
-export const getCachedProfileWithCouple = cache(async (userId: string) => {
+export async function getCachedProfileWithCouple(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -50,7 +49,7 @@ export const getCachedProfileWithCouple = cache(async (userId: string) => {
       },
     },
   });
-});
+}
 
 export async function batchGetProfiles(userIds: string[]) {
   if (userIds.length === 0) return [];

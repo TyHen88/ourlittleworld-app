@@ -4,7 +4,7 @@ import { InfiniteData, QueryClient, useInfiniteQuery } from "@tanstack/react-que
 import type { CursorPaginatedResponse } from "@/lib/pagination";
 
 export const POST_PAGE_SIZE = 10;
-export const POST_QUERY_STALE_TIME = 60 * 1000;
+export const POST_QUERY_STALE_TIME = 0;
 export const POST_QUERY_GC_TIME = 10 * 60 * 1000;
 
 export type PostPageResponse<T = unknown> = CursorPaginatedResponse<T>;
@@ -117,9 +117,9 @@ export function usePosts(id: string | undefined, queryStr?: string) {
     enabled: !!id,
     staleTime: POST_QUERY_STALE_TIME,
     gcTime: POST_QUERY_GC_TIME,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     refetchInterval: false,
     placeholderData: (previousData) => previousData,
     retry: 1,

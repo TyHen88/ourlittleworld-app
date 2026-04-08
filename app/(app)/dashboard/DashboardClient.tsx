@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { BudgetOverview } from "@/components/love/BudgetOverview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -102,26 +102,6 @@ export function DashboardClient({ user, profile, couple, daysTogether, daysActiv
                     return `Day ${totalDays.toLocaleString()} Together`;
             }
         })();
-
-    useEffect(() => {
-        const routes = [
-            "/budget",
-            "/calendar",
-            "/create-post",
-            "/notifications",
-            "/reminders",
-            "/trips",
-            "/settings",
-        ];
-
-        if (!isSingle) {
-            routes.push("/chat");
-        }
-
-        routes.forEach((route) => {
-            router.prefetch(route);
-        });
-    }, [isSingle, router]);
 
     return (
         <div className="p-6 space-y-8 max-w-2xl mx-auto">

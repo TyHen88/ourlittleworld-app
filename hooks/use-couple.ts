@@ -73,11 +73,11 @@ export function useCouple() {
             }
         },
         enabled: status === "authenticated" && !!user?.id,
-        staleTime: 10 * 60 * 1000,
+        staleTime: 0,
         gcTime: 30 * 60 * 1000,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         retry: 2,
     });
 

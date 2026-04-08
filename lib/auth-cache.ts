@@ -1,5 +1,4 @@
 import { auth } from "@/auth";
-import { cache } from "react";
 import prisma from "@/lib/prisma";
 
 function isDynamicServerUsageError(error: unknown) {
@@ -10,7 +9,7 @@ function isDynamicServerUsageError(error: unknown) {
   );
 }
 
-export const getCachedUser = cache(async () => {
+export async function getCachedUser() {
   try {
     const session = await auth();
     if (!session?.user?.id) return null;
@@ -56,10 +55,10 @@ export const getCachedUser = cache(async () => {
     console.warn('Failed to fetch user from session:', err);
     return null;
   }
-});
+}
 
-export const getCachedUserOrThrow = cache(async () => {
+export async function getCachedUserOrThrow() {
   const user = await getCachedUser();
   if (!user) throw new Error("Not authenticated");
   return user;
-});
+}

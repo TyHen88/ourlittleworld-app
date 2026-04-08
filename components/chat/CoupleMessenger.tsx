@@ -64,7 +64,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<CoupleChatMessage[]>([]);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
-  const [hoveredReactionMessageId, setHoveredReactionMessageId] = useState<string | null>(null);
   const [selectedReactionMessageId, setSelectedReactionMessageId] = useState<string | null>(null);
   const [reactionSheetMessageId, setReactionSheetMessageId] = useState<string | null>(null);
   const [reactionRequests, setReactionRequests] = useState<Record<string, string>>({});
@@ -78,6 +77,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
   const previousScrollHeightRef = useRef<number | null>(null);
   const lastMarkedReadMessageIdRef = useRef<string | null>(null);
   const keyboardOpenRef = useRef(false);
+  const lastReactionTapRef = useRef<{ messageId: string; timestamp: number } | null>(null);
   const isSingle = profile?.user_type === "SINGLE";
   const coupleId = couple?.id as string | undefined;
   const {
@@ -92,11 +92,16 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     !sending &&
     !uploadingImage &&
     (draft.trim().length > 0 || pendingImages.length > 0);
-  const activeReactionMessageId = hoveredReactionMessageId ?? selectedReactionMessageId;
+  const activeReactionMessageId = selectedReactionMessageId;
 
   const closeReactionUi = () => {
-    setHoveredReactionMessageId(null);
     setSelectedReactionMessageId(null);
+    setReactionSheetMessageId(null);
+    setShowFullEmojiPicker(false);
+  };
+
+  const openReactionPicker = (messageId: string) => {
+    setSelectedReactionMessageId(messageId);
     setReactionSheetMessageId(null);
     setShowFullEmojiPicker(false);
   };
@@ -262,7 +267,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     }
 
     const clearInlineReactionUi = () => {
-      setHoveredReactionMessageId(null);
       setSelectedReactionMessageId(null);
     };
 
@@ -531,7 +535,7 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
     }
   };
 
-  const handleMessageSelect = (
+  const handleMessageClick = (
     event: React.MouseEvent<HTMLDivElement>,
     messageId: string
   ) => {
@@ -539,19 +543,33 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
       return;
     }
 
-    setSelectedReactionMessageId((current) => (current === messageId ? null : messageId));
+    if (event.detail >= 2) {
+      openReactionPicker(messageId);
+      return;
+    }
   };
 
-  const handleMessageDoubleClick = (
-    event: React.MouseEvent<HTMLDivElement>,
+  const handleMessageTouchEnd = (
+    event: React.TouchEvent<HTMLDivElement>,
     messageId: string
   ) => {
     if (shouldIgnoreMessageInteraction(event.target)) {
       return;
     }
 
-    setSelectedReactionMessageId(messageId);
-    setReactionSheetMessageId(messageId);
+    const now = Date.now();
+    const lastTap = lastReactionTapRef.current;
+
+    if (lastTap && lastTap.messageId === messageId && now - lastTap.timestamp <= 320) {
+      openReactionPicker(messageId);
+      lastReactionTapRef.current = null;
+      return;
+    }
+
+    lastReactionTapRef.current = {
+      messageId,
+      timestamp: now,
+    };
   };
 
   if (isSingle || !coupleId) {
@@ -681,12 +699,6 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     "relative flex w-fit max-w-[84%] flex-col",
                     isMine ? "self-end items-end" : "self-start items-start"
                   )}
-                  onMouseEnter={() => setHoveredReactionMessageId(message.id)}
-                  onMouseLeave={() =>
-                    setHoveredReactionMessageId((current) =>
-                      current === message.id ? null : current
-                    )
-                  }
                 >
                   <AnimatePresence>
                     {showReactionPicker && (
@@ -788,8 +800,8 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                   </AnimatePresence>
 
                   <div
-                    onClick={(event) => handleMessageSelect(event, message.id)}
-                    onDoubleClick={(event) => handleMessageDoubleClick(event, message.id)}
+                    onClick={(event) => handleMessageClick(event, message.id)}
+                    onTouchEnd={(event) => handleMessageTouchEnd(event, message.id)}
                     className={cn(
                       "max-w-full cursor-pointer overflow-hidden shadow-sm ring-2 transition-all duration-300 active:scale-[0.98]",
                       stickerOnly

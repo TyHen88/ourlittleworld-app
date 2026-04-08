@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { getCachedUser } from "@/lib/auth-cache";
 import { AppNavigationHistory } from "@/components/navigation/AppNavigationHistory";
+import { RouteDataRefresh } from "@/components/navigation/RouteDataRefresh";
 
 import { AppSidebar } from "./AppSidebar";
 
@@ -27,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </div>
 
             <AppNavigationHistory />
+            <RouteDataRefresh />
             <AppSidebar />
 
             <main className="relative min-h-[100dvh] min-w-0 flex-1">

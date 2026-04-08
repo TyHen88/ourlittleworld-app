@@ -127,7 +127,10 @@ export function useReminderSummary(month: string, enabled = true) {
 
       return json as ReminderSummaryResponse;
     },
-    staleTime: 30 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     enabled,
   });
 }
@@ -138,11 +141,11 @@ export function useInfiniteReminders(view: ReminderView) {
     queryFn: ({ pageParam }) => fetchReminderPage(view, typeof pageParam === "string" ? pageParam : null),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: 60 * 1000,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     retry: 1,
   });
 

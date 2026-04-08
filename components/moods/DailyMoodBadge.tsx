@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { getUserMoodBadgeData } from "@/lib/actions/moods";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 interface DailyMoodBadgeProps {
     userId: string;
@@ -11,7 +11,7 @@ interface DailyMoodBadgeProps {
 }
 
 export function DailyMoodBadge({ userId, coupleId, position = "top-right" }: DailyMoodBadgeProps) {
-    const queryClient = useQueryClient();
+    void coupleId;
     const [noteOpen, setNoteOpen] = useState(false);
     const todayKey = new Date().toISOString().split('T')[0];
 
@@ -22,7 +22,10 @@ export function DailyMoodBadge({ userId, coupleId, position = "top-right" }: Dai
             const result = await getUserMoodBadgeData(userId);
             return result.success ? result.data : null;
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
     });
 
     const mood = moodData?.mood_emoji || null;

@@ -3,6 +3,7 @@
 import { WidgetSummarySync } from "@/components/mobile/WidgetSummarySync";
 import { AutoEnablePushAfterRegister } from "@/components/push/AutoEnablePushAfterRegister";
 import { PushNotificationRealtimeSync } from "@/components/push/PushNotificationRealtimeSync";
+import { PushSubscriptionSync } from "@/components/push/PushSubscriptionSync";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
@@ -14,9 +15,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
             new QueryClient({
                 defaultOptions: {
                     queries: {
-                        staleTime: 30 * 1000,
+                        staleTime: 0,
                         gcTime: 5 * 60 * 1000,
-                        refetchOnWindowFocus: false,
+                        refetchOnMount: "always",
+                        refetchOnWindowFocus: true,
                         refetchOnReconnect: true,
                         retry: 1,
                         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -35,6 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <SessionProvider>
             <QueryClientProvider client={queryClient}>
                 <AutoEnablePushAfterRegister />
+                <PushSubscriptionSync />
                 <PushNotificationRealtimeSync />
                 <WidgetSummarySync />
                 {children}

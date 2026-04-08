@@ -401,7 +401,7 @@ export async function addComment(postId: string, content: string) {
                 body: trimmedContent.slice(0, 120),
                 detail: trimmedContent,
                 url: getPostPushUrl(),
-                tag: `post-comment-${postId}`,
+                tag: `post-comment-${postId}-${newComment.id}`,
             });
         }
 
@@ -472,7 +472,7 @@ export async function addReply(postId: string, commentId: string, content: strin
                 body: trimmedContent.slice(0, 120),
                 detail: trimmedContent,
                 url: getPostPushUrl(),
-                tag: `post-reply-${postId}-${commentId}`,
+                tag: `post-reply-${postId}-${commentId}-${newReply.id}`,
             });
         }
 

@@ -31,7 +31,7 @@ export function useSavingsGoals(id: string | undefined) {
             const url = new URL("/api/savings-goals", window.location.origin);
             url.searchParams.set("id", id);
 
-            const res = await fetch(url.toString());
+            const res = await fetch(url.toString(), { cache: "no-store" });
             const json = await res.json();
 
             if (!res.ok) {
@@ -40,7 +40,10 @@ export function useSavingsGoals(id: string | undefined) {
 
             return json.data as SavingsGoal[];
         },
-        staleTime: 30 * 1000,
+        staleTime: 0,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         enabled: !!id,
     });
 }

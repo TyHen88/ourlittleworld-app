@@ -50,9 +50,9 @@ export function RecentMemory({ coupleId, currentUserId }: RecentMemoryProps) {
         enabled: !!coupleId,
         staleTime: POST_QUERY_STALE_TIME,
         gcTime: POST_QUERY_GC_TIME,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
+        refetchOnMount: "always",
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         initialData: initialPosts,
         initialDataUpdatedAt,
     });
