@@ -6,10 +6,112 @@ import { POST_KEYS, removePostFromCaches, updatePostInCaches } from "@/hooks/use
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { RichTextContent } from "@/components/ui/RichTextContent";
 import { Heart, MessageCircle, Share2, MoreHorizontal, X, ChevronLeft, ChevronRight, Send, CornerDownRight, ZoomIn, ZoomOut, Download, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toggleLikePost, addComment, addReply, deletePost } from "@/lib/actions/post";
 import { toast } from "@/lib/toast";
+
+type PostReply = {
+    id: string;
+    author_id?: string | null;
+    author_name?: string | null;
+    author_avatar?: string | null;
+    content: string;
+    created_at: string;
+};
+
+type PostComment = PostReply & {
+    replies: PostReply[];
+};
+
+type PostMetadata = {
+    images?: string[];
+    likes?: string[];
+    likes_count?: number;
+    comments?: PostComment[];
+    comments_count?: number;
+};
+
+type PostMetadataInput = {
+    images?: string[];
+    likes?: string[];
+    likes_count?: number;
+    comments?: unknown[];
+    comments_count?: number;
+};
+
+type PostCacheRecord = {
+    id?: string | null;
+    metadata?: PostMetadata;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizePostReply(value: unknown): PostReply | null {
+    if (!isRecord(value)) {
+        return null;
+    }
+
+    if (
+        typeof value.id !== "string" ||
+        typeof value.content !== "string" ||
+        typeof value.created_at !== "string"
+    ) {
+        return null;
+    }
+
+    return {
+        id: value.id,
+        author_id: typeof value.author_id === "string" ? value.author_id : null,
+        author_name: typeof value.author_name === "string" ? value.author_name : null,
+        author_avatar: typeof value.author_avatar === "string" ? value.author_avatar : null,
+        content: value.content,
+        created_at: value.created_at,
+    };
+}
+
+function normalizePostComment(value: unknown): PostComment | null {
+    const reply = normalizePostReply(value);
+    if (!reply || !isRecord(value)) {
+        return null;
+    }
+
+    const replies = Array.isArray(value.replies)
+        ? value.replies
+            .map((entry) => normalizePostReply(entry))
+            .filter((entry): entry is PostReply => Boolean(entry))
+        : [];
+
+    return {
+        ...reply,
+        replies,
+    };
+}
+
+function normalizePostMetadata(value: PostMetadataInput | undefined): PostMetadata | undefined {
+    if (!value) {
+        return undefined;
+    }
+
+    return {
+        images: Array.isArray(value.images)
+            ? value.images.filter((image): image is string => typeof image === "string")
+            : undefined,
+        likes: Array.isArray(value.likes)
+            ? value.likes.filter((like): like is string => typeof like === "string")
+            : undefined,
+        likes_count: typeof value.likes_count === "number" ? value.likes_count : undefined,
+        comments: Array.isArray(value.comments)
+            ? value.comments
+                .map((comment) => normalizePostComment(comment))
+                .filter((comment): comment is PostComment => Boolean(comment))
+            : undefined,
+        comments_count: typeof value.comments_count === "number" ? value.comments_count : undefined,
+    };
+}
 
 interface PostProps {
     id: string;
@@ -23,13 +125,7 @@ interface PostProps {
     avatarUrl?: string | null;
     currentUserId?: string;
     coupleId?: string;
-    metadata?: {
-        images?: string[];
-        likes?: string[];
-        likes_count?: number;
-        comments?: any[];
-        comments_count?: number;
-    };
+    metadata?: PostMetadataInput;
 }
 
 export function CoupleFeedPost({ id, author, authorId, content, timestamp, reactions, comments, imageUrl, avatarUrl, metadata, currentUserId, coupleId }: PostProps) {
@@ -50,12 +146,12 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
     const [isLiking, setIsLiking] = useState(false);
     const [submittingReplyId, setSubmittingReplyId] = useState<string | null>(null);
 
-    const [localMetadata, setLocalMetadata] = useState<PostProps["metadata"]>(metadata);
+    const [localMetadata, setLocalMetadata] = useState<PostMetadata | undefined>(() => normalizePostMetadata(metadata));
     const targetId = coupleId || currentUserId;
 
     useEffect(() => {
         if (submittingComment) return;
-        setLocalMetadata(metadata);
+        setLocalMetadata(normalizePostMetadata(metadata));
     }, [metadata, submittingComment]);
 
     // Get dynamic counts from arrays
@@ -65,7 +161,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
     const dynamicCommentsCount = useMemo(() => {
         const list = localMetadata?.comments || [];
-        return list.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0) || comments;
+        return list.reduce((acc, comment) => acc + 1 + (comment.replies?.length || 0), 0) || comments;
     }, [localMetadata?.comments, comments]);
 
     const [isLiked, setIsLiked] = useState(localMetadata?.likes?.includes(currentUserId || "") || false);
@@ -84,10 +180,10 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             ? [imageUrl]
             : [];
 
-    const syncMetadataAcrossCaches = (nextMetadata: any) => {
+    const syncMetadataAcrossCaches = (nextMetadata: PostMetadata | undefined) => {
         if (!targetId) return;
 
-        updatePostInCaches(queryClient, targetId, id, (post: any) => ({
+        updatePostInCaches(queryClient, targetId, id, (post: PostCacheRecord) => ({
             ...post,
             metadata: nextMetadata,
         }));
@@ -132,8 +228,9 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                 setLocalMetadata(currentMetadata);
                 syncMetadataAcrossCaches(currentMetadata);
             } else if (result.metadata) {
-                setLocalMetadata(result.metadata);
-                syncMetadataAcrossCaches(result.metadata);
+                const nextMetadata = normalizePostMetadata(result.metadata);
+                setLocalMetadata(nextMetadata);
+                syncMetadataAcrossCaches(nextMetadata);
             }
         } finally {
             setIsLiking(false);
@@ -155,7 +252,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             }
         };
 
-        const optimisticComment = {
+        const optimisticComment: PostComment = {
             id: `tmp-${makeId()}`,
             author_id: currentUserId,
             author_name: "Me",
@@ -167,9 +264,9 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
 
         setCommentText("");
         setLocalMetadata((prev) => {
-            const base: any = prev && typeof prev === 'object' ? prev : {};
+            const base: PostMetadata = prev ? { ...prev } : {};
             const nextComments = Array.isArray(base.comments) ? [...base.comments, optimisticComment] : [optimisticComment];
-            const totalComments = nextComments.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0);
+            const totalComments = nextComments.reduce((acc, comment) => acc + 1 + (comment.replies?.length || 0), 0);
             const nextMetadata = {
                 ...base,
                 comments: nextComments,
@@ -182,8 +279,9 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
         const result = await addComment(id, trimmed);
         if (result.success) {
             if (result.metadata) {
-                setLocalMetadata(result.metadata);
-                syncMetadataAcrossCaches(result.metadata);
+                const nextMetadata = normalizePostMetadata(result.metadata);
+                setLocalMetadata(nextMetadata);
+                syncMetadataAcrossCaches(nextMetadata);
             }
         } else {
             setLocalMetadata(prevMetadata);
@@ -208,7 +306,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
             }
         };
 
-        const optimisticReply = {
+        const optimisticReply: PostReply = {
             id: `tmp-${makeId()}`,
             author_id: currentUserId,
             author_name: "Me",
@@ -220,14 +318,14 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
         setReplyText("");
         setReplyingToId(null);
         setLocalMetadata((prev) => {
-            const base: any = prev && typeof prev === 'object' ? prev : {};
+            const base: PostMetadata = prev ? { ...prev } : {};
             const list = Array.isArray(base.comments) ? [...base.comments] : [];
-            const idx = list.findIndex((c: any) => c?.id === commentId);
+            const idx = list.findIndex((comment) => comment.id === commentId);
             if (idx === -1) return base;
-            const target = { ...list[idx] };
+            const target: PostComment = { ...list[idx] };
             target.replies = Array.isArray(target.replies) ? [...target.replies, optimisticReply] : [optimisticReply];
             list[idx] = target;
-            const totalComments = list.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length || 0), 0);
+            const totalComments = list.reduce((acc, comment) => acc + 1 + (comment.replies?.length || 0), 0);
             const nextMetadata = {
                 ...base,
                 comments: list,
@@ -240,8 +338,9 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
         const result = await addReply(id, commentId, trimmed);
         if (result.success) {
             if (result.metadata) {
-                setLocalMetadata(result.metadata);
-                syncMetadataAcrossCaches(result.metadata);
+                const nextMetadata = normalizePostMetadata(result.metadata);
+                setLocalMetadata(nextMetadata);
+                syncMetadataAcrossCaches(nextMetadata);
             }
         } else {
             setLocalMetadata(prevMetadata);
@@ -777,7 +876,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                 {(localMetadata?.comments?.length ?? 0) === 0 ? (
                                     <p className="text-center text-xs text-slate-400 py-2">No comments yet. Be the first!</p>
                                 ) : (
-                                    localMetadata?.comments?.map((comment: any) => (
+                                    localMetadata?.comments?.map((comment) => (
                                         <div key={comment.id} className="space-y-2">
                                             <div className="flex gap-3">
                                                 <Avatar className="w-8 h-8 shrink-0">
@@ -787,7 +886,12 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                                 <div className="flex-1">
                                                     <div className="bg-white rounded-2xl px-3 py-2 shadow-sm border border-slate-100 inline-block max-w-full">
                                                         <h5 className="text-[11px] font-bold text-slate-800">{comment.author_name}</h5>
-                                                        <p className="text-xs text-slate-600 break-words">{comment.content}</p>
+                                                        <RichTextContent
+                                                            text={comment.content}
+                                                            tone="light"
+                                                            className="text-xs text-slate-600"
+                                                            previewListClassName="pt-0.5"
+                                                        />
                                                     </div>
                                                     <div className="flex items-center gap-3 mt-1 px-1">
                                                         <span className="text-[9px] text-slate-400 uppercase font-medium">
@@ -804,7 +908,7 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                                     {/* Replies List */}
                                                     {comment.replies?.length > 0 && (
                                                         <div className="mt-3 space-y-3 pl-2 border-l-2 border-romantic-blush/20">
-                                                            {comment.replies.map((reply: any) => (
+                                                            {comment.replies.map((reply) => (
                                                                 <div key={reply.id} className="flex gap-2">
                                                                     <Avatar className="w-6 h-6 shrink-0">
                                                                         {reply.author_avatar && <AvatarImage src={reply.author_avatar} />}
@@ -813,7 +917,12 @@ export function CoupleFeedPost({ id, author, authorId, content, timestamp, react
                                                                     <div className="flex-1">
                                                                         <div className="bg-white/80 rounded-xl px-2.5 py-1.5 shadow-sm border border-slate-50 inline-block max-w-full">
                                                                             <h5 className="text-[10px] font-bold text-slate-800">{reply.author_name}</h5>
-                                                                            <p className="text-[11px] text-slate-600 break-words">{reply.content}</p>
+                                                                            <RichTextContent
+                                                                                text={reply.content}
+                                                                                tone="light"
+                                                                                className="text-[11px] text-slate-600"
+                                                                                previewListClassName="pt-0.5"
+                                                                            />
                                                                         </div>
                                                                     </div>
                                                                 </div>

@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useCoupleChat } from "@/hooks/use-couple-chat";
 import { Button } from "@/components/ui/button";
+import { RichTextContent } from "@/components/ui/RichTextContent";
 import {
   COUPLE_CHAT_DEFAULT_REACTIONS,
   COUPLE_CHAT_EVENT,
@@ -886,15 +887,16 @@ export function CoupleMessenger({ user, profile, couple }: CoupleMessengerProps)
                     )}
 
                     {message.content.trim().length > 0 && (
-                      <p
+                      <RichTextContent
+                        text={message.content}
+                        tone={isMine ? "dark" : "light"}
                         className={cn(
-                          "whitespace-pre-wrap text-sm leading-relaxed",
+                          "text-sm leading-relaxed",
                           sticker || messageImages.length > 0 ? "mt-1.5" : "mt-1",
                           isMine ? "text-white" : "text-slate-700"
                         )}
-                      >
-                        {message.content}
-                      </p>
+                        previewListClassName="pt-0.5"
+                      />
                     )}
 
                     <p
